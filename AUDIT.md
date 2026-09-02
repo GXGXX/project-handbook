@@ -32,3 +32,24 @@
 事实 manifest 只能检查“声明的 token 是否出现在目标页面”，不能证明 token
 与源码语义一致；这一步仍需在写作时对照可执行代码。静态 verifier 也不能
 证明浏览器布局、字体、Mermaid 版本行为，必须保留一次真实浏览器烟测记录。
+
+## 本轮问答能力借鉴
+
+检索 `skills.sh` 和 GitHub 后，没有找到一个同时提供“静态项目手册生成、三栏阅读
+布局和基于手册内容的问答”的成熟 skill。可借鉴的相邻项目包括：
+
+- [`Goodnight77/rag-skills`](https://github.com/Goodnight77/rag-skills)：将代码文档
+  RAG、可解释检索和来源归因拆成独立决策领域；当前仓库的第一版采用同样的“检索—
+  引用—证据不足时拒答”原则，但保留轻量关键词基线，避免引入向量数据库。
+- [`latestaiagents/agent-skills`](https://github.com/latestaiagents/agent-skills)：将
+  混合检索、纠错 RAG、评估和生产清单分层；当前仓库先实现可审计的单路检索，并把
+  真正的向量检索与评估列为后续升级，而不是伪装成生产级 RAG。
+
+因此，问答面板采用以下可验证边界：
+
+1. 生成页只嵌入公开配置和已整理的搜索索引，不嵌入 API Key。
+2. 推荐通过 `chat_server.py` 在 localhost 提供 relay；relay 读取索引、检索片段、
+   调用 OpenAI-compatible 接口并返回来源元数据。
+3. 浏览器直连仅作为兼容性测试模式，密钥只在当前页面内存中使用，并在 UI 中明确
+   风险。
+4. 静态校验覆盖配置、资产和生成结构；浏览器烟测与问答回归仍需人工或后续自动化。

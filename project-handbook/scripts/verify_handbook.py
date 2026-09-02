@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from build_handbook import HandbookError, UNSAFE_RE, flatten_pages, read_json
+from build_handbook import HandbookError, UNSAFE_RE, chat_config, flatten_pages, read_json
 
 
 TAG_RE = re.compile(r"<(?P<tag>script|link|a|img)\b(?P<attrs>[^>]*)>", re.I)
@@ -113,10 +113,13 @@ def verify_pages(handbook: Path, pages: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
-def verify_assets(handbook: Path) -> list[str]:
+def verify_assets(handbook: Path, chat_enabled: bool) -> list[str]:
     site_assets = handbook / "site" / "assets"
     errors: list[str] = []
-    for name in ("style.css", "app.js", "search-index.json"):
+    required = ["style.css", "app.js", "search-index.json"]
+    if chat_enabled:
+        required.append("chat.js")
+    for name in required:
         if not (site_assets / name).is_file():
             errors.append(f"missing generated asset site/assets/{name}")
     index_path = site_assets / "search-index.json"
@@ -159,11 +162,13 @@ def verify_facts(handbook: Path, pages: list[dict[str, Any]]) -> list[str]:
 
 def verify(handbook: Path) -> int:
     try:
-        pages = flatten_pages(read_json(handbook / "book.json"))
+        book = read_json(handbook / "book.json")
+        pages = flatten_pages(book)
+        chat = chat_config(book)
     except HandbookError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    errors = verify_pages(handbook, pages) + verify_assets(handbook) + verify_facts(handbook, pages)
+    errors = verify_pages(handbook, pages) + verify_assets(handbook, chat["enabled"]) + verify_facts(handbook, pages)
     if errors:
         print(f"verification failed with {len(errors)} error(s):")
         for error in errors:

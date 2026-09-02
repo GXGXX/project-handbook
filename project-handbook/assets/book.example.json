@@ -2,6 +2,16 @@
   "title": "项目手册",
   "subtitle": "Project Handbook",
   "version": "0.1.0",
+  "chat": {
+    "enabled": true,
+    "mode": "relay",
+    "endpoint": "/api/chat",
+    "model": "",
+    "context_chars": 16000,
+    "max_history": 8,
+    "title": "手册问答",
+    "placeholder": "输入问题，答案将附带来源…"
+  },
   "parts": [
     {
       "id": "start",

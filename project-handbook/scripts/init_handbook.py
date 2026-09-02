@@ -48,6 +48,7 @@ def create_workspace(output: Path, force: bool) -> None:
     copy_template(ASSETS / "book.example.json", output / "book.json", force)
     copy_template(ASSETS / "style.css", output / "assets" / "style.css", force)
     copy_template(ASSETS / "app.js", output / "assets" / "app.js", force)
+    copy_template(ASSETS / "chat.js", output / "assets" / "chat.js", force)
     write_sample_content(output, force)
     facts = output / "evidence" / "facts.json"
     if not facts.exists() or force:

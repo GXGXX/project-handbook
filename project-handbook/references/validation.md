@@ -18,9 +18,14 @@ The verifier checks the generated `site/` as well as source fragments:
 - generated metadata is escaped and pages contain no scaffold placeholders;
 - headings have unique IDs and page slugs are unique;
 - local CSS/JS assets exist and no remote script/style is required;
+- when chat is enabled, the generated chat config contains no secret fields and
+  the local `chat.js` asset is present;
 - optional evidence facts occur in their claimed page.
 
 Static checks do not prove browser behavior. Open `site/index.html` and test
-search, keyboard navigation, theme switching, mobile navigation, code-copy,
-and diagrams. If Mermaid is used, use the pinned local asset and record the
-browser used for the smoke test.
+search, keyboard navigation, theme switching, mobile navigation, the two-pane
+chat layout, and diagrams. Start `scripts/chat_server.py` and ask one question
+whose answer is explicitly present in a page; confirm the answer shows a source
+link and that an unsupported question produces an uncertainty message. If
+Mermaid is used, use the pinned local asset and record the browser used for the
+smoke test.

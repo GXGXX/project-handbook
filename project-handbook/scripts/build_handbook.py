@@ -10,12 +10,14 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 HEADING_RE = re.compile(r"<(?P<tag>h2|h3)(?P<attrs>\s[^>]*)?>(?P<body>[\s\S]*?)</(?P=tag)>", re.I)
 MERMAID_RE = re.compile(r"<(?:div|pre)\b[^>]*\bclass=[\"'][^\"']*\bmermaid\b[^\"']*[\"'][^>]*>", re.I)
 UNSAFE_RE = re.compile(r"<\s*script\b|\bon[a-z]+\s*=|javascript\s*:", re.I)
+SECRET_KEY_RE = re.compile(r"(?:api[_-]?key|access[_-]?token|secret|password)", re.I)
 
 
 class HandbookError(Exception):
@@ -129,6 +131,70 @@ def e(value: Any) -> str:
     return html.escape(str(value), quote=True)
 
 
+def chat_config(book: dict[str, Any]) -> dict[str, Any]:
+    """Validate the public, non-secret configuration embedded in each page."""
+    raw = book.get("chat", {})
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise HandbookError("book.json chat must be an object")
+    secret_keys: list[str] = []
+
+    def find_secret_keys(value: Any, path: str = "chat") -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                child_path = f"{path}.{key}"
+                if SECRET_KEY_RE.search(str(key)):
+                    secret_keys.append(child_path)
+                else:
+                    find_secret_keys(child, child_path)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                find_secret_keys(child, f"{path}[{index}]")
+
+    find_secret_keys(raw)
+    secret_keys = sorted(secret_keys)
+    if secret_keys:
+        raise HandbookError(
+            "book.json chat cannot contain secrets; use the relay environment instead: "
+            + ", ".join(secret_keys)
+        )
+    mode = raw.get("mode", "relay")
+    if mode not in ("relay", "direct"):
+        raise HandbookError("book.json chat.mode must be relay or direct")
+    endpoint = raw.get("endpoint", "/api/chat" if mode == "relay" else "")
+    if not isinstance(endpoint, str) or not endpoint.strip():
+        raise HandbookError("book.json chat.endpoint must be a non-empty string")
+    parsed = urlsplit(endpoint)
+    if parsed.scheme not in ("", "http", "https") or endpoint.startswith("//") or endpoint.lower().startswith("javascript:"):
+        raise HandbookError("book.json chat.endpoint must be a relative, http, or https URL")
+    model = raw.get("model", "")
+    if not isinstance(model, str) or len(model) > 160:
+        raise HandbookError("book.json chat.model must be a string of at most 160 characters")
+    try:
+        context_chars = int(raw.get("context_chars", 16000))
+    except (TypeError, ValueError) as exc:
+        raise HandbookError("book.json chat.context_chars must be an integer") from exc
+    if not 1000 <= context_chars <= 100000:
+        raise HandbookError("book.json chat.context_chars must be between 1000 and 100000")
+    try:
+        max_history = int(raw.get("max_history", 8))
+    except (TypeError, ValueError) as exc:
+        raise HandbookError("book.json chat.max_history must be an integer") from exc
+    if not 0 <= max_history <= 20:
+        raise HandbookError("book.json chat.max_history must be between 0 and 20")
+    return {
+        "enabled": bool(raw.get("enabled", True)),
+        "mode": mode,
+        "endpoint": endpoint.strip(),
+        "model": model.strip(),
+        "context_chars": context_chars,
+        "max_history": max_history,
+        "title": str(raw.get("title", "手册问答"))[:80],
+        "placeholder": str(raw.get("placeholder", "输入问题，答案将附带来源…"))[:160],
+    }
+
+
 def sidebar(page: dict[str, Any], pages: list[dict[str, Any]], book: dict[str, Any]) -> str:
     current = page["url"]
     chunks = [f'<a class="brand" href="{e(relative_url(current, "index.html"))}"><strong>{e(book["title"])}</strong><small>{e(book.get("subtitle", ""))}</small></a>']
@@ -165,10 +231,46 @@ def pager(page: dict[str, Any], pages: list[dict[str, Any]]) -> str:
     return "<nav class=\"pager\">" + "".join(links) + "</nav>"
 
 
-def shell(page: dict[str, Any], fragment: str, headings: list[dict[str, Any]], pages: list[dict[str, Any]], book: dict[str, Any], search: list[dict[str, Any]]) -> str:
+def chat_panel(chat: dict[str, Any]) -> str:
+    if not chat["enabled"]:
+        return ""
+    return f'''<aside id="chat-panel" class="chat-panel" aria-label="{e(chat["title"])}">
+  <header class="chat-header">
+    <div><strong>{e(chat["title"])}</strong><small id="chat-status">等待连接</small></div>
+    <button id="chat-clear" type="button" title="清空对话">清空</button>
+  </header>
+  <div id="chat-messages" class="chat-messages" role="log" aria-live="polite">
+    <div class="chat-welcome"><strong>基于本项目手册提问</strong><p>我会优先引用当前整理出的代码与文档证据；证据不足时会明确说明。</p></div>
+  </div>
+  <details class="chat-settings">
+    <summary>连接设置</summary>
+    <label>连接方式<select id="chat-mode"><option value="relay">本地 relay（推荐）</option><option value="direct">浏览器直连</option></select></label>
+    <label>接口地址<input id="chat-endpoint" type="url" spellcheck="false"></label>
+    <label>模型<input id="chat-model" type="text" spellcheck="false" placeholder="由 relay 或接口默认值决定"></label>
+    <label id="chat-key-wrap">API Key（仅当前页面内存）<input id="chat-api-key" type="password" autocomplete="off"></label>
+    <p class="chat-security">推荐使用本地 relay：密钥从环境变量读取，不会写入 HTML 或 Git。</p>
+  </details>
+  <form id="chat-form" class="chat-form">
+    <textarea id="chat-input" rows="3" placeholder="{e(chat["placeholder"])}" maxlength="4000"></textarea>
+    <div class="chat-form-foot"><small>Ctrl/⌘ + Enter 发送</small><button id="chat-send" type="submit">发送</button></div>
+  </form>
+</aside>'''
+
+
+def shell(page: dict[str, Any], fragment: str, headings: list[dict[str, Any]], pages: list[dict[str, Any]], book: dict[str, Any], search: list[dict[str, Any]], chat: dict[str, Any]) -> str:
     base = "" if page.get("home") else "../"
     base_json = json.dumps(base).replace("<", "\\u003c")
     search_json = json.dumps(search, ensure_ascii=False).replace("<", "\\u003c")
+    page_chat = dict(chat)
+    endpoint = page_chat["endpoint"]
+    if not urlsplit(endpoint).scheme and not endpoint.startswith("/"):
+        endpoint = relative_url(page["url"], endpoint)
+    page_chat["endpoint"] = endpoint
+    chat_json = json.dumps({**page_chat, "current_page": page["url"]}, ensure_ascii=False).replace("<", "\\u003c")
+    chat_tags = "" if not chat["enabled"] else (
+        f'<script id="chat-config" type="application/json">{chat_json}</script>\n'
+        f'  <script src="{e(base)}assets/chat.js" defer></script>'
+    )
     head = "" if page.get("home") else f'<header class="page-head"><p class="eyebrow">{e(page["part_label"])}</p><h1>{e(page["title"])}</h1><p class="lead">{e(page["lead"])}</p><p class="meta">阅读约 {e(page.get("time", ""))} 分钟 · 第 {page["number"] + 1} / {len(pages)} 篇</p></header>'
     search_button = '<button id="search-open" type="button">搜索 <kbd>Ctrl/⌘ K</kbd></button>'
     return f'''<!doctype html>
@@ -184,12 +286,13 @@ def shell(page: dict[str, Any], fragment: str, headings: list[dict[str, Any]], p
   <aside class="sidebar">{sidebar(page, pages, book)}</aside>
   <main>
     <header class="topbar"><button id="menu" type="button" aria-label="打开导航">☰</button><span class="crumb">{e(page["part_label"])} / {e(page["title"])}</span>{search_button}<button id="theme" type="button" aria-label="切换主题">◐</button></header>
-    <div class="content-wrap"><article class="article">{head}{fragment}{pager(page, pages)}</article>{toc(headings)}</div>
+    <div class="content-wrap"><article class="article">{head}{fragment}{pager(page, pages)}</article>{toc(headings)}{chat_panel(page_chat)}</div>
   </main>
   <dialog id="search-dialog"><form method="dialog"><input id="search" placeholder="搜索页面与概念" autocomplete="off"><button aria-label="关闭">×</button></form><div id="results"></div></dialog>
   <script>window.HANDBOOK_BASE={base_json};</script>
   <script id="search-data" type="application/json">{search_json}</script>
   <script src="{e(base)}assets/app.js" defer></script>
+  {chat_tags}
 </body>
 </html>'''
 
@@ -235,7 +338,7 @@ def prepare_pages(handbook: Path, pages: list[dict[str, Any]], draft: bool) -> t
 
 def copy_assets(handbook: Path, site: Path, generated: list[str]) -> None:
     asset_dir = handbook / "assets"
-    for asset in ("style.css", "app.js", "mermaid.min.js"):
+    for asset in ("style.css", "app.js", "chat.js", "mermaid.min.js"):
         source = asset_dir / asset
         if not source.is_file():
             continue
@@ -247,8 +350,12 @@ def copy_assets(handbook: Path, site: Path, generated: list[str]) -> None:
 def build(handbook: Path, draft: bool) -> int:
     book = read_json(handbook / "book.json")
     pages = flatten_pages(book)
+    chat = chat_config(book)
     asset_dir, site = handbook / "assets", handbook / "site"
-    for asset in ("style.css", "app.js"):
+    required_assets = ["style.css", "app.js"]
+    if chat["enabled"]:
+        required_assets.append("chat.js")
+    for asset in required_assets:
         if not (asset_dir / asset).is_file():
             raise HandbookError(f"missing required local asset assets/{asset}")
     prepared, missing = prepare_pages(handbook, pages, draft)
@@ -261,7 +368,7 @@ def build(handbook: Path, draft: bool) -> int:
     for page, fragment, processed, headings in prepared:
         output = site / ("index.html" if page.get("home") else f"pages/{page['slug']}.html")
         output.parent.mkdir(exist_ok=True)
-        output.write_text(shell(page, processed, headings, pages, book, search), encoding="utf-8")
+        output.write_text(shell(page, processed, headings, pages, book, search, chat), encoding="utf-8")
         generated.append(output.relative_to(site).as_posix())
     copy_assets(handbook, site, generated)
     search_path = site / "assets" / "search-index.json"
