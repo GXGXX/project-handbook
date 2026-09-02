@@ -1,0 +1,27 @@
+{
+  "title": "项目手册",
+  "subtitle": "Project Handbook",
+  "version": "0.1.0",
+  "parts": [
+    {
+      "id": "start",
+      "label": "起点导读",
+      "icon": "◆",
+      "pages": [
+        {
+          "slug": "index",
+          "title": "封面与导读",
+          "home": true,
+          "time": 3,
+          "lead": "从这里开始，先建立项目全局视角。"
+        },
+        {
+          "slug": "overview",
+          "title": "项目总览",
+          "time": 8,
+          "lead": "项目解决什么问题，事实来自哪里。"
+        }
+      ]
+    }
+  ]
+}

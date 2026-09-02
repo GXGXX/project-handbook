@@ -1,0 +1,5 @@
+interface:
+  display_name: "Project Handbook"
+  short_description: "Turn code and docs into a verifiable offline handbook"
+  brand_color: "#4A5D6B"
+  default_prompt: "Use $project-handbook to turn this project into a verifiable offline handbook."
