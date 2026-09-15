@@ -1,0 +1,68 @@
+{
+  "title": "一次奖励领取，是怎样完成的？",
+  "book_id": "synthetic-learning-example",
+  "summary": "纯虚构教学案例：从职责分工到领取流程，再用三种情况核对结果。",
+  "sources": [
+    {"id":"client","title":"示例客户端","path":"synthetic/client.txt","locator":"完整教学片段","excerpt":"点击领取 -> send ClaimReward(reward_id)\n收到 success -> 刷新余额并显示奖励\n收到 level_low / already_claimed -> 显示原因","note":"人工编写的合成教学片段，不是实际项目代码。"},
+    {"id":"rules","title":"示例配置","path":"synthetic/rules.txt","locator":"完整教学片段","excerpt":"reward_id = welcome\nunlock_level = 10\nreward_amount = 100\nclaim_limit = 1","note":"演示配置；示例数值不对应真实项目。"},
+    {"id":"handler","title":"示例服务端逻辑","path":"synthetic/handler.txt","locator":"完整教学片段","excerpt":"claim(player, reward_id):\n  rule = rules[reward_id]\n  if player.level < rule.unlock_level: return level_low\n  if reward_id in player.claimed: return already_claimed\n  player.balance += rule.reward_amount\n  player.claimed.add(reward_id)\n  return success, player.balance","note":"教学伪代码，未执行。不展示事务、持久化或并发控制，不能据此证明它们存在。"}
+  ],
+  "systems": [{"id":"reward","title":"奖励领取","summary":"客户端发起，服务端检查，配置决定条件和数量。","nodes":[{"id":"eligibility","title":"先检查，再发放","body":"示例逻辑先校验等级和领取记录，再增加余额。","kind":"配置声明","sources":["handler","rules"]}]}],
+  "learning": {
+    "question":"我是新人，想了解奖励这块是怎么做的。",
+    "interpretation":"将“奖励这块”理解为一次固定奖励的领取：谁负责、请求怎么走、何时成功或失败。先补充职责框架，不扩展到所有经济系统。",
+    "answer":"领取并不是客户端直接加钱。客户端发起请求，服务端按配置检查等级和领取记录；符合条件才增加余额并记为已领取，客户端收到结果后刷新显示。这份教学资料没有事务和重试实现，不能据此保证并发领取安全。",
+    "scope":["客户端、服务端与配置的职责","一次领取从点击到返回","正常、边界和重复领取三个例子"],
+    "excluded":["充值与商城","邮件、掉落和补偿","并发安全与实际持久化保证"],
+    "status":"declared","sources":["client","rules","handler"],
+    "diagram": {"type":"architecture","nodes":[
+      {"id":"client","title":"客户端：发起与展示","body":"传递奖励编号，按服务端结果刷新界面，不决定最终发放。","status":"declared","sources":["client"]},
+      {"id":"server","title":"服务端：检查与发放","body":"读取规则、检查角色状态、修改余额和领取记录，返回成功或失败。","status":"declared","sources":["handler"]},
+      {"id":"config","title":"配置：条件与数量","body":"等级达到 10 才可领取 100，一种奖励限领一次。","status":"declared","sources":["rules"]}
+    ],"edges":[
+      {"from":"client","to":"server","label":"请求领取 ClaimReward","status":"declared","sources":["client"]},
+      {"from":"server","to":"config","label":"读取奖励规则","status":"declared","sources":["handler","rules"]},
+      {"from":"server","to":"client","label":"返回结果与余额","status":"declared","sources":["handler","client"]}
+    ]},
+    "steps":[
+      {"id":"request","node":"client","title":"点击领取，带上奖励编号","owner":"客户端","input":"玩家点击 welcome 奖励的领取按钮。","action":"发送 ClaimReward，参数包含 reward_id。","output":"服务端收到要领取哪项奖励。","details":"按钮显示可点击，不等于服务端一定允许领取。页面状态可能滞后，因此最终规则仍由服务端检查。","status":"declared","sources":["client"]},
+      {"id":"check","node":"server","title":"先确认等级和领取次数","owner":"服务端 + 配置","input":"角色等级、领取记录、welcome 的规则。","action":"先比较等级是否达到 10，再判断是否已经领取。","output":"不满足时直接返回原因；都满足才继续发放。","details":"先后顺序决定多个条件同时不满足时返回哪个错误。示例中先返回 level_low，再返回 already_claimed。","status":"declared","sources":["handler","rules"]},
+      {"id":"grant","node":"server","title":"增加余额，并记录已领取","owner":"服务端","input":"已通过检查的角色，原余额 balance。","action":"余额增加 reward_amount = 100，并将 welcome 加入领取记录。","output":"返回 success 与新余额。","details":"教学片段只有顺序操作，没有数据库事务与锁。不能把“先检查后增加”推断为并发防重；真实项目需要继续查事务、锁、唯一约束及失败回滚。","status":"declared","sources":["handler"]},
+      {"id":"display","node":"client","title":"用返回结果刷新界面","owner":"客户端","input":"服务端返回 success、level_low 或 already_claimed。","action":"成功时显示奖励和新余额，失败时显示原因。","output":"玩家看到领取结果；失败路径没有进入发放步骤。","details":"如果服务端已发放但响应丢失，客户端如何重试？这份片段没有说明，应继续找请求重试与状态重新拉取逻辑。","status":"declared","sources":["client"]}
+    ],
+    "examples":[
+      {"id":"normal","title":"等级 12，第一次领取","kind":"normal","provenance":"illustrative","input":"等级 12，余额 50，未领 welcome。","trace":[
+        {"step":"request","value":"发送 welcome 奖励编号。","sources":["client"]},
+        {"step":"check","value":"12 >= 10，且领取记录中没有 welcome：通过。","sources":["handler","rules"]},
+        {"step":"grant","value":"余额 50 + 100 = 150；领取记录加入 welcome。","sources":["handler"]},
+        {"step":"display","value":"收到 success，显示余额 150。","sources":["client"]}
+      ],"result":"按教学片段推演，领取成功，余额变为 150。非运行实测。","status":"declared","sources":["handler","rules"]},
+      {"id":"threshold","title":"刚好等级 10，也可以领取","kind":"boundary","provenance":"illustrative","input":"等级 10，余额 0，未领 welcome。","trace":[
+        {"step":"request","value":"发送 welcome。","sources":["client"]},
+        {"step":"check","value":"10 < 10 不成立，因此不会报等级不足；记录中未领取。","sources":["handler"]},
+        {"step":"grant","value":"余额 0 + 100 = 100，写入领取记录。","sources":["handler","rules"]},
+        {"step":"display","value":"收到 success，显示余额 100。","sources":["client"]}
+      ],"result":"边界是“达到 10”，不是“超过 10”。等级 9 则在检查步骤提前返回。","status":"declared","sources":["handler","rules"]},
+      {"id":"duplicate","title":"已经领取，再点一次","kind":"exception","provenance":"illustrative","input":"等级 12，余额 150，记录中已有 welcome。","trace":[
+        {"step":"request","value":"再次发送 welcome。","sources":["client"]},
+        {"step":"check","value":"等级通过，但领取记录命中：返回 already_claimed，跳过发放。","sources":["handler"]},
+        {"step":"display","value":"显示已领取；不增加余额。","sources":["client"]}
+      ],"result":"按顺序调用推演，余额仍为 150。这个例子不证明并发请求同样安全。","status":"declared","sources":["handler"]}
+    ],
+    "glossary":[
+      {"term":"奖励编号","aliases":["reward_id","welcome"],"meaning":"标识要领哪一份奖励，不是奖励数量。"},
+      {"term":"开放等级","aliases":["unlock_level","等级门槛"],"meaning":"角色必须达到的最低等级。客户端展示和服务端检查应使用一致口径。"},
+      {"term":"重复领取","aliases":["already_claimed","claimed","防重"],"meaning":"领取记录已经存在。顺序判断不等同于事务或并发幂等保证。"}
+    ],
+    "actions":[
+      {"title":"想改开放等级或奖励数量","body":"先核对配置字段 unlock_level / reward_amount，再查服务端读取位置与客户端提示，最后验证门槛前、门槛上及门槛后的行为。","step":"check","sources":["rules","handler"]},
+      {"title":"玩家说领了却没有到账","body":"沿领取请求、检查结果、发放记录、返回消息逐段核对。不能只看客户端弹窗；真实项目还要补服务端日志和持久化证据。","step":"grant","sources":["client","handler"]},
+      {"title":"准备验证重复领取","body":"先测同一角色连续领取，再查并发与重试实现；并发压力测试需要受控测试环境，不能直接对线上试验。","step":"grant","sources":["handler"]}
+    ],
+    "coverage":[
+      {"area":"客户端","checked":"请求参数与成功/失败展示的教学片段","missing":"网络中断后的重试处理","next":"补真实请求层与状态刷新逻辑"},
+      {"area":"服务端","checked":"条件检查、顺序发放、领取标记","missing":"事务、并发互斥、落库失败回滚","next":"沿发放函数继续查存储与事务调用"},
+      {"area":"配置与文档","checked":"开放等级、数量与次数声明","missing":"真实部署版本及更新时间","next":"记录原文件定位、哈希与版本后对照运行读取"}
+    ]
+  }
+}

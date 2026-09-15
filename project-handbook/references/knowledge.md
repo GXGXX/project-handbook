@@ -1,6 +1,6 @@
 # Visual knowledge handbooks
 
-Default: one reader question, one diagram. Use this mode when the reader asks how a flow or rule works and needs a checkable HTML walkthrough. A whole-project atlas is optional after that question is answered.
+Legacy diagram mode: one reader question, one diagram. For newcomer or vague-question tasks, use the default layered learning mode in [learning.md](learning.md). Use this mode when the reader asks how a flow or rule works and needs a checkable HTML walkthrough. A whole-project atlas is optional after that question is answered.
 
 ## Authoring contract
 

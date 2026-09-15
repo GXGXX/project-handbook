@@ -9,6 +9,7 @@ import shutil
 import sys
 from pathlib import Path
 from build_handbook import build, HandbookError
+from learning_handbook import render_learning
 
 ROOT = Path(__file__).resolve().parents[1]
 ID = re.compile(r'^[a-z][a-z0-9-]{0,44}$')
@@ -438,6 +439,7 @@ def vertical_flow(flow, sources, prefix='pages/'):
 
 def render_knowledge(data, output):
     validate(data)
+    portable = render_learning(data) if 'learning' in data else None
     output = Path(output).resolve()
     if output.exists(): raise ValueError('output already exists; choose a new directory: ' + str(output))
     sources = {s['id']:s for s in data.get('sources',[])}
@@ -643,10 +645,14 @@ def render_knowledge(data, output):
         if part_pages:
             parts.append({'label': label, 'pages': part_pages})
     book = {'title': data['title'], 'subtitle': '一问一图 · 竖向流程 · 证据链路', 'version': '0.9.0', 'book_id': data['book_id'], 'atlas': True, 'chat': {'enabled': True, 'mode': 'relay', 'endpoint': '/api/chat'}, 'parts': parts}
+    if portable is not None:
+        book.update(version='1.0.0', subtitle='新人讲解 · 框架流程 · 细节例子')
     (output / 'book.json').write_text(json.dumps(book, ensure_ascii=False, indent=2), encoding='utf-8')
     (output / 'knowledge.json').write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
     for slug, fragment in fragments.items(): (output / 'content' / f'{slug}.html').write_text(fragment, encoding='utf-8')
     build(output, False)
+    if portable is not None:
+        (output / 'handbook.html').write_text(portable, encoding='utf-8')
     return output
 
 def main():

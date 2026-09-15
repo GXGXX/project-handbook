@@ -1,5 +1,5 @@
 interface:
   display_name: "Project Handbook"
-  short_description: "Turn code and docs into a verifiable offline handbook"
+  short_description: "Explain code and docs with interactive offline flowcharts"
   brand_color: "#4A5D6B"
-  default_prompt: "Use $project-handbook to turn this project into a verifiable offline handbook."
+  default_prompt: "Use $project-handbook to answer my project question with an offline HTML flowchart, explicit branches, clickable evidence and worked examples."

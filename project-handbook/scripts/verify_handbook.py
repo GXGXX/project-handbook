@@ -161,6 +161,14 @@ def verify_facts(handbook: Path, pages: list[dict[str, Any]]) -> list[str]:
 
 
 def verify(handbook: Path) -> int:
+    from learning_handbook import verify_portable
+    if handbook.is_file():
+        errors = verify_portable(handbook)
+        for error in errors:
+            print('error: ' + error)
+        if not errors:
+            print('verified portable handbook, sections, assets and internal links')
+        return int(bool(errors))
     try:
         book = read_json(handbook / "book.json")
         pages = flatten_pages(book)
@@ -169,6 +177,8 @@ def verify(handbook: Path) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     errors = verify_pages(handbook, pages) + verify_assets(handbook, chat["enabled"]) + verify_facts(handbook, pages)
+    if (handbook / 'handbook.html').is_file():
+        errors.extend(verify_portable(handbook / 'handbook.html'))
     if errors:
         print(f"verification failed with {len(errors)} error(s):")
         for error in errors:

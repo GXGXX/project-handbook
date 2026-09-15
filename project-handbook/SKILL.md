@@ -1,28 +1,44 @@
 ---
 name: project-handbook
-description: Answer one reader question with one evidence-backed offline diagram handbook from client, server, and documentation directories. Use when a user asks how a flow, rule, or system works and wants a checkable HTML walkthrough; do not use for ordinary README edits, API reference generation, or general website work.
+description: Use when a newcomer provides code and documentation directories and asks a vague project question, or needs an offline HTML explanation from framework and end-to-end flow to details, worked examples and evidence. Not for ordinary README edits or API reference generation.
 metadata:
-  version: "0.9.0"
+  version: "1.1.0"
   source-inspiration: "https://github.com/lili-luo/aicoding-cookbook"
 ---
 
 # Project Handbook
 
-Default delivery is one question, one diagram. Take a reader question plus
-optional client, server, and documentation roots; extract only the evidence
-needed to answer that question; render a small static site a maintainer can
-open without a server. Treat executable code as the factual baseline, keep
-evidence visible, and do not expand into a whole-project encyclopedia unless
-the user asks.
+Default delivery for a process or calculation question is a flowchart-first,
+portable HTML: interpret the vague question, explain necessary background,
+show actual decisions and execution order, then reveal formulas and evidence
+inside clickable nodes. Separate entry paths and connect to shared processing.
+Read [references/flow.md](references/flow.md) first and build with
+`python scripts/build_flow.py flow.json NEW_OUTPUT` using the bundled
+`assets/flow.example.json` schema. Never substitute a tiny overview plus a long
+article for a requested flowchart. All navigation items need an exclusive,
+visible selected state. Do not add production notes or review-summary sections
+unless requested; keep factual uncertainty in the relevant node details.
+For a broader conceptual handbook rather than a process question, consult
+[references/learning.md](references/learning.md) and its `learning` manifest.
+Do not require a newcomer to name functions or narrow their question before
+inspecting the supplied directories. Ask only when ambiguity changes scope.
 
 ## Operating contract
+
+For flowchart delivery, keep reviewed facts and topology in `flow.json`; use
+the flow builder and its browser checks. The `book.json`, `content/`, Q&A and
+site-specific contracts below apply only when building a multi-page handbook,
+not to the default standalone flowchart. Never copy private input data into a
+public example without explicit authorization.
 
 - Inspect the repository before writing: inventory entry points, modules, data
   flows, configuration, operations, and external integrations.
 - Classify documentation as complete, partial, stale, or absent. When docs and
   code disagree, record the disagreement instead of silently choosing a side.
-- Keep the source of truth in `book.json`, `content/*.html`, and optional
-  `evidence/facts.json`; never hand-edit generated `site/` pages.
+- For learning handbooks keep the source of truth in `knowledge.json`, including
+  the reviewed `learning` content and source snapshots. Never hand-edit generated
+  `handbook.html` or `site/` pages. Legacy hand-authored books use `book.json`,
+  `content/*.html`, and optional `evidence/facts.json`.
 - Use the bundled initializer to scaffold a handbook, the builder to generate
   pages, and the verifier to fail on broken links, missing content, unsafe
   placeholders, duplicate IDs, or missing local assets.
@@ -47,52 +63,38 @@ the user asks.
 
 ## Workflow
 
-Read [references/knowledge.md](references/knowledge.md). The default task is
-not a whole-project atlas. Ask or reuse one reader question, inspect only the
-client / server / documentation evidence needed to answer it, then author a
-reviewed `knowledge.json` whose vertical flow, nodes and risks all serve
-that question. Run `scripts/build_knowledge.py` to generate one HTML diagram
-with evidence pages. File inventories are discovery drafts, not completed
-explanations. Mark verified, declared, and missing runtime evidence explicitly.
-A full-project map is optional thickening after the question is answered.
-Never bake private project names or paths into the reusable skill; keep real
-evidence outputs outside a public-ready repository.
-
-Q&A defaults to local evidence excerpts, explicitly not model-generated answers.
-Readers can opt into a configured model and confirm transmission, or copy their
-question and evidence back into the installing agent. Static HTML cannot inherit
-the agent's account quota. Verify conversation and draft continuity across pages.
-
-1. **Pin the question** — write one reader question before scanning the tree.
-   Everything that does not help answer it stays out of the first delivery.
-2. **Inventory only what the question needs** — locate the docs, entry points,
-   configuration, tests, and deployment files on that path. Write a short
-   evidence map before drafting prose. Missing server code stays `open`.
-3. **Design one reading path** — home vertical flowchart, primary flow, the
-   nodes required by the question, risks/gaps, and source pages. Keep
-   navigation in `book.json`. Do not add sibling systems “for completeness.”
-4. **Scaffold or import** — for a normal repository, run
-   `scripts/init_handbook.py <output-dir>` and replace the sample
-   config/content. When the user provides separate client, backend, and
-   documentation roots, run `scripts/import_project.py --client <client-dir>
-   --backend <backend-dir> --docs <docs-dir> --output <output-dir>` only as a
-   bounded evidence draft. `--backend` is optional, but omitting it must leave
-   server-side conclusions explicitly open. The importer must stay read-only
-   against source roots, skip VCS/cache trees, extract only bounded text and
-   workbook metadata, and write the result to a new output directory outside
-   sensitive source trees.
-5. **Author** — keep exact names, ports, fields, and thresholds unchanged.
-   Separate configuration declarations, client descriptions, checked
-   references, and unknown runtime behavior.
-6. **Build and verify** — run `python scripts/build_knowledge.py knowledge.json
-   <new-handbook-dir>` (or `build_handbook.py` for hand-authored books)
-   followed by `python scripts/verify_handbook.py <handbook-dir>`. Fix errors;
-   do not ship a warning-only partial build unless the user explicitly requests
-   a draft preview and the README labels it as such.
-7. **Smoke test** — open the site, walk the primary flow, open one source page,
-   and ask the original question in the Q&A panel. For chat, start
-   `python scripts/chat_server.py <handbook-dir>` and use the printed localhost
-   URL. Read [references/chat.md](references/chat.md) for relay and direct mode.
+1. **Interpret** — inspect the supplied roots read-only. Record the original
+   question, your interpretation, scope, and exclusions. Add enough background
+   for a newcomer rather than forcing an isolated one-question/one-diagram view.
+2. **Trace** — follow the relevant entry, protocol, handler, configuration,
+   state/storage changes, return path and exceptions. Keep an evidence trace
+   with source locators, relationship type, status and unresolved references.
+   Directory import is discovery only, never a completed business explanation.
+3. **Author** — for workflow questions follow [references/flow.md](references/flow.md):
+   author exact yes/no branches, shared sections, bypasses and worked examples.
+   Do not use dashed lines to imply uncertain execution. For conceptual books,
+   follow the six-layer contract and manifest in
+   [references/learning.md](references/learning.md). Use
+   `assets/learning.example.json` as a synthetic schema example, not project facts.
+   Each example links its intermediate states to real authored steps. Label
+   demonstrations, runtime observations, source declarations and evidence gaps.
+4. **Build** — workflow: `python scripts/build_flow.py flow.json <new-output>`.
+   Conceptual book: `python scripts/build_knowledge.py knowledge.json <new-output>`.
+   The learning manifest produces portable `handbook.html` as well as the legacy
+   site. Existing outputs are never replaced. For old manifest details consult
+   [references/knowledge.md](references/knowledge.md).
+5. **Verify** — flow builds validate their manifest; open the generated file
+   in a real browser and test tab and section selection, examples, details,
+   node/edge clearance and narrow layout. Compare each path to the evidence.
+   For conceptual books run `python scripts/verify_handbook.py <new-output>` and
+   `python scripts/verify_handbook.py <new-output>/handbook.html`. Open the actual
+   portable file and check guide controls, source return, example-to-step links,
+   term search, narrow layout and offline reading. Structural checks do not
+   prove semantic correctness; review the original question against the answer.
+6. **Deliver** — give the portable HTML first, state the deepest checked path
+   and missing evidence. The core answer must not require configuring a model.
+   A new question can return to the agent for deeper source analysis; optional
+   online Q&A remains in the legacy site, with explicit model configuration.
 
 ## Supporting guidance
 
@@ -102,6 +104,8 @@ the agent's account quota. Verify conversation and draft continuity across pages
 - Read [references/validation.md](references/validation.md) before delivery.
 
 ## Included tools
+
+- `scripts/build_flow.py` — render an authored branching flowchart as one offline HTML file; no server or model configuration needed to read it.
 
 - `scripts/build_knowledge.py` — render reviewed diagrams, nodes, branches and source pages from a knowledge manifest.
 

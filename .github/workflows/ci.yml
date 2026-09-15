@@ -27,3 +27,21 @@ jobs:
           node tests/test_app_ui.cjs
           node tests/test_chat_ui.cjs
           node tests/test_atlas_ui.cjs
+
+  learning-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - run: python project-handbook/scripts/build_knowledge.py project-handbook/assets/learning.example.json learning-smoke
+      - run: python project-handbook/scripts/verify_handbook.py learning-smoke
+      - run: node tests/test_learning_browser.cjs learning-smoke/handbook.html
+      - run: python project-handbook/scripts/build_flow.py project-handbook/assets/flow.example.json flow-smoke
+      - run: node tests/test_flow_browser.cjs flow-smoke/handbook.html

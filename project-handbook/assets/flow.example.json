@@ -1,0 +1,27 @@
+{
+  "title": "订单支付是怎样完成的？",
+  "summary": "合成教学示例：先创建订单，再处理支付结果。沿实线箭头阅读，点击节点查看依据。",
+  "common": "payment",
+  "sources": [{"id":"demo","locator":"合成规则 · 非真实系统","excerpt":"库存不足时结束；库存充足时创建待支付订单。成功通知通过校验后，检查是否已处理；未处理才记录支付与履约事件。此例不代表生产系统实现。"}],
+  "graphs": [
+    {"id":"order","title":"创建订单","source":"demo","nodes":[
+      {"id":"submit","title":"提交订单","row":0,"col":0,"kind":"terminal","lines":"校验商品与数量","detail":"本图仅展示成功提交后的库存与支付路径。"},
+      {"id":"stock","title":"库存充足？","row":1,"col":0,"kind":"decision","lines":"需求数量 ≤ 可用数量","detail":"否分支结束；是分支继续创建订单。"},
+      {"id":"soldout","title":"提示缺货，结束","row":1,"col":1,"kind":"terminal","lines":"不进入支付流程","detail":"演示失败路径，不推断真实库存实现。"},
+      {"id":"created","title":"创建待支付订单","row":2,"col":0,"kind":"process","lines":"金额 = 单价 × 数量","detail":"演示：50 × 2 = 100。真实金额规则需核对代码。"},
+      {"id":"pay","title":"发起支付","row":3,"col":0,"kind":"terminal","lines":"继续阅读：支付结果","detail":"点击下方按钮查看共同流程。"}
+    ],"edges":[{"a":"submit","b":"stock","label":""},{"a":"stock","b":"soldout","label":"否"},{"a":"stock","b":"created","label":"是"},{"a":"created","b":"pay","label":""}]},
+    {"id":"payment","title":"支付结果","source":"demo","nodes":[
+      {"id":"callback","title":"收到已通过校验的成功通知","row":0,"col":0,"kind":"terminal","lines":"签名、金额、订单校验均已通过","detail":"此图从校验通过开始，不展示校验失败路径。"},
+      {"id":"duplicate","title":"该通知已处理？","row":1,"col":0,"kind":"decision","lines":"检查幂等记录","detail":"演示规则：重复通知只确认，不重复履约。"},
+      {"id":"ack","title":"直接确认，结束","row":1,"col":1,"kind":"terminal","lines":"不重复推进状态","detail":"已处理路径。"},
+      {"id":"paid","title":"记录支付与履约事件","row":2,"col":0,"kind":"process","lines":"同一事务记录状态与事件","detail":"合成示例规则，不宣称验证过生产环境的一致性。"},
+      {"id":"done","title":"确认通知","row":3,"col":0,"kind":"terminal","lines":"本次处理结束","detail":"履约执行不在此图范围内。"}
+    ],"edges":[{"a":"callback","b":"duplicate","label":""},{"a":"duplicate","b":"ack","label":"是"},{"a":"duplicate","b":"paid","label":"否"},{"a":"paid","b":"done","label":""}]}
+  ],
+  "examples":[
+    {"title":"正常：购买两件商品","provenance":"演示","input":"单价50，数量2；库存充足；首次成功通知。","trace":["50 × 2 = 100，创建待支付订单。","通知通过校验，此前未处理。","记录已支付与履约事件，确认通知。"],"result":"金额100；不是运行记录。"},
+    {"title":"异常：库存不足","provenance":"演示","input":"请求2件，仅剩1件。","trace":["库存充足？否。","提示缺货并结束。"],"result":"不进入支付流程。"},
+    {"title":"边界：重复通知","provenance":"演示","input":"已处理的成功通知再次到达。","trace":["该通知已处理？是。","直接确认，不再次记录履约事件。"],"result":"不重复推进流程。"}
+  ]
+}
