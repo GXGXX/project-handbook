@@ -195,12 +195,17 @@ def chat_config(book: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def visible_pages(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in pages if not str(item.get("slug", "")).startswith("source-")]
+
+
 def sidebar(page: dict[str, Any], pages: list[dict[str, Any]], book: dict[str, Any]) -> str:
     current = page["url"]
-    chunks = [f'<a class="brand" href="{e(relative_url(current, "index.html"))}"><strong>{e(book["title"])}</strong><small>{e(book.get("subtitle", ""))}</small></a>']
-    for part_label in dict.fromkeys(item["part_label"] for item in pages):
+    nav = visible_pages(pages)
+    chunks = [f'<a class="brand" href="{e(relative_url(current, "index.html"))}"><strong>{e(book["title"])}</strong><small>{e(book.get("subtitle", ""))}</small></a>', '<button class="sidebar-close" id="sidebar-close" type="button" aria-label="关闭导航" title="关闭导航">×</button>']
+    for part_label in dict.fromkeys(item["part_label"] for item in nav):
         chunks.append(f'<section class="nav-group"><h2>{e(part_label)}</h2>')
-        for item in pages:
+        for item in nav:
             if item["part_label"] != part_label:
                 continue
             href = relative_url(current, item["url"])
@@ -218,14 +223,18 @@ def toc(headings: list[dict[str, Any]]) -> str:
 
 
 def pager(page: dict[str, Any], pages: list[dict[str, Any]]) -> str:
-    index = page["number"]
+    nav = visible_pages(pages)
+    try:
+        index = nav.index(page)
+    except ValueError:
+        return "<nav class=\"pager\"><span class=\"pager-empty\"></span><span class=\"pager-empty\"></span></nav>"
     links: list[str] = []
     for direction, offset, label in (("prev", -1, "上一篇"), ("next", 1, "下一篇")):
         target_index = index + offset
-        if target_index < 0 or target_index >= len(pages):
+        if target_index < 0 or target_index >= len(nav):
             links.append('<span class="pager-empty"></span>')
             continue
-        target = pages[target_index]
+        target = nav[target_index]
         href = relative_url(page["url"], target["url"])
         links.append(f'<a class="{direction}" href="{e(href)}"><small>{label}</small><span>{e(target["title"])}</span></a>')
     return "<nav class=\"pager\">" + "".join(links) + "</nav>"
@@ -242,15 +251,23 @@ def chat_panel(chat: dict[str, Any]) -> str:
   <div id="chat-messages" class="chat-messages" role="log" aria-live="polite">
     <div class="chat-welcome"><strong>基于本项目手册提问</strong><p>我会优先引用当前整理出的代码与文档证据；证据不足时会明确说明。</p></div>
   </div>
-  <details class="chat-settings">
+  <details id="chat-settings" class="chat-settings">
     <summary>连接设置</summary>
-    <label>连接方式<select id="chat-mode"><option value="relay">本地 relay（推荐）</option><option value="direct">浏览器直连</option></select></label>
-    <label>接口地址<input id="chat-endpoint" type="url" spellcheck="false"></label>
-    <label>模型<input id="chat-model" type="text" spellcheck="false" placeholder="由 relay 或接口默认值决定"></label>
+    <label>回答方式<select id="chat-answer-mode"><option value="evidence">本地证据检索（不调用模型）</option><option value="model">模型问答（需配置接口）</option></select></label>
+    <input id="chat-mode" type="hidden" value="relay">
+    <label>接口地址<input id="chat-endpoint" type="url" spellcheck="false" placeholder="请输入完整接口地址，例如 https://你的域名/v1" value=""></label>
     <label id="chat-key-wrap">API Key（仅当前页面内存）<input id="chat-api-key" type="password" autocomplete="off"></label>
-    <p class="chat-security">推荐使用本地 relay：密钥从环境变量读取，不会写入 HTML 或 Git。</p>
+    <div class="chat-model-row">
+      <label>模型<select id="chat-model"><option value="">先获取模型列表</option></select></label>
+      <button id="chat-fetch-models" type="button">获取模型</button>
+    </div>
+    <p id="chat-fetch-note" class="chat-fetch-note" hidden></p>
+    <p class="chat-security">填写接口地址和 API Key，点击获取模型后再提问。密钥只留在当前页面内存，不会写入 HTML、浏览器存储或 Git。双击 HTML 时浏览器会拦截外部模型接口，请用启动器打开 localhost。选择模型问答并发送后，会把当前问题与检索到的手册摘录发给所填接口。</p>
+    <input id="chat-consent" type="checkbox" checked hidden>
   </details>
   <form id="chat-form" class="chat-form">
+    <small id="chat-context">上下文：当前页面</small>
+    <button id="chat-export" type="button">复制问题与证据到 agent</button>
     <textarea id="chat-input" rows="3" placeholder="{e(chat["placeholder"])}" maxlength="4000"></textarea>
     <div class="chat-form-foot"><small>Ctrl/⌘ + Enter 发送</small><button id="chat-send" type="submit">发送</button></div>
   </form>
@@ -262,6 +279,8 @@ def shell(page: dict[str, Any], fragment: str, headings: list[dict[str, Any]], p
     base_json = json.dumps(base).replace("<", "\\u003c")
     search_json = json.dumps(search, ensure_ascii=False).replace("<", "\\u003c")
     page_chat = dict(chat)
+    page_chat['book_id'] = str(book.get('book_id', book['title']))
+    page_chat['default_answer_mode'] = 'evidence'
     endpoint = page_chat["endpoint"]
     if not urlsplit(endpoint).scheme and not endpoint.startswith("/"):
         endpoint = relative_url(page["url"], endpoint)
@@ -271,7 +290,13 @@ def shell(page: dict[str, Any], fragment: str, headings: list[dict[str, Any]], p
         f'<script id="chat-config" type="application/json">{chat_json}</script>\n'
         f'  <script src="{e(base)}assets/chat.js" defer></script>'
     )
-    head = "" if page.get("home") else f'<header class="page-head"><p class="eyebrow">{e(page["part_label"])}</p><h1>{e(page["title"])}</h1><p class="lead">{e(page["lead"])}</p><p class="meta">阅读约 {e(page.get("time", ""))} 分钟 · 第 {page["number"] + 1} / {len(pages)} 篇</p></header>'
+    nav = visible_pages(pages)
+    try:
+        nav_index = nav.index(page)
+        meta = f'阅读约 {e(page.get("time", ""))} 分钟 · 第 {nav_index + 1} / {len(nav)} 篇'
+    except ValueError:
+        meta = f'阅读约 {e(page.get("time", ""))} 分钟 · 来源证据'
+    head = "" if page.get("home") else f'<header class="page-head"><p class="eyebrow">{e(page["part_label"])}</p><h1>{e(page["title"])}</h1><p class="lead">{e(page["lead"])}</p><p class="meta">{meta}</p></header>'
     search_button = '<button id="search-open" type="button">搜索 <kbd>Ctrl/⌘ K</kbd></button>'
     return f'''<!doctype html>
 <html lang="zh-CN" data-theme="light">
@@ -282,16 +307,17 @@ def shell(page: dict[str, Any], fragment: str, headings: list[dict[str, Any]], p
   <meta name="description" content="{e(page["lead"])}">
   <link rel="stylesheet" href="{e(base)}assets/style.css">
 </head>
-<body>
+<body class="{'atlas-book' if book.get('atlas') else ''}">
   <aside class="sidebar">{sidebar(page, pages, book)}</aside>
   <main>
-    <header class="topbar"><button id="menu" type="button" aria-label="打开导航">☰</button><span class="crumb">{e(page["part_label"])} / {e(page["title"])}</span>{search_button}<button id="theme" type="button" aria-label="切换主题">◐</button></header>
+    <header class="topbar"><button id="menu" type="button" aria-label="打开导航" aria-expanded="false">☰</button><span class="crumb">{e(page["part_label"])} / {e(page["title"])}</span>{search_button}<button id="theme" type="button" aria-label="切换主题">◐</button></header>
     <div class="content-wrap"><article class="article">{head}{fragment}{pager(page, pages)}</article>{toc(headings)}{chat_panel(page_chat)}</div>
   </main>
   <dialog id="search-dialog"><form method="dialog"><input id="search" placeholder="搜索页面与概念" autocomplete="off"><button aria-label="关闭">×</button></form><div id="results"></div></dialog>
   <script>window.HANDBOOK_BASE={base_json};</script>
   <script id="search-data" type="application/json">{search_json}</script>
   <script src="{e(base)}assets/app.js" defer></script>
+  {('<script src="' + e(base) + 'assets/atlas.js" defer></script>') if book.get('atlas') else ''}
   {chat_tags}
 </body>
 </html>'''
@@ -338,7 +364,7 @@ def prepare_pages(handbook: Path, pages: list[dict[str, Any]], draft: bool) -> t
 
 def copy_assets(handbook: Path, site: Path, generated: list[str]) -> None:
     asset_dir = handbook / "assets"
-    for asset in ("style.css", "app.js", "chat.js", "mermaid.min.js"):
+    for asset in ("style.css", "app.js", "chat.js", "mermaid.min.js", "atlas.js"):
         source = asset_dir / asset
         if not source.is_file():
             continue
@@ -364,6 +390,16 @@ def build(handbook: Path, draft: bool) -> int:
     (site / "assets").mkdir(exist_ok=True)
     clean_previous(site)
     search = [{"url": page["url"], "title": page["title"], "part": page["part_label"], "lead": page["lead"], "text": plain_text(fragment)} for page, fragment, _, _ in prepared]
+    if book.get('atlas'):
+        search = []
+        for page, _, processed, headings in prepared:
+            matches = list(HEADING_RE.finditer(processed))
+            for i, match in enumerate(matches):
+                end = matches[i+1].start() if i+1 < len(matches) else len(processed)
+                section_html = processed[match.end():end].split('</section>', 1)[0]
+                section_html = re.sub(r'<button\b[\s\S]*?</button>|<summary\b[\s\S]*?</summary>|<div class="node-actions"[\s\S]*?</div>', '', section_html, flags=re.I)
+                section = plain_text(section_html)
+                search.append({'url': page['url']+'#'+headings[i]['id'], 'title': page['title']+' / '+headings[i]['text'], 'part': page['part_label'], 'lead': page['lead'], 'text': section})
     generated: list[str] = []
     for page, fragment, processed, headings in prepared:
         output = site / ("index.html" if page.get("home") else f"pages/{page['slug']}.html")
@@ -375,7 +411,7 @@ def build(handbook: Path, draft: bool) -> int:
     search_path.write_text(json.dumps(search, ensure_ascii=False, indent=2), encoding="utf-8")
     generated.append(search_path.relative_to(site).as_posix())
     (site / ".generated.json").write_text(json.dumps({"files": generated}, indent=2), encoding="utf-8")
-    print(f"built {len(search)} page(s) in {site}")
+    print(f"built {len(prepared)} page(s), {len(search)} search section(s) in {site}")
     if missing:
         print(f"draft placeholders: {', '.join(missing)}")
     return 0

@@ -1,0 +1,215 @@
+{
+  "title": "等级到几才开放？",
+  "book_id": "synthetic-atlas-example",
+  "summary": "纯虚构示例：先钉一个问题，再画主路径、核对证据。",
+  "sources": [
+    {
+      "id": "unlock-rule",
+      "title": "虚构开放规则",
+      "path": "example/rules.txt",
+      "locator": "L1（演示数据）",
+      "excerpt": "unlock_level = 10",
+      "note": "纯虚构示例，不对应实际游戏或源文件。"
+    }
+  ],
+  "project": {
+    "purpose": "先看配置怎么写，再核对运行逻辑有没有接上。",
+    "audience": "刚接手项目的开发与测试同学。",
+    "status": "partial",
+    "layers": [
+      {"id": "client", "title": "客户端", "summary": "展示入口与配置读取。", "status": "declared", "sources": ["unlock-rule"]},
+      {"id": "runtime", "title": "运行逻辑", "summary": "执行逻辑尚未提供。", "status": "open", "sources": []}
+    ],
+    "entrypoints": [
+      {"title": "成长入口", "path": "client/progression.ts", "summary": "示例候选入口。", "status": "declared", "sources": []}
+    ],
+    "runtime": [
+      {"title": "执行边界", "command": "补充启动命令和测试入口", "summary": "示例资料没有运行命令。", "status": "open", "sources": []}
+    ]
+  },
+  "flows": [
+    {
+      "id": "unlock-flow",
+      "title": "从开放条件到运行核对",
+      "goal": "选配置入口或运行入口往下看，下面会合到同一核对。",
+      "status": "partial",
+      "lanes": [
+        {
+          "id": "config-path",
+          "title": "配置入口",
+          "tone": "a",
+          "start": "从配置表读门槛",
+          "handoff": "交给共用核对",
+          "groups": [
+            {
+              "title": "A · 读出声明",
+              "tone": "a",
+              "steps": [
+                {
+                  "kind": "formula",
+                  "label": "先看配置写了什么",
+                  "tone": "a",
+                  "status": "verified",
+                  "systems": ["progression"],
+                  "sources": ["unlock-rule"],
+                  "output": "知道配置声明的门槛。",
+                  "lines": [
+                    {"tag": "base", "text": "unlock_level = 10"},
+                    {"tag": "cond", "text": "这是配置声明，还不是运行结论"}
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "runtime-path",
+          "title": "运行入口",
+          "tone": "b",
+          "start": "从调用处反查",
+          "handoff": "交给共用核对",
+          "groups": [
+            {
+              "title": "A · 找执行代码",
+              "tone": "b",
+              "steps": [
+                {
+                  "kind": "check",
+                  "label": "有没有读取该字段的代码？",
+                  "tone": "b",
+                  "status": "open",
+                  "systems": ["verification"],
+                  "sources": [],
+                  "output": "如果缺失，就带着缺口进入共用段。",
+                  "lines": [
+                    {"tag": "cond", "text": "先找读取 unlock_level 的调用处"},
+                    {"tag": "cond", "text": "示例资料没有执行逻辑"}
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "shared": {
+        "title": "共用核对",
+        "banner": "两条入口汇入同一核对",
+        "tone": "shared",
+        "steps": [
+          {
+            "kind": "start",
+            "label": "对照声明和实现",
+            "tone": "shared",
+            "status": "open",
+            "systems": ["verification"],
+            "sources": [],
+            "output": "能对上就标已核对；对不上就留下缺口。",
+            "lines": [
+              {"tag": "both", "text": "配置入口和运行入口都会进到这里"},
+              {"tag": "cond", "text": "缺服务端或测试时，不要把配置当成已上线"}
+            ]
+          }
+        ],
+        "groups": [
+          {
+            "title": "按资料归属分开看",
+            "tone": "shared",
+            "steps": [
+              {
+                "kind": "check",
+                "label": "这一层有没有运行证据？",
+                "tone": "shared",
+                "status": "open",
+                "systems": ["verification"],
+                "sources": ["unlock-rule"],
+                "branches": [
+                  {
+                    "title": "配置声明",
+                    "tone": "a",
+                    "steps": [
+                      {
+                        "kind": "formula",
+                        "label": "记下门槛",
+                        "tone": "a",
+                        "status": "verified",
+                        "lines": [
+                          {"tag": "att", "label": "配", "text": "unlock_level = 10 已出现在规则摘录"}
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "title": "运行逻辑",
+                    "tone": "b",
+                    "steps": [
+                      {
+                        "kind": "formula",
+                        "label": "记下缺口",
+                        "tone": "b",
+                        "status": "open",
+                        "lines": [
+                          {"tag": "def", "label": "跑", "text": "调用处和测试还没入库"}
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "risks": [
+    {
+      "title": "配置不等于运行行为",
+      "impact": "high",
+      "status": "open",
+      "detail": "没有执行逻辑和测试时，不能确认界面和服务端是否按配置生效。",
+      "next": "补充调用处和测试证据。",
+      "sources": []
+    }
+  ],
+  "systems": [
+    {
+      "id": "progression",
+      "title": "成长开放",
+      "summary": "理解配置条件与实际执行的区别。",
+      "question": "等级到几才开放？",
+      "nodes": [
+        {
+          "id": "unlock",
+          "title": "达到 10 级的开放条件",
+          "body": "演示配置声明 10 级开放；需要运行实现才能确认等级检查在何处执行。",
+          "kind": "配置声明",
+          "sources": ["unlock-rule"],
+          "related": ["verification"],
+          "branches": [
+            {"title": "满足条件", "body": "满足配置所声明的前置等级。"},
+            {"title": "不满足条件", "body": "不满足配置前置等级；实际界面提示尚无证据。"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verification",
+      "title": "运行核对",
+      "summary": "明确资料不足时需要补充什么。",
+      "question": "缺了哪一端就不能结案？",
+      "nodes": [
+        {
+          "id": "missing-runtime",
+          "title": "尚未提供执行逻辑",
+          "body": "下一步：提供读取 unlock_level 的调用处及相关测试，不把配置文案当成已验证运行行为。",
+          "kind": "待确认",
+          "sources": [],
+          "related": ["progression"]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {"from": "progression", "to": "verification", "label": "从规则追问实际执行", "status": "阅读关联"}
+  ]
+}

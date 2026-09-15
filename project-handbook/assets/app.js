@@ -10,7 +10,24 @@
     root.dataset.theme = theme; set("project-handbook-theme", theme);
   });
   var sidebar = document.querySelector(".sidebar");
-  document.getElementById("menu").addEventListener("click", function () { sidebar.classList.toggle("open"); });
+  var menu = document.getElementById("menu");
+  var setSidebarState = function (open) {
+    sidebar.classList.toggle("open", open);
+    menu.setAttribute("aria-expanded", open ? "true" : "false");
+    menu.setAttribute("aria-label", open ? "关闭导航" : "打开导航");
+  };
+  var closeSidebar = function () {
+    setSidebarState(false);
+  };
+  menu.addEventListener("click", function () {
+    setSidebarState(!sidebar.classList.contains("open"));
+  });
+  var closeButton = document.getElementById("sidebar-close");
+  if (closeButton) closeButton.addEventListener("click", closeSidebar);
+  sidebar.querySelectorAll("a").forEach(function (link) { link.addEventListener("click", closeSidebar); });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") closeSidebar();
+  });
   var dialog = document.getElementById("search-dialog");
   var input = document.getElementById("search");
   var results = document.getElementById("results");

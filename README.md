@@ -1,29 +1,52 @@
 # Project Handbook
 
-把代码库和文档整理成一套可核验、可离线打开的项目手册，并提供一个可选的
-“左侧导航—中间正文—右侧问答”工作区。它受到
-[`aicoding-cookbook`](https://github.com/lili-luo/aicoding-cookbook) 中
-`docs-to-book` 思路启发，但脚本和模板在此仓库中独立实现，避免把原仓库
-的隐含假设直接带进新的项目。
+把代码库和文档整理成一套可核验、可离线打开的项目手册。默认交付是：
 
-## 为什么做这个版本
+**一个读者问题 → 一张可核对的竖向流程图 → 右侧只查手册证据。**
 
-原方案的阅读体验和方法论很有价值，但真实落地时容易遇到几类问题：
+它受到 [`aicoding-cookbook`](https://github.com/lili-luo/aicoding-cookbook) 中
+`docs-to-book` 思路启发，但脚本和模板在此仓库中独立实现。
 
-- 配置、slug、页面缺失没有统一 schema；部分错误会在生成占位页后仍以成功结束。
-- Node CommonJS/ESM、Mermaid 版本、浏览器验证依赖环境，跨平台复现成本高。
-- 生成器把标题和摘要直接拼进 HTML，内容页也缺少安全边界。
-- `verify.js` 偏结构正则，不能稳定解析相对链接、重复锚点或残留旧页面。
-- 搜索索引截断正文，事实核对主要依赖人工抽查。
-- 生成后的静态页面只能阅读，缺少基于手册证据的交互式追问入口。
+## 先看长什么样
 
-这个版本的取舍是：用 Python 标准库完成初始化、构建和验证；默认严格失败；
-把证据清单作为可选的一等输入；把浏览器烟测明确列为静态校验之外的步骤。
-本轮迭代增加了轻量关键词检索和本地 relay：页面只发送问题与会话，relay 从
-`search-index.json` 取上下文、要求模型引用 `[1]` 来源，并把 API Key 留在进程
-环境变量中。
+首页是竖向流程图，不是整本百科。多条入口用顶部按钮切换，下面会合到共用核对。右侧默认只返回手册摘录，不调用模型。
+
+![竖向流程图：切换入口后进入共用核对](docs/images/vertical-flow.png)
+
+点进专题后，左导航、中间正文、右侧问答并排。问答必须带上来源，例如 `unlock_level = 10` 和 `[1]`。
+
+![三栏工作区：专题正文与带出处的问答](docs/images/workspace.png)
+
+节点标题只写「先做什么、再改什么、得到什么」。缺证据时只打状态标记，不把「未入库」写进标题。
+
+![证据状态：已核对 / 配置声明 / 待补充](docs/images/evidence-status.png)
+
+配图是界面示意，帮助理解阅读路径。仓库里可运行的是不含真实项目数据的合成示例。
+
+## 0.9 这次优化了什么
+
+- 默认产出从整本项目百科改成「一问一图」。
+- 首页用可切换车道 + 共用段；系统地图留在项目地图页。
+- 主阅读栏加宽，公式行不折成竖排；共用段有分隔线和描边舞台。
+- 并列分支并排渲染，不编造额外拓扑。
+- 问答默认本地证据摘录；选择模型问答并发送时，会将问题与检索片段发给所选供应商，无须重复勾选。
+- 渲染器拒绝覆盖已有输出目录，更新内容时写到新的 sibling 目录。
 
 ## 快速开始
+
+先用不含真实项目数据的示例走通：
+
+```text
+python project-handbook/scripts/build_knowledge.py project-handbook/assets/knowledge.example.json ./sample-atlas
+python project-handbook/scripts/verify_handbook.py ./sample-atlas
+python project-handbook/scripts/chat_server.py ./sample-atlas --evidence-only
+```
+
+打开 `http://127.0.0.1:8765/`。语义内容由作者读证据后写入 `knowledge.json`，不是扫描文件便自动推导全项目。Schema 见 [图解指南](project-handbook/references/knowledge.md)。
+
+`--evidence-only` 不读取环境变量中的模型凭据；它不是断网开关。用户在页面主动填写供应商地址和密钥、选择模型问答后，仍可发起模型请求。
+
+### 原有普通手册模式
 
 ```text
 python project-handbook/scripts/init_handbook.py ./my-handbook
@@ -31,24 +54,19 @@ python project-handbook/scripts/build_handbook.py ./my-handbook
 python project-handbook/scripts/verify_handbook.py ./my-handbook
 ```
 
-如果代码和文档是两个目录，可以直接导入一轮素材（只读扫描源目录，并只写入
-新输出目录）：
+如果代码和文档是两个目录，可以只读导入一轮素材，并只写入新输出目录：
 
 ```powershell
 python project-handbook/scripts/import_project.py `
   --client D:\path\to\client `
+  --backend D:\path\to\backend `
   --docs D:\path\to\docs `
   --output .\my-handbook
 ```
 
-导入器默认抽样脚本/文本、Excel 工作簿元数据和文件类型统计；不会复制原始工作簿，
-也会对明显的密钥格式做脱敏。大项目可用 `--sample-files` 和
-`--max-excerpt-bytes` 控制输出规模。
+`--backend` 可省略；省略时，生成的项目地图会把服务端校验标成“待补充”，不会从客户端目录推断运行结论。
 
-编辑 `my-handbook/book.json` 和 `my-handbook/content/*.html`。构建结果位于
-`my-handbook/site/`，直接打开 `site/index.html` 即可；搜索索引会内嵌到页面，
-不依赖 `file://` 下的 `fetch()`。桌面端会同时显示右侧问答面板。要实际询问模型，
-推荐启动本地 relay（不要把密钥写进配置或 HTML）：
+要实际询问模型，不要把密钥写进配置或 HTML：
 
 ```powershell
 $env:OPENAI_API_KEY = "粘贴你的密钥"
@@ -56,14 +74,8 @@ $env:OPENAI_MODEL = "gpt-4o-mini"
 python project-handbook/scripts/chat_server.py .\my-handbook
 ```
 
-然后打开终端输出的 `http://127.0.0.1:8765/`。兼容 OpenAI API 的本地或云端服务
-可通过 `--base-url` 切换。完整配置、CORS 和安全边界见
-[references/chat.md](project-handbook/references/chat.md)。需要 Mermaid 时，放入
-经过固定版本确认的 `assets/mermaid.min.js`；否则优先使用本地 SVG。
-
-注意：静态 HTML 无法自动继承 Codex 当前会话的 token；如果希望费用和权限由 agent
-统一管理，应让 agent 宿主提供一个受控的 `/api/chat` relay，再把 `chat.endpoint`
-指向它。
+然后打开终端输出的 `http://127.0.0.1:8765/`。完整边界见
+[references/chat.md](project-handbook/references/chat.md)。
 
 ## 目录
 
@@ -74,17 +86,21 @@ project-handbook/
 ├── scripts/
 │   ├── init_handbook.py
 │   ├── import_project.py
+│   ├── build_knowledge.py
 │   ├── build_handbook.py
 │   ├── verify_handbook.py
 │   └── chat_server.py
 ├── references/
-│   ├── audit-checklist.md
+│   ├── knowledge.md
 │   ├── authoring.md
-│   ├── validation.md
-│   └── chat.md
+│   ├── chat.md
+│   ├── audit-checklist.md
+│   └── validation.md
 └── assets/
+    ├── knowledge.example.json
     ├── book.example.json
     ├── style.css
+    ├── atlas.js
     ├── app.js
     └── chat.js
 ```
@@ -92,18 +108,17 @@ project-handbook/
 ## 设计边界
 
 静态 verifier 能证明结构、链接、资产、锚点和证据 token 的一致性，不能证明
-一条业务陈述真的正确，也不能替代真实浏览器渲染。交付记录应同时写明源码
-核对范围和浏览器烟测结果。
+一条业务陈述真的正确。缺服务端源码时，内层公式保持「待补充」，不把后整理图
+当成现网事实。真实项目素材应留在仓库外的私有目录。
 
 ## 作品集叙事
 
 这个项目可以按“观察—假设—实验—证据”来展示：先指出原方案在严格失败、
 `file://` 搜索、HTML 安全和事实核验上的落差；再说明为什么选择标准库、
-预检构建、facts manifest 和本地 relay；最后用回归测试、跨 Python 版本 CI、
-来源可点击的问答面板和可重打包的 zip 证明改动不是只停留在 prompt 层面。
+预检构建、facts manifest、一问一图和本地 relay；最后用回归测试、跨 Python
+版本 CI 和可重打包的 zip 证明改动不是只停留在 prompt 层面。
 
-本机真实素材演练的脱敏记录见 [TEST_REPORT.md](TEST_REPORT.md)；真实游戏文件只
-留在临时目录，没有进入本仓库。
+脱敏后的本机演练记录见 [TEST_REPORT.md](TEST_REPORT.md)。
 
 ## 许可证与致谢
 

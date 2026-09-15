@@ -5,8 +5,9 @@ navigation, metadata, and search index.
 
 ## Page contract
 
-Each page should answer one reader question and stand alone. Use this order
-when it fits:
+Each page should answer one reader question and stand alone. The default
+handbook answers one pinned question; extra pages wait until asked. Use this
+order when it fits:
 
 1. What the component is responsible for.
 2. How data or control enters and leaves it.
