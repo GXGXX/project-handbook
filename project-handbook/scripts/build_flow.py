@@ -19,7 +19,7 @@ def validate(data):
             'viewport', 'stage', 'zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit',
             'zoom-value', 'locate'}
     def identifier(value):
-        if not isinstance(value, str) or not re.fullmatch(r'[a-zA-Z][a-zA-Z0-9_-]*', value) or value in used:
+        if not isinstance(value, str) or not re.fullmatch(r'[a-zA-Z][a-zA-Z0-9_-]*', value) or value in used or value.startswith('flow-qa-'):
             raise ValueError('Invalid or duplicate ID: ' + str(value))
         used.add(value)
     source_ids = {s['id'] for s in data.get('sources', [])}
@@ -117,8 +117,9 @@ def render(data):
         examples += '</ol><strong>' + esc(ex['result']) + '</strong></details>'
     replacements = {
         'TITLE': esc(data['title']), 'HEADER': header, 'NAV': nav, 'EXAMPLES': examples,
-        'CSS': (ASSETS / 'flow.css').read_text(encoding='utf-8'),
-        'JS': (ASSETS / 'flow.js').read_text(encoding='utf-8'),
+        'CSS': '\n'.join((ASSETS / name).read_text(encoding='utf-8') for name in ('flow.css', 'flow-assistant.css')),
+        'JS': '\n;\n'.join((ASSETS / name).read_text(encoding='utf-8').replace('</script', '<\\/script')
+                            for name in ('vendor/html2canvas.min.js', 'flow.js', 'flow-assistant.js')),
         'DATA': json.dumps(data, ensure_ascii=False).replace('<', '\\u003c'),
     }
     template = (ASSETS / 'flow-template.html').read_text(encoding='utf-8')
@@ -126,6 +127,8 @@ def render(data):
 
 
 def build(data, output):
+    data = copy.deepcopy(data)
+    data.pop('runtime', None)
     page = render(data)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)

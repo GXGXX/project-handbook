@@ -26,6 +26,13 @@ class FlowTests(unittest.TestCase):
         self.assertNotIn('id="next"', page)
         self.assertIn('id="zoom-fit"', page)
 
+    def test_assistant_and_local_capture_are_embedded(self):
+        page = flow.render(self.data)
+        self.assertIn('flow:node-selected', page)
+        self.assertIn('html2canvas', page)
+        self.assertIn('flow-qa-panel', page)
+        self.assertNotRegex(page, r'<script[^>]+src="https?://')
+
     def test_reject_invalid_graphs(self):
         changes = [lambda d: d['graphs'][0]['edges'].pop(1),
                    lambda d: d['graphs'][0]['edges'][0].update(b='missing'),
@@ -52,6 +59,15 @@ class FlowTests(unittest.TestCase):
             self.assertTrue((output / 'handbook.html').is_file())
             with self.assertRaises(FileExistsError):
                 flow.build(self.data, output)
+
+    def test_build_never_saves_live_runtime(self):
+        self.data['runtime'] = {'token': 'ephemeral-secret', 'api': '/api'}
+        with tempfile.TemporaryDirectory() as root:
+            output = Path(root) / 'book'
+            flow.build(self.data, output)
+            for filename in ('handbook.html', 'flow.json'):
+                self.assertNotIn('ephemeral-secret', (output / filename).read_text(encoding='utf-8'))
+        self.assertIn('runtime', self.data)
 
     def test_canvas_keeps_all_nodes_and_explicit_connections(self):
         data = flow.canvas_data(self.data)

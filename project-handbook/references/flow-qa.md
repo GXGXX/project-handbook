@@ -1,0 +1,78 @@
+# In-Page Follow-Ups
+
+Use after building and reviewing a flow handbook. Start the connection yourself;
+the reader should not need to run commands or paste credentials into a page.
+
+## Launch
+
+Run with the installed Python runtime, quoting paths as appropriate:
+
+```text
+python scripts/flow_server.py NEW_OUTPUT --source-root CLIENT --source-root SERVER --source-root DOCS
+```
+
+The command above assumes the installed `project-handbook` skill directory is
+the working directory. In a user's project, resolve the script from the loaded
+skill's absolute location and use absolute output/source paths; do not look for
+`scripts/flow_server.py` inside the user's client repository.
+
+Pass only existing directories supplied or authorized by the user. Omit missing
+roots; do not add the home directory, drive root, credentials directory or an
+unrelated project for convenience. The port defaults to an available loopback
+port. The script prints the reading URL and writes safe startup information
+(`url`, `pid`) to `NEW_OUTPUT/.flow-server.json` without a connection token.
+
+Keep the local helper running independently of an interactive terminal. On
+Windows use `Start-Process -WindowStyle Hidden`, explicit quoted arguments and
+logs inside the generated output directory. Read the startup file, verify the
+page responds, and open its URL for the user. Do not start a second helper for
+the same output; reuse the running address. To stop, terminate only the helper
+PID you verified belongs to this output, not every Python or Codex process.
+
+The backend discovers `CODEX_BIN`, PATH or the Windows Codex bundled executable.
+Optional `--codex-bin` points to an installed executable; `--model` explicitly
+selects a model. Otherwise it uses the local Codex configuration. Authentication
+remains server-side with Codex. Do not read or copy auth files into artifacts.
+This is a dedicated ephemeral Codex context, not the active desktop task.
+
+## Answer, Then Compile
+
+- A node's **追问这个节点** button opens the Q&A panel with that node selected.
+  The general Q&A button also accepts questions about the entire flow.
+- The model answers from authored details and recent completed answers first.
+  Missing evidence can trigger one bounded host-side keyword lookup within
+  authorized text/code directories, followed by an answer with relative source
+  citations. No project code runs, no source files change, and the model has no
+  external-action tools. This is not exhaustive semantic code search; missing
+  results are an evidence gap, not proof that a behavior does not exist.
+- HTML stays unchanged during Q&A. Completed, failed and cancelled entries are
+  saved locally in `.flow-session.json`; only completed answers can be selected.
+  Browser refresh restores history. Drafts and partial answers are not compiled.
+- **整理新版本** asks the model to update affected node details, flow and examples.
+  Validate the generated manifest before writing `versions/ID/handbook.html`.
+  Do not replace the original. Structural validation does not independently
+  prove the new explanation: inspect changed high-risk claims before sharing.
+- **离线 HTML** exports the current authored flow plus selected completed answers
+  without a model call. PNG exports the diagram, not hidden detail content or
+  every Q&A. A static copy cannot use Codex when moved to another computer.
+
+## Verify and Share
+
+Verify one real answer on non-sensitive or authorized data; do not call mock
+responses a working Codex connection. Check node context, streaming, cancellation,
+saved history, unavailable backend, explicit answer selection, new-version
+preservation, offline HTML with no network calls, and nonblank PNGs with complete
+nodes and arrows. Test narrow layout and keyboard focus.
+
+The helper binds only `127.0.0.1`, validates Host/Origin and requires an ephemeral
+token for API requests. Never expose it to the LAN or disable those checks to
+make sharing work. Never embed runtime state in saved HTML or commit the output
+folder, local history, logs, startup information, private source excerpts, or
+credentials. Keep generated outputs outside public source or in ignored paths.
+
+Default exports remove raw excerpts and recognizable secrets, URLs and absolute
+paths, but cannot determine which business facts the user considers confidential.
+Use synthetic or explicitly approved facts and inspect public screenshots.
+When the local Codex version or configuration cannot establish a safe connection,
+show the real limitation; do not silently enable tools, write permissions, an
+external relay, a different provider, or paid API credentials.

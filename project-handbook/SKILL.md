@@ -2,7 +2,7 @@
 name: project-handbook
 description: Use when a newcomer provides code and documentation directories and asks a vague project question, or needs an offline HTML explanation from framework and end-to-end flow to details, worked examples and evidence. Not for ordinary README edits or API reference generation.
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   source-inspiration: "https://github.com/lili-luo/aicoding-cookbook"
 ---
 
@@ -28,7 +28,12 @@ inspecting the supplied directories. Ask only when ambiguity changes scope.
 ## Operating contract
 
 For flowchart delivery, keep reviewed facts and topology in `flow.json`; use
-the flow builder and its browser checks. The `book.json`, `content/`, Q&A and
+the flow builder and its browser checks. For in-page follow-ups read
+[references/flow-qa.md](references/flow-qa.md), start the local connection for the
+reader, and deliver its URL alongside the portable file. This is the default
+when the reader wants to ask follow-ups without leaving HTML. Never regenerate
+the diagram for each question; explicit answer selection and compilation create
+a new version. The `book.json`, `content/`, Q&A and
 site-specific contracts below apply only when building a multi-page handbook,
 not to the default standalone flowchart. Never copy private input data into a
 public example without explicit authorization.
@@ -93,10 +98,11 @@ public example without explicit authorization.
    portable file and check guide controls, source return, example-to-step links,
    term search, narrow layout and offline reading. Structural checks do not
    prove semantic correctness; review the original question against the answer.
-6. **Deliver** — give the portable HTML first, state the deepest checked path
-   and missing evidence. The core answer must not require configuring a model.
-   A new question can return to the agent for deeper source analysis; optional
-   online Q&A remains in the legacy site, with explicit model configuration.
+6. **Deliver** — give the local reading URL and the portable HTML, state the
+   deepest checked path and missing evidence. Follow [references/flow-qa.md](references/flow-qa.md)
+   for the default flowchart Q&A connection. Reading and offline export do not
+   require a model; do not claim live answering works until verified. On an
+   unavailable connection, preserve offline reading and explain the limitation.
 
 ## Supporting guidance
 
@@ -108,6 +114,7 @@ public example without explicit authorization.
 ## Included tools
 
 - `scripts/build_flow.py` — render an authored branching flowchart as one offline HTML file; no server or model configuration needed to read it.
+- `scripts/flow_server.py` — serve the flow with in-page Codex follow-ups, saved answers, selected-answer revisions and redacted exports.
 
 - `scripts/build_knowledge.py` — render reviewed diagrams, nodes, branches and source pages from a knowledge manifest.
 
