@@ -1,33 +1,35 @@
 # Project Handbook
 
-**下载本 skill，在 Codex 中调用，描述问题并提供客户端／服务端代码和文档目录，输出一份解答问题的 HTML。**
+**让 Codex 安装并调用本 skill，提供代码、文档目录和一个问题，等待一份解答问题的 HTML。**
 
 不需要先知道函数名。整条流程在一张可缩放、拖动的画布中呈现；遇到疑问，点击具体节点查看解释、公式、例子和依据。
 
 ## 快速上手
 
-1. [下载本 skill](https://github.com/GXGXX/project-handbook/archive/refs/heads/main.zip)，将其中的 `project-handbook` 文件夹放到 `~/.agents/skills/`（Windows：`%USERPROFILE%\.agents\skills\`）。
-2. 在 Codex 中调用 `$project-handbook`，描述你想了解的问题，并提供 Codex 可读取的目录。
-3. 打开生成的 `handbook.html`，先看完整流程，再点击节点深入了解。
+先把下面这句话发到 Codex 会话里，让 Codex 安装：
 
-复制下面的示例，把问题和目录换成你的内容：
+```text
+帮我安装下这个 skill：
+https://github.com/GXGXX/project-handbook/tree/main/project-handbook
+```
+
+安装好后，调用 skill，提供目录，直接问问题就行。例如：
 
 ```text
 使用 $project-handbook。
-我是新人，想知道订单支付是怎样完成的。
-客户端目录：D:/demo/client
-服务端目录：D:/demo/server
-文档目录：D:/demo/docs
 
-请输出一份解答这个问题的 HTML：
-- 用一张完整流程画布串起入口、判断、处理和结果。
-- 公共步骤直接在图中汇合，不拆成需要切换的页面。
-- 判断连线标明“是 / 否”，清楚区分失败、结束和继续。
-- 点击具体节点，可以看解释、字段、公式和来源依据。
-- 提供正常、边界、异常例子，帮助我理解实际过程。
+这是客户端目录：D:/demo/client
+这是服务端目录：D:/demo/server
+这是文档目录：D:/demo/docs
+
+目前游戏中的伤害流程是怎样的？
 ```
 
-暂时没有某个目录也可以使用；Codex 会读取现有材料，在相关节点中说明无法确认的内容。安装后若未显示该 skill，重启 Codex。
+把示例目录换成自己的即可，也可以分几条消息提供目录和问题。
+
+接下来等待 Codex 读取资料、梳理流程并输出 HTML。打开后先看完整流程，有疑问再点击具体节点查看细节。
+
+暂时没有某个目录也可以使用。安装后若未显示该 skill，重启 Codex。
 
 ## 输出是什么样的
 
