@@ -3,6 +3,7 @@ import argparse
 import html
 import json
 import re
+import copy
 from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parents[1] / 'assets'
@@ -14,7 +15,9 @@ def validate(data):
         raise ValueError('At least one graph is required')
     used = {'data', 'nodes', 'edges', 'canvas', 'diagram', 'examples', 'detail',
             'detail-title', 'detail-text', 'detail-formula', 'source', 'next',
-            'search', 'graph-title', 'graph-note', 'arrow', 'amber-arrow'}
+            'search', 'graph-title', 'graph-note', 'arrow', 'amber-arrow',
+            'viewport', 'stage', 'zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit',
+            'zoom-value', 'locate'}
     def identifier(value):
         if not isinstance(value, str) or not re.fullmatch(r'[a-zA-Z][a-zA-Z0-9_-]*', value) or value in used:
             raise ValueError('Invalid or duplicate ID: ' + str(value))
@@ -66,15 +69,47 @@ def validate(data):
             raise ValueError('Unreachable nodes')
     if data.get('common') and data['common'] not in graph_ids:
         raise ValueError('Unknown common graph')
+    all_nodes = {n['id']: n for g in graphs for n in g['nodes']}
+    for edge in data.get('connections', []):
+        if edge['a'] not in all_nodes or edge['b'] not in all_nodes or edge['a'] == edge['b']:
+            raise ValueError('Invalid cross-section connection')
+        if all_nodes[edge['a']]['kind'] == 'decision':
+            raise ValueError('Keep decision branches within their authored section')
+        if not edge.get('label'):
+            raise ValueError('Cross-section connections require explicit meaning')
+
+
+def canvas_data(data):
+    """Place all authored sections on one canvas; never infer connections."""
+    result = copy.deepcopy(data)
+    nodes, edges, occupied = [], [], set()
+    next_row = 0
+    for graph in result['graphs']:
+        offset = graph.get('position', {'row': next_row, 'col': 0})
+        if any(type(offset.get(k)) is not int or offset[k] < 0 for k in ('row', 'col')):
+            raise ValueError('Invalid section position')
+        for node in graph['nodes']:
+            node['row'] += offset['row']
+            node['col'] += offset['col']
+            node['source'] = graph['source']
+            pos = node['row'], node['col']
+            if pos in occupied:
+                raise ValueError('Sections overlap on canvas')
+            occupied.add(pos)
+            nodes.append(node)
+        edges.extend(graph['edges'])
+        next_row = max(n['row'] for n in nodes) + 2
+    edges.extend(result.get('connections', []))
+    result['canvas'] = {'nodes': nodes, 'edges': edges}
+    return result
 
 
 def render(data):
     validate(data)
+    data = canvas_data(data)
     esc = lambda value: html.escape(str(value), quote=True)
     header = '<header><span class="eyebrow">流程图解</span><h1>' + esc(data['title']) + '</h1><p>' + esc(data.get('summary', '')) + '</p></header>'
-    nav = '<nav aria-label="流程选择">' + ''.join(
-        '<button data-tab="' + esc(g['id']) + '" aria-pressed="' + str(i == 0).lower() + '">' + esc(g['title']) + '</button>'
-        for i, g in enumerate(data['graphs'])) + '<a href="#examples">数值走一遍</a></nav>'
+    nav = '<nav aria-label="阅读导航"><a href="#diagram" class="nav-active" aria-current="location">整体流程</a><a href="#examples">数值走一遍</a></nav>'
     examples = ''
     for ex in data.get('examples', []):
         examples += '<details class="example"><summary>' + esc(ex['title']) + '</summary><p>' + esc(ex['provenance']) + ' · ' + esc(ex['input']) + '</p><ol>'

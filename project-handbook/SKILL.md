@@ -2,7 +2,7 @@
 name: project-handbook
 description: Use when a newcomer provides code and documentation directories and asks a vague project question, or needs an offline HTML explanation from framework and end-to-end flow to details, worked examples and evidence. Not for ordinary README edits or API reference generation.
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   source-inspiration: "https://github.com/lili-luo/aicoding-cookbook"
 ---
 
@@ -11,11 +11,13 @@ metadata:
 Default delivery for a process or calculation question is a flowchart-first,
 portable HTML: interpret the vague question, explain necessary background,
 show actual decisions and execution order, then reveal formulas and evidence
-inside clickable nodes. Separate entry paths and connect to shared processing.
+inside clickable nodes. Show the entire process on ONE zoomable, pannable canvas.
+Connect entry paths to shared processing with explicitly authored edges; never
+hide the second half behind a common-process tab or next-page control.
 Read [references/flow.md](references/flow.md) first and build with
 `python scripts/build_flow.py flow.json NEW_OUTPUT` using the bundled
 `assets/flow.example.json` schema. Never substitute a tiny overview plus a long
-article for a requested flowchart. All navigation items need an exclusive,
+article for a requested flowchart. All reading navigation items need an exclusive,
 visible selected state. Do not add production notes or review-summary sections
 unless requested; keep factual uncertainty in the relevant node details.
 For a broader conceptual handbook rather than a process question, consult
@@ -84,8 +86,8 @@ public example without explicit authorization.
    site. Existing outputs are never replaced. For old manifest details consult
    [references/knowledge.md](references/knowledge.md).
 5. **Verify** — flow builds validate their manifest; open the generated file
-   in a real browser and test tab and section selection, examples, details,
-   node/edge clearance and narrow layout. Compare each path to the evidence.
+   in a real browser and test whole-canvas visibility, pan/zoom and section selection, examples, details,
+   cross-section edges, correct per-node evidence, node/edge clearance and narrow layout. Compare each path to the evidence.
    For conceptual books run `python scripts/verify_handbook.py <new-output>` and
    `python scripts/verify_handbook.py <new-output>/handbook.html`. Open the actual
    portable file and check guide controls, source return, example-to-step links,

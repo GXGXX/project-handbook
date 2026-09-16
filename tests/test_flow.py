@@ -22,13 +22,16 @@ class FlowTests(unittest.TestCase):
         self.assertNotIn('href="#review"', page)
         self.assertIn('activateNavigation', page)
         self.assertIn('nav-active', page)
+        self.assertNotIn('data-tab=', page)
+        self.assertNotIn('id="next"', page)
+        self.assertIn('id="zoom-fit"', page)
 
     def test_reject_invalid_graphs(self):
         changes = [lambda d: d['graphs'][0]['edges'].pop(1),
                    lambda d: d['graphs'][0]['edges'][0].update(b='missing'),
                    lambda d: d['graphs'][0]['nodes'][1].update(row=0),
                    lambda d: d['graphs'][0]['nodes'][0].update(id='detail'),
-                   lambda d: d.update(common='missing')]
+                   lambda d: d['connections'][0].update(b='missing')]
         for change in changes:
             d = copy.deepcopy(self.data)
             change(d)
@@ -49,3 +52,25 @@ class FlowTests(unittest.TestCase):
             self.assertTrue((output / 'handbook.html').is_file())
             with self.assertRaises(FileExistsError):
                 flow.build(self.data, output)
+
+    def test_canvas_keeps_all_nodes_and_explicit_connections(self):
+        data = flow.canvas_data(self.data)
+        self.assertEqual(len(data['canvas']['nodes']), 10)
+        self.assertEqual(len(data['canvas']['edges']), 9)
+        self.assertIn({'a': 'pay', 'b': 'callback', 'label': '支付成功且通知校验通过'}, data['canvas']['edges'])
+        self.assertEqual(self.data['graphs'][1]['nodes'][0]['row'], 0)
+        self.data.pop('connections')
+        self.assertEqual(len(flow.canvas_data(self.data)['canvas']['edges']), 8)
+
+    def test_node_sources_survive_combining_sections(self):
+        self.data['sources'].append({'id':'second','locator':'Second source','excerpt':'Second evidence'})
+        self.data['graphs'][1]['source'] = 'second'
+        flow.validate(self.data)
+        nodes = {n['id']:n for n in flow.canvas_data(self.data)['canvas']['nodes']}
+        self.assertEqual(nodes['created']['source'], 'demo')
+        self.assertEqual(nodes['callback']['source'], 'second')
+
+    def test_canvas_rejects_overlapping_sections(self):
+        self.data['graphs'][1]['position'] = {'row':0, 'col':0}
+        with self.assertRaises(ValueError):
+            flow.render(self.data)

@@ -1,37 +1,62 @@
 'use strict';
 const data=JSON.parse(document.getElementById('data').textContent);
 const $=id=>document.getElementById(id), ns='http://www.w3.org/2000/svg';
-let current=data.graphs[0];
-function svg(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v]of Object.entries(attrs))e.setAttribute(k,v);if(text)e.textContent=text;return e}
-function showDetail(n){$('detail-title').textContent=n.title;$('detail-formula').textContent=n.lines;$('detail-text').textContent=n.detail;const source=data.sources.find(s=>s.id===current.source);$('source').textContent=source?source.locator+'\n\n'+source.excerpt:'未附实现证据';$('detail').showModal()}
+const current=data.canvas, viewport=$('viewport');
+let scale=1, width=1040, height=1;
+function svg(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v]of Object.entries(attrs))e.setAttribute(k,v);if(text)e.textContent=text;return e;}
+function showDetail(n){$('detail-title').textContent=n.title;$('detail-formula').textContent=n.lines;$('detail-text').textContent=n.detail;const source=data.sources.find(s=>s.id===n.source);$('source').textContent=source?source.locator+'\n\n'+source.excerpt:'未附来源';$('detail').showModal();}
+function zoom(value,center=true){const old=scale, x=(viewport.scrollLeft+viewport.clientWidth/2)/old,y=(viewport.scrollTop+viewport.clientHeight/2)/old;const minimum=Math.min(.1,(viewport.clientWidth-24)/width,(viewport.clientHeight-24)/height);scale=Math.max(minimum,Math.min(2,value));$('canvas').style.transform=`scale(${scale})`;$('stage').style.width=width*scale+'px';$('stage').style.height=height*scale+'px';$('zoom-value').textContent=(scale<.01?(scale*100).toFixed(2):Math.round(scale*100))+'%';if(center){viewport.scrollLeft=x*scale-viewport.clientWidth/2;viewport.scrollTop=y*scale-viewport.clientHeight/2;}}
+function fit(){zoom(Math.min(1,(viewport.clientWidth-24)/width,(viewport.clientHeight-24)/height),false);viewport.scrollLeft=0;viewport.scrollTop=0;}
+function clearRoute(points,obstacles){
+ return points.slice(1).every((b,i)=>{const a=points[i];return obstacles.every(r=>{
+  const left=r.x-5,right=r.x+r.w+5,top=r.y-5,bottom=r.y+r.h+5;
+  if(Math.abs(a[0]-b[0])<.01)return a[0]<=left||a[0]>=right||Math.max(a[1],b[1])<=top||Math.min(a[1],b[1])>=bottom;
+  return a[1]<=top||a[1]>=bottom||Math.max(a[0],b[0])<=left||Math.min(a[0],b[0])>=right;
+ });});
+}
+function detour(a,b,rects,obstacles){
+ // Grid row gaps and column gutters are free corridors even for uneven nodes.
+ const startY=Math.max(...rects.filter(r=>r.row===a.row).map(r=>r.y+r.h))+20;
+ const endY=Math.min(...rects.filter(r=>r.row===b.row).map(r=>r.y))-20;
+ const ax=a.x+a.w/2,bx=b.x+b.w/2;
+ const lanes=[20,width-20,...rects.flatMap(r=>[r.x-45,r.x+r.w+45])]
+  .filter(x=>x>=15&&x<=width-15).sort((x,y)=>(Math.abs(x-ax)+Math.abs(x-bx))-(Math.abs(y-ax)+Math.abs(y-bx)));
+ for(const x of lanes){const points=[[ax,a.y+a.h],[ax,startY],[x,startY],[x,endY],[bx,endY],[bx,b.y-2]];if(clearRoute(points,obstacles))return points;}
+ throw new Error('No clear route; revise node placement.');
+}
 function draw(){
- const root=$('canvas').getBoundingClientRect(), layer=$('edges');layer.replaceChildren();
- const defs=svg('defs',{});for(const [id,color]of [['arrow','#638296'],['amber-arrow','#b17b24']]){const m=svg('marker',{id,viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'});m.append(svg('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:color}));defs.append(m)}layer.append(defs);
- const bounds=id=>{const r=$(id).getBoundingClientRect();return {x:r.left-root.left,y:r.top-root.top,w:r.width,h:r.height}};
- for(const e of current.edges){const a=bounds(e.a),b=bounds(e.b);let path,lx,ly;const ax=a.x+a.w/2,ay=a.y+a.h,bx=b.x+b.w/2;
-  if(e.route==='bypass'||e.route==='outer'){const x=e.route==='bypass'?995:945;path=`M ${a.x+a.w} ${a.y+a.h/2} H ${x} V ${b.y+b.h/2} H ${b.x+b.w+2}`;lx=x-8;ly=a.y+a.h/2-13;
-  }else if(Math.abs(a.y+a.h/2-b.y-b.h/2)<5){path=`M ${a.x+a.w} ${a.y+a.h/2} H ${b.x-2}`;lx=(a.x+a.w+b.x)/2;ly=a.y+a.h/2-10;
-  }else if(a.x===b.x){path=`M ${ax} ${ay} V ${b.y-2}`;lx=ax+16;ly=(ay+b.y)/2+4;
-  }else{path=`M ${ax} ${ay} V ${b.y+b.h/2} H ${b.x+b.w+2}`;lx=ax+19;ly=ay+26;}
+ const root=$('canvas').getBoundingClientRect(),layer=$('edges');layer.replaceChildren();
+ const defs=svg('defs',{});for(const [id,color]of [['arrow','#638296'],['amber-arrow','#b17b24']]){const m=svg('marker',{id,viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:7,markerHeight:7,orient:'auto'});m.append(svg('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:color}));defs.append(m);}layer.append(defs);
+ const rects=current.nodes.map(n=>{const r=$(n.id).getBoundingClientRect();return {id:n.id,row:n.row,x:(r.left-root.left)/scale,y:(r.top-root.top)/scale,w:r.width/scale,h:r.height/scale};});
+ for(const e of current.edges){const a=rects.find(r=>r.id===e.a),b=rects.find(r=>r.id===e.b);let points,lx,ly,anchor=e.route==='bypass'||e.route==='outer'?'end':'middle';const ax=a.x+a.w/2,ay=a.y+a.h,bx=b.x+b.w/2;
+  if(e.route==='bypass'||e.route==='outer'){const x=width-(e.route==='bypass'?35:70);points=[[a.x+a.w,a.y+a.h/2],[x,a.y+a.h/2],[x,b.y+b.h/2],[b.x+b.w+2,b.y+b.h/2]];lx=x-8;ly=a.y+a.h/2-13;
+  }else if(a.row===b.row&&b.x>a.x){points=[[a.x+a.w,a.y+a.h/2],[b.x-2,b.y+b.h/2]];lx=(a.x+a.w+b.x)/2;ly=a.y+a.h/2-10;
+  }else if(Math.abs(a.x-b.x)<1&&b.y>ay){points=[[ax,ay],[ax,b.y-2]];lx=ax+16;ly=(ay+b.y)/2+4;
+  }else{const mid=(ay+b.y)/2;points=[[ax,ay],[ax,mid],[bx,mid],[bx,b.y-2]];lx=ax+20;ly=ay+22;}
+  const obstacles=rects.filter(r=>r.id!==e.a&&r.id!==e.b);
+  if(!clearRoute(points,obstacles)){
+   points=detour(a,b,rects,obstacles);
+   const segments=points.slice(1).map((p,i)=>[points[i],p]).filter(([p,q])=>p[1]===q[1]).sort(([p,q],[r,s])=>Math.abs(s[0]-r[0])-Math.abs(q[0]-p[0]));
+   const [p,q]=segments[0];lx=(p[0]+q[0])/2;ly=p[1]-8;anchor='middle';
+  }
+  const path=points.map((p,i)=>(i?'L':'M')+' '+p.join(' ')).join(' ');
   layer.append(svg('path',{d:path,fill:'none',stroke:e.route==='bypass'?'#b17b24':'#638296','stroke-width':1.8,'marker-end':`url(#${e.route==='bypass'?'amber-arrow':'arrow'})`,'data-from':e.a,'data-to':e.b}));
-  if(e.label){const t=svg('text',{x:lx,y:ly,'text-anchor':e.route==='bypass'||e.route==='outer'?'end':'middle',class:'edge-label '+e.route},e.label);layer.append(t);const r=t.getBBox();const bg=svg('rect',{x:r.x-5,y:r.y-3,width:r.width+10,height:r.height+6,rx:4,fill:'#fff'});layer.insertBefore(bg,t)}
+  if(e.label){const t=svg('text',{x:lx,y:ly,'text-anchor':anchor,class:'edge-label '+(e.route||'normal')},e.label);layer.append(t);const r=t.getBBox();layer.insertBefore(svg('rect',{x:r.x-5,y:r.y-3,width:r.width+10,height:r.height+6,rx:4,fill:'#fff'}),t);}
  }
 }
-function select(id,scroll=false){current=data.graphs.find(g=>g.id===id);$('nodes').replaceChildren();$('graph-title').textContent=current.title;$('graph-note').textContent=current.note || '沿箭头阅读；点击节点查看公式与依据。';for(const n of current.nodes){const b=document.createElement('button');b.id=n.id;b.className='node '+n.kind;b.style.gridRow=n.row+1;b.style.gridColumn=n.col+1;const t=document.createElement('strong');t.textContent=n.title;const l=document.createElement('span');l.textContent=n.lines;b.append(t,l);b.addEventListener('click',()=>showDetail(n));$('nodes').append(b)}document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===id)));$('next').hidden=id===data.common;$('next').style.display=(!data.common || id===data.common)?'none':'block';$('search').value='';requestAnimationFrame(draw);if(scroll)$('diagram').scrollIntoView({behavior:'instant'})}
-document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>select(b.dataset.tab,true)));
-$('next').addEventListener('click',()=>select(data.common || data.graphs[0].id,true));
-$('search').addEventListener('input',()=>{const q=$('search').value.trim().toLowerCase();for(const n of current.nodes)$(n.id).classList.toggle('match',!!q&&(n.title+n.lines+n.detail).toLowerCase().includes(q))});
-window.addEventListener('resize',draw);select(data.graphs[0].id);document.fonts.ready.then(draw);
-
-// Give section navigation the same exclusive active state as flow navigation.
-function activateNavigation(item){
- document.querySelectorAll('nav button,nav a').forEach(el=>{
-  const active=el===item;
-  el.classList.toggle('nav-active',active);
-  if(el.tagName==='BUTTON')el.setAttribute('aria-pressed',String(active));
-  else if(active)el.setAttribute('aria-current','location');
-  else el.removeAttribute('aria-current');
- });
-}
-document.querySelectorAll('nav button,nav a').forEach(el=>el.addEventListener('click',()=>activateNavigation(el)));
-$('next').addEventListener('click',()=>activateNavigation(document.querySelector('[data-tab="'+(data.common || data.graphs[0].id)+'"]')));
+$('graph-title').textContent='完整流程';$('graph-note').textContent='所有步骤在同一画布；拖动空白处移动，点击节点查看解答。';
+const columns=Math.max(...current.nodes.map(n=>n.col))+1;
+width=40+columns*380+(columns-1)*90+140;
+$('canvas').style.width=width+'px';$('nodes').style.gridTemplateColumns=`repeat(${columns},380px)`;
+for(const n of current.nodes){const b=document.createElement('button');b.id=n.id;b.className='node '+n.kind;b.style.gridRow=n.row+1;b.style.gridColumn=n.col+1;const t=document.createElement('strong');t.textContent=n.title;const l=document.createElement('span');l.textContent=n.lines;b.append(t,l);b.addEventListener('click',()=>showDetail(n));$('nodes').append(b);}
+function layout(){height=$('canvas').offsetHeight;zoom(scale,false);draw();}
+$('zoom-in').addEventListener('click',()=>zoom(scale*1.2));$('zoom-out').addEventListener('click',()=>zoom(scale/1.2));$('zoom-reset').addEventListener('click',()=>zoom(1));$('zoom-fit').addEventListener('click',fit);
+$('search').addEventListener('input',()=>{const q=$('search').value.trim().toLowerCase();for(const n of current.nodes)$(n.id).classList.toggle('match',!!q&&(n.title+n.lines+n.detail).toLowerCase().includes(q));});
+$('locate').addEventListener('click',()=>{const n=document.querySelector('.node.match');if(!n)return;zoom(1,false);const r=n.getBoundingClientRect(),v=viewport.getBoundingClientRect();viewport.scrollLeft+=r.left-v.left-(viewport.clientWidth-r.width)/2;viewport.scrollTop+=r.top-v.top-(viewport.clientHeight-r.height)/2;n.focus({preventScroll:true});});
+let drag=null;
+viewport.addEventListener('pointerdown',e=>{if(e.target.closest('button')||e.button!==0||e.pointerType==='touch')return;drag={x:e.clientX,y:e.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};viewport.setPointerCapture(e.pointerId);viewport.classList.add('dragging');});
+viewport.addEventListener('pointermove',e=>{if(!drag)return;viewport.scrollLeft=drag.left+drag.x-e.clientX;viewport.scrollTop=drag.top+drag.y-e.clientY;});
+function endDrag(){drag=null;viewport.classList.remove('dragging');}viewport.addEventListener('pointerup',endDrag);viewport.addEventListener('pointercancel',endDrag);
+function activateNavigation(item){document.querySelectorAll('nav a').forEach(el=>{el.classList.toggle('nav-active',el===item);if(el===item)el.setAttribute('aria-current','location');else el.removeAttribute('aria-current');});}
+document.querySelectorAll('nav a').forEach(el=>el.addEventListener('click',()=>activateNavigation(el)));
+window.addEventListener('resize',layout);layout();document.fonts.ready.then(()=>{layout();fit();});
