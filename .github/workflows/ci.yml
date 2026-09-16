@@ -45,3 +45,5 @@ jobs:
       - run: node tests/test_learning_browser.cjs learning-smoke/handbook.html
       - run: python project-handbook/scripts/build_flow.py project-handbook/assets/flow.example.json flow-smoke
       - run: node tests/test_flow_browser.cjs flow-smoke/handbook.html
+      - run: python project-handbook/scripts/build_flow.py project-handbook/assets/damage.example.json damage-smoke
+      - run: node tests/test_damage_example_browser.cjs damage-smoke/handbook.html

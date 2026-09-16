@@ -74,3 +74,20 @@ class FlowTests(unittest.TestCase):
         self.data['graphs'][1]['position'] = {'row':0, 'col':0}
         with self.assertRaises(ValueError):
             flow.render(self.data)
+
+    def test_sanitized_damage_example(self):
+        text = (ROOT / 'project-handbook/assets/damage.example.json').read_text(encoding='utf-8')
+        data = json.loads(text)
+        page = flow.render(data)
+        self.assertIn('教学数据', data['summary'])
+        self.assertIn('非项目代码摘录', data['sources'][0]['locator'])
+        self.assertNotRegex(text, r'https?://|[A-Za-z]:[\\/]|m_[A-Z]')
+        self.assertEqual(len(data['examples']), 3)
+        self.assertNotIn('@@', page)
+        base = max(1600 - 600, 1)
+        reduced = base * 2 * 80 // 100
+        normal = max(reduced - 100, 0)
+        fixed = max(500 - 100, 0)
+        self.assertEqual((base, reduced, normal, fixed, min(200, normal)), (1000, 1600, 1500, 400, 200))
+        for example, result in zip(data['examples'], (normal, fixed, 200)):
+            self.assertIn(str(result), ' '.join(example['trace']))

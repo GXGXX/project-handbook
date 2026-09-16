@@ -33,9 +33,9 @@ https://github.com/GXGXX/project-handbook/tree/main/project-handbook
 
 ## 输出是什么样的
 
-下面是“订单支付”教学示例生成的真实页面截图，使用合成数据。
+下面是“游戏中的伤害流程”脱敏示例生成的真实页面截图。项目名称、代码路径、字段和业务数值均未公开，公式与数值已替换为教学数据。
 
-![完整画布：从创建订单到支付通知处理，不再切换共同流程](docs/images/payment-flow.png)
+![游戏伤害整体流程：命中、基础伤害、暴击、减伤、固定覆盖、结算与扣血](docs/images/damage-flow.png)
 
 - **查看全图**：一次看到整个流程及连线。
 - **缩放与拖动**：放大看局部，拖动空白处移动画布。
@@ -43,7 +43,7 @@ https://github.com/GXGXX/project-handbook/tree/main/project-handbook
 - **点击节点**：查看该步骤做什么、为什么、依据是什么。
 - **数值走一遍**：跟着具体输入，看每一步如何得到最终结果。
 
-![点击节点，展开对应解释和来源](docs/images/payment-detail.png)
+![点击伤害节点，查看公式、具体例子与脱敏说明](docs/images/damage-detail.png)
 
 HTML 可直接在浏览器中打开，不需要启动服务。
 
