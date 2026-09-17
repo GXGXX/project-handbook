@@ -34,7 +34,9 @@
       send: ['m22 2-7 20-4-9-9-4Z', 'M22 2 11 13'],
       download: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm7 10 5 5 5-5', 'M12 15V3'],
       image: ['M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z', 'm21 15-5-5L5 21', 'M8.5 8.5h.01'],
-      scan: ['M4 9V5a1 1 0 0 1 1-1h4', 'M15 4h4a1 1 0 0 1 1 1v4', 'M20 15v4a1 1 0 0 1-1 1h-4', 'M9 20H5a1 1 0 0 1-1-1v-4', 'M8 12h8'],
+      camera: ['M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z', 'M16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0'],
+      grip: ['M9 5h.01', 'M9 12h.01', 'M9 19h.01', 'M15 5h.01', 'M15 12h.01', 'M15 19h.01'],
+      resize: ['M15 3h6v6', 'm21 3-7 7', 'M3 15v6h6', 'm3 21 7-7'],
       refresh: ['M3 12a9 9 0 0 1 15.36-6.36L21 8', 'M21 3v5h-5', 'M21 12a9 9 0 0 1-15.36 6.36L3 16', 'M8 16H3v5'],
       compile: ['M12 3v12', 'm8 11 4 4 4-4', 'M5 17v4h14v-4'],
       stop: ['M6 6h12v12H6z']
@@ -47,6 +49,7 @@
     }
     function icon(name) {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.dataset.icon = name;
       for (const [key, value] of Object.entries({viewBox: '0 0 24 24', width: 18, height: 18, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true'})) svg.setAttribute(key, value);
       for (const d of icons[name]) {
         const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', d); svg.append(path);
@@ -76,13 +79,16 @@
     const toggle = button('flow-qa-toggle', '问答', 'chat', true);
     const share = button('flow-qa-share', '导出离线 HTML', 'download');
     const pngFull = button('flow-qa-png-full', '导出全图 PNG', 'image');
-    const pngView = button('flow-qa-png-view', '导出当前视图 PNG', 'scan');
+    const pngView = button('flow-qa-png-view', '导出当前视图 PNG', 'camera');
     tools.append(toggle, share, pngFull, pngView); toolbar.append(tools);
     const shell = element('div', 'flow-qa-shell');
     viewportElement.before(shell); shell.append(viewportElement);
     const aside = element('aside', 'flow-qa-panel');
     aside.id = 'flow-qa-panel'; aside.hidden = true; aside.setAttribute('aria-label', '流程问答');
     toggle.setAttribute('aria-controls', aside.id); toggle.setAttribute('aria-expanded', 'false');
+    const widthHandle = button('flow-qa-resize-width', '拖动调整问答宽度', 'grip');
+    const cornerHandle = button('flow-qa-resize-corner', '拖动调整问答大小', 'resize');
+    const topHandle = button('flow-qa-resize-top', '拖动调整问答高度', 'grip');
     const head = element('div', 'flow-qa-header');
     const heading = element('div', 'flow-qa-heading');
     const badge = element('span', 'flow-qa-badge', live ? '检查中' : '离线副本');
@@ -111,7 +117,50 @@
     const compile = button('flow-qa-compile', '整理新版本', 'compile', true);
     compile.title = '将选中的回答整理成完整版本，保留原版';
     const footerActions = element('div', 'flow-qa-footer-actions'); footerActions.append(exportButton, compile);
-    footer.append(count, footerActions); aside.append(head, context, transcript, result, status, form, footer); shell.append(aside);
+    footer.append(count, footerActions); aside.append(head, context, transcript, result, status, form, footer, widthHandle, cornerHandle, topHandle); shell.append(aside);
+    let panelWidth = null, panelHeight = null, mobileHeight = null;
+    const isNarrow = () => window.matchMedia('(max-width:800px)').matches;
+    function resizePanel(newWidth, newHeight) {
+      if (isNarrow()) {
+        if (newHeight !== undefined) mobileHeight = Math.max(Math.min(440, innerHeight - 16), Math.min(innerHeight - 16, newHeight));
+        shell.style.setProperty('--flow-qa-mobile-height', mobileHeight === null ? '86dvh' : mobileHeight + 'px');
+      } else {
+        const maximum = Math.max(320, shell.clientWidth - 276);
+        if (newWidth !== undefined) panelWidth = newWidth;
+        if (newHeight !== undefined) panelHeight = newHeight;
+        shell.style.setProperty('--flow-qa-width', Math.max(320, Math.min(maximum, panelWidth ?? 520)) + 'px');
+        shell.style.setProperty('--flow-qa-height', Math.max(480, Math.min(1400, panelHeight ?? innerHeight * .82)) + 'px');
+      }
+    }
+    for (const [handle, kind] of [[widthHandle, 'width'], [cornerHandle, 'corner'], [topHandle, 'top']]) {
+      let resizing = null;
+      handle.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        const bounds = aside.getBoundingClientRect();
+        resizing = {x: event.clientX, y: event.clientY, width: bounds.width, height: bounds.height};
+        handle.setPointerCapture(event.pointerId); shell.classList.add('flow-qa-resizing');
+      });
+      handle.addEventListener('pointermove', event => {
+        if (!resizing) return;
+        resizePanel(kind === 'top' ? undefined : resizing.width + resizing.x - event.clientX,
+          kind === 'width' ? undefined : resizing.height + (kind === 'top' ? resizing.y - event.clientY : event.clientY - resizing.y));
+      });
+      const end = () => {resizing = null; shell.classList.remove('flow-qa-resizing');};
+      handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end); handle.addEventListener('lostpointercapture', end);
+      handle.addEventListener('keydown', event => {
+        const horizontal = kind !== 'top' && ['ArrowLeft', 'ArrowRight'].includes(event.key);
+        const vertical = kind !== 'width' && ['ArrowUp', 'ArrowDown'].includes(event.key);
+        if (!horizontal && !vertical) return;
+        event.preventDefault();
+        const bounds = aside.getBoundingClientRect();
+        resizePanel(horizontal ? bounds.width + (event.key === 'ArrowLeft' ? 32 : -32) : undefined,
+          vertical ? bounds.height + ((event.key === (kind === 'top' ? 'ArrowUp' : 'ArrowDown')) ? 32 : -32) : undefined);
+      });
+    }
+    window.addEventListener('resize', () => resizePanel());
+    const shellObserver = new ResizeObserver(() => resizePanel()); shellObserver.observe(shell);
+    resizePanel();
     const dialog = document.getElementById('detail');
     if (dialog) {
       const askNode = button('flow-qa-ask-node flow-qa-primary', '追问这个节点', 'chat', true);
@@ -132,8 +181,15 @@
     }
     function readinessSummary() {
       if (connected) return '已连接本地问答';
-      const summary = available ? 'Codex 可用；首个问题将尝试连接' : '问答暂不可用；可阅读与导出';
-      return summary + (backendMessage ? '。' + backendMessage : '');
+      const problem = connectionProblem();
+      if (problem) return problem;
+      return available ? 'Codex 可用；首个问题将尝试连接' : '问答暂不可用；可阅读与导出';
+    }
+    function connectionProblem() {
+      if (/sign.?in|log.?in|auth/i.test(backendMessage)) return '请先在本机 Codex 登录，再重试提问。';
+      if (/cannot verify|cannot enforce|unavailable|no model turn/i.test(backendMessage)) return '暂时无法建立安全连接；请检查本机 Codex 后重试。已有内容仍可阅读和导出。';
+      if (/timed out|unexpectedly|failed|rejected/i.test(backendMessage)) return 'Codex 连接暂时失败，请稍后重试。已有内容仍可阅读和导出。';
+      return '';
     }
     function updateControls() {
       const busy = !!active || externalBusy;
@@ -165,6 +221,21 @@
       nodeId = node ? node.id : null;
       contextText.textContent = node ? node.title : '整个流程'; clearContext.hidden = !node;
     }
+    const markdown = typeof window.markdownit === 'function' ? window.markdownit({html: false, linkify: false, breaks: true}) : null;
+    if (markdown) {
+      // Model output can format text, but cannot load images, links or raw HTML.
+      markdown.renderer.rules.image = (tokens, index) => markdown.utils.escapeHtml(tokens[index].content);
+      markdown.renderer.rules.link_open = () => '<span>';
+      markdown.renderer.rules.link_close = () => '</span>';
+      markdown.renderer.rules.table_open = () => '<div class="flow-qa-table"><table>';
+      markdown.renderer.rules.table_close = () => '</table></div>';
+    }
+    function renderAnswer(text) {
+      const answer = element('div', 'flow-qa-answer');
+      if (markdown) answer.innerHTML = markdown.render(text).trim();
+      else answer.textContent = text;
+      return answer;
+    }
     function renderEntries(scroll = false) {
       const nearBottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 90;
       const oldScroll = transcript.scrollTop;
@@ -184,7 +255,11 @@
         } else {
           meta.append(element('span', 'flow-qa-entry-state', entry.status === 'streaming' ? '回答中' : entry.status === 'cancelled' ? '已停止' : '未完成'));
         }
-        article.append(meta, element('h4', 'flow-qa-question', entry.question), element('div', 'flow-qa-answer', entry.answer || (entry.status === 'streaming' ? '…' : '暂无回答')));
+        const userMessage = element('div', 'flow-qa-message flow-qa-message-user');
+        userMessage.append(element('span', 'flow-qa-role flow-qa-role-user', '你'), element('h4', 'flow-qa-question', entry.question));
+        const assistantMessage = element('div', 'flow-qa-message flow-qa-message-assistant');
+        assistantMessage.append(element('span', 'flow-qa-role flow-qa-role-assistant', 'Codex · AI'), renderAnswer(entry.answer || (entry.status === 'streaming' ? '正在思考…' : '暂无回答')));
+        article.append(meta, userMessage, assistantMessage);
         transcript.append(article);
       }
       transcript.scrollTop = scroll || nearBottom ? transcript.scrollHeight : oldScroll;
@@ -201,7 +276,7 @@
     document.addEventListener('flow:node-selected', event => setNode(event.detail?.id));
     draft.addEventListener('input', updateControls);
     draft.addEventListener('keydown', event => {
-      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); if (!send.disabled) form.requestSubmit(); }
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); if (!send.disabled) form.requestSubmit(); }
     });
 
     async function request(endpoint, body, signal) {
@@ -241,7 +316,7 @@
         externalBusy = value.busy;
         updateReadiness(value.backend);
         if (readinessOnly) {
-          if (!connected && backendMessage && status.classList.contains('flow-qa-error')) setStatus(status.textContent + '；' + backendMessage, true);
+          if (!connected && connectionProblem() && status.classList.contains('flow-qa-error')) setStatus(connectionProblem(), true);
         } else {
           if (!quiet || !externalBusy) setStatus(externalBusy ? '已有任务正在处理' : readinessSummary(), !available);
           renderEntries();

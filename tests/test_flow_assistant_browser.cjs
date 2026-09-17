@@ -10,7 +10,7 @@ const {pathToFileURL} = require('node:url');
 const assets = path.resolve(__dirname, '../project-handbook/assets');
 const read = name => fs.existsSync(path.join(assets, name)) ? fs.readFileSync(path.join(assets, name), 'utf8') : '';
 const token = 'synthetic-runtime-token-not-for-sharing';
-const saved = {id: 'saved-1', node_id: 'entry', question: '已保存的问题', answer: '已保存的答案\n/repository/private/module.py\n~/private/project\nhttps://internal.example/team\ncookie="session-private"\nBasic cHJpdmF0ZTpwYXNz\neyJhbGciOiJIUzI1NiJ9.eyJwcml2YXRlIjp0cnVlfQ.signature\nAKIA1234567890ABCDEF', status: 'complete', created_at: '2026-09-16T10:00:00Z'};
+const saved = {id: 'saved-1', node_id: 'entry', question: '已保存的问题', answer: '**已保存的答案**\n\n1. 先检查 `金额`。\n2. 再保存结果。\n\n/repository/private/module.py\n~/private/project\nhttps://internal.example/team\ncookie="session-private"\nBasic cHJpdmF0ZTpwYXNz\neyJhbGciOiJIUzI1NiJ9.eyJwcml2YXRlIjp0cnVlfQ.signature\nAKIA1234567890ABCDEF', status: 'complete', created_at: '2026-09-16T10:00:00Z'};
 const failed = {id: 'failed-1', node_id: 'entry', question: '失败的问题', answer: '未完成的私人草稿', status: 'error'};
 const nodes = [
   {id: 'entry', row: 0, col: 0, title: '提交订单', lines: '检查订单', detail: '来源 C:\\private\\orders.py，api_key=sk-test-private-value-123456', kind: 'process', source: 'demo'},
@@ -27,7 +27,7 @@ function fixture(runtime, qa = [saved, failed]) {
   const replacements = {
     TITLE: manifest.title, HEADER: '<header><h1>订单流程</h1></header>', NAV: '<nav><a href="#diagram">整体流程</a><a href="#examples">例子</a></nav>', EXAMPLES: '',
     DATA: JSON.stringify(manifest).replace(/</g, '\\u003c'), CSS: read('flow.css') + '\n' + read('flow-assistant.css'),
-    JS: [read('vendor/html2canvas.min.js'), read('flow.js'), read('flow-assistant.js')].join('\n;\n').replace(/<\/script/g, '<\\/script')
+    JS: [read('vendor/html2canvas.min.js'), read('vendor/markdown-it.min.js'), read('flow.js'), read('flow-assistant.js')].join('\n;\n').replace(/<\/script/g, '<\\/script')
   };
   return read('flow-template.html').replace(/@@([A-Z]+)@@/g, (_, key) => replacements[key] || '');
 }
@@ -155,6 +155,9 @@ async function until(check, message) {
     assert.equal(await shared.locator('.node').count(), 2, 'cloned exports must not duplicate generated nodes');
     assert.equal(await shared.locator('.flow-qa-entry').count(), 1);
     assert.match(await shared.locator('.flow-qa-entry').textContent(), /已保存的答案/);
+    assert.equal(await shared.locator('.flow-qa-answer strong').textContent(), '已保存的答案');
+    assert.equal(await shared.locator('.flow-qa-answer ol li').count(), 2);
+    assert.equal(await shared.locator('.flow-qa-answer code').textContent(), '金额');
     assert(await shared.locator('.flow-qa-send').isDisabled());
     const data = await shared.locator('#data').textContent();
     assert.equal(JSON.parse(data).runtime, undefined);
@@ -318,7 +321,7 @@ async function until(check, message) {
     backend = {available: false, connected: false, model: 'synthetic', message: 'Safety setup unavailable <b>read-only</b>. password:"synthetic secret phrase" https://internal.example/auth /data/private/auth.json'};
     const readiness = await pageFor(origin);
     await readiness.getByRole('button', {name: '问答', exact: true}).click();
-    await until(() => readiness.locator('.flow-qa-status').textContent().then(text => text.includes('Safety setup unavailable')), 'unavailable backend should show its safe failure detail');
+    await until(() => readiness.locator('.flow-qa-status').textContent().then(text => text.includes('安全连接')), 'unavailable backend should show an understandable failure reason');
     assert.match(await readiness.locator('.flow-qa-badge').textContent(), /不可用/);
     await readiness.locator('.flow-qa-draft').fill('保留待连接的问题');
     await readiness.locator('.flow-qa-entry input').first().check();
@@ -334,7 +337,7 @@ async function until(check, message) {
     assert.doesNotMatch(await readiness.locator('.flow-qa-status').textContent(), /已连接/);
     mode = 'auth-error';
     await readiness.locator('.flow-qa-send').click();
-    await until(() => readiness.locator('.flow-qa-status').textContent().then(text => text.includes('Sign-in required')), 'failed first connection should refresh the safe backend failure reason');
+    await until(() => readiness.locator('.flow-qa-status').textContent().then(text => text.includes('登录')), 'failed first connection should explain how to restore sign-in');
     assert.doesNotMatch(await readiness.locator('.flow-qa-badge').textContent(), /已连接/);
     assert.equal(await readiness.locator('.flow-qa-draft').inputValue(), '保留待连接的问题');
     assert(await readiness.locator('.flow-qa-send').isEnabled(), 'failed authentication must permit retry after external sign-in');

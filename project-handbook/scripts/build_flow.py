@@ -119,7 +119,7 @@ def render(data):
         'TITLE': esc(data['title']), 'HEADER': header, 'NAV': nav, 'EXAMPLES': examples,
         'CSS': '\n'.join((ASSETS / name).read_text(encoding='utf-8') for name in ('flow.css', 'flow-assistant.css')),
         'JS': '\n;\n'.join((ASSETS / name).read_text(encoding='utf-8').replace('</script', '<\\/script')
-                            for name in ('vendor/html2canvas.min.js', 'flow.js', 'flow-assistant.js')),
+                            for name in ('vendor/html2canvas.min.js', 'vendor/markdown-it.min.js', 'flow.js', 'flow-assistant.js')),
         'DATA': json.dumps(data, ensure_ascii=False).replace('<', '\\u003c'),
     }
     template = (ASSETS / 'flow-template.html').read_text(encoding='utf-8')

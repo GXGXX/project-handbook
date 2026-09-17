@@ -49,16 +49,18 @@ const {pathToFileURL} = require('node:url');
     await page.locator('#diagram').screenshot({path: path.join(output, 'damage-qa.png')});
     console.log('PASS real Codex: streamed node-context answer contains the verified teaching result 400.');
 
-    await page.locator('.flow-qa-compile').click();
-    await page.waitForFunction(() => window.__flowSmoke.compile, null, {timeout: 300000});
-    const compiledEvents = await page.evaluate(() => window.__flowSmoke.compile);
-    assert.equal(compiledEvents.at(-1).type, 'compiled', JSON.stringify(compiledEvents.at(-1)));
-    const revised = await page.request.get(url + compiledEvents.at(-1).url);
-    assert(revised.ok());
-    const revisedHtml = await revised.text();
-    assert(!revisedHtml.includes('"runtime":'));
-    fs.writeFileSync(path.join(output, 'revised-handbook.html'), revisedHtml);
-    console.log('PASS real Codex: selected-answer revision generated and validated as a new offline version.');
+    if (process.env.FLOW_LIVE_ANSWER_ONLY !== '1') {
+      await page.locator('.flow-qa-compile').click();
+      await page.waitForFunction(() => window.__flowSmoke.compile, null, {timeout: 300000});
+      const compiledEvents = await page.evaluate(() => window.__flowSmoke.compile);
+      assert.equal(compiledEvents.at(-1).type, 'compiled', JSON.stringify(compiledEvents.at(-1)));
+      const revised = await page.request.get(url + compiledEvents.at(-1).url);
+      assert(revised.ok());
+      const revisedHtml = await revised.text();
+      assert(!revisedHtml.includes('"runtime":'));
+      fs.writeFileSync(path.join(output, 'revised-handbook.html'), revisedHtml);
+      console.log('PASS real Codex: selected-answer revision generated and validated as a new offline version.');
+    }
 
     const downloadPromise = page.waitForEvent('download');
     await page.locator('.flow-qa-export').click();
@@ -73,6 +75,9 @@ const {pathToFileURL} = require('node:url');
     await offlinePage.goto(pathToFileURL(offline).href);
     await offlinePage.locator('.flow-qa-toggle').click();
     assert((await offlinePage.locator('.flow-qa-answer').textContent()).includes('400'));
+    assert.equal(await offlinePage.locator('.flow-qa-answer').innerHTML(),
+      await page.locator(`[data-entry-id="${entryId}"] .flow-qa-answer`).innerHTML(),
+      'Offline export preserves formatted answer content');
     assert(await offlinePage.locator('.flow-qa-send').isDisabled());
     assert.equal(await offlinePage.locator('.node').count(), 11);
     assert.deepEqual(network, []);

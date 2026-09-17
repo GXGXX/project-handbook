@@ -17,7 +17,7 @@ class FlowTests(unittest.TestCase):
 
     def test_portable_and_no_review(self):
         page = flow.render(self.data)
-        self.assertNotIn('@@', page)
+        self.assertNotRegex(page, r'@@[A-Z]+@@')
         self.assertNotIn('id="review"', page)
         self.assertNotIn('href="#review"', page)
         self.assertIn('activateNavigation', page)
@@ -30,6 +30,7 @@ class FlowTests(unittest.TestCase):
         page = flow.render(self.data)
         self.assertIn('flow:node-selected', page)
         self.assertIn('html2canvas', page)
+        self.assertIn('markdownit', page)
         self.assertIn('flow-qa-panel', page)
         self.assertNotRegex(page, r'<script[^>]+src="https?://')
 
@@ -99,7 +100,7 @@ class FlowTests(unittest.TestCase):
         self.assertIn('非项目代码摘录', data['sources'][0]['locator'])
         self.assertNotRegex(text, r'https?://|[A-Za-z]:[\\/]|m_[A-Z]')
         self.assertEqual(len(data['examples']), 3)
-        self.assertNotIn('@@', page)
+        self.assertNotRegex(page, r'@@[A-Z]+@@')
         base = max(1600 - 600, 1)
         reduced = base * 2 * 80 // 100
         normal = max(reduced - 100, 0)

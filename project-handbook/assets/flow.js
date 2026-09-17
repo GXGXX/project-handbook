@@ -7,6 +7,16 @@ function svg(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const 
 function showDetail(n){$('detail-title').textContent=n.title;$('detail-formula').textContent=n.lines;$('detail-text').textContent=n.detail;const source=data.sources.find(s=>s.id===n.source);$('source').textContent=source?source.locator+'\n\n'+(source.excerpt||'分享副本未附原始摘录。'):'未附来源';document.dispatchEvent(new CustomEvent('flow:node-selected',{detail:{id:n.id}}));$('detail').showModal();}
 function zoom(value,center=true){const old=scale, x=(viewport.scrollLeft+viewport.clientWidth/2)/old,y=(viewport.scrollTop+viewport.clientHeight/2)/old;const minimum=Math.min(.1,(viewport.clientWidth-24)/width,(viewport.clientHeight-24)/height);scale=Math.max(minimum,Math.min(2,value));$('canvas').style.transform=`scale(${scale})`;$('stage').style.width=width*scale+'px';$('stage').style.height=height*scale+'px';$('zoom-value').textContent=(scale<.01?(scale*100).toFixed(2):Math.round(scale*100))+'%';if(center){viewport.scrollLeft=x*scale-viewport.clientWidth/2;viewport.scrollTop=y*scale-viewport.clientHeight/2;}}
 function fit(){zoom(Math.min(1,(viewport.clientWidth-24)/width,(viewport.clientHeight-24)/height),false);viewport.scrollLeft=0;viewport.scrollTop=0;}
+viewport.addEventListener('wheel',event=>{
+ if(!event.ctrlKey||!event.deltaY)return;
+ event.preventDefault();
+ const before=$('canvas').getBoundingClientRect(),x=(event.clientX-before.left)/scale,y=(event.clientY-before.top)/scale;
+ const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?viewport.clientHeight:1);
+ zoom(scale*Math.exp(-Math.max(-300,Math.min(300,delta))*.002),false);
+ const after=$('canvas').getBoundingClientRect();
+ viewport.scrollLeft+=after.left+x*scale-event.clientX;
+ viewport.scrollTop+=after.top+y*scale-event.clientY;
+},{passive:false});
 function clearRoute(points,obstacles){
  return points.slice(1).every((b,i)=>{const a=points[i];return obstacles.every(r=>{
   const left=r.x-5,right=r.x+r.w+5,top=r.y-5,bottom=r.y+r.h+5;

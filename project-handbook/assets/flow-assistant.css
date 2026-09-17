@@ -1,5 +1,5 @@
 .flow-qa-shell{display:grid;grid-template-columns:minmax(0,1fr);gap:0;align-items:start;min-width:0}
-.flow-qa-shell.flow-qa-open{grid-template-columns:minmax(0,1fr) 376px;gap:16px}
+.flow-qa-shell.flow-qa-open{grid-template-columns:minmax(0,1fr) var(--flow-qa-width,520px);gap:16px}
 .flow-qa-shell>#viewport{min-width:0;width:100%}
 .flow-qa-tools{display:flex;align-items:center;gap:6px;margin-left:auto}
 .flow-qa-button{font:inherit;letter-spacing:0;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:36px;min-height:36px;border:1px solid #ced7dd;border-radius:6px;padding:7px 10px;background:#fff;color:#33434b;cursor:pointer;line-height:1.4;white-space:nowrap}
@@ -10,7 +10,14 @@
 .flow-qa-button:focus-visible,.flow-qa-draft:focus-visible,.flow-qa-pick input:focus-visible{outline:3px solid #80b8a9;outline-offset:2px}
 .flow-qa-button.flow-qa-primary,.canvas-tools .flow-qa-toggle[aria-expanded=true]{background:#216e65;border-color:#216e65;color:#fff}
 .flow-qa-button.flow-qa-primary:hover:not(:disabled){background:#195c54}
-.flow-qa-panel{height:72vh;min-height:400px;max-height:960px;display:flex;flex-direction:column;min-width:0;background:#fff;border:1px solid #d2dedb;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px #233b3210;color:#273b35;font-size:13px;line-height:1.6;letter-spacing:0}
+.flow-qa-panel{position:relative;height:var(--flow-qa-height,82vh);min-height:480px;max-height:1400px;display:flex;flex-direction:column;min-width:0;background:#fff;border:1px solid #d2dedb;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px #233b3210;color:#273b35;font-size:15px;line-height:1.7;letter-spacing:0}
+.flow-qa-shell.flow-qa-open>#viewport{height:var(--flow-qa-height,82vh)}
+.flow-qa-panel .flow-qa-resize-width,.flow-qa-panel .flow-qa-resize-corner,.flow-qa-panel .flow-qa-resize-top{position:absolute;z-index:2;min-width:0;min-height:0;padding:0;border:0;background:transparent;touch-action:none;color:#7c9b91}
+.flow-qa-panel .flow-qa-resize-width{left:0;top:16px;bottom:20px;width:12px;cursor:ew-resize}
+.flow-qa-panel .flow-qa-resize-width svg{width:12px;height:22px}
+.flow-qa-panel .flow-qa-resize-corner{left:0;bottom:0;width:22px;height:22px;cursor:nesw-resize}
+.flow-qa-panel .flow-qa-resize-top{display:none}
+.flow-qa-resizing{user-select:none}
 .flow-qa-panel[hidden],.flow-qa-panel [hidden],.flow-qa-tools [hidden]{display:none!important}
 .flow-qa-header{display:flex;align-items:center;gap:5px;padding:14px 14px 11px;border-bottom:1px solid #e4eae7;flex-shrink:0}
 .flow-qa-heading{display:flex;align-items:baseline;gap:9px;flex:1;min-width:0;flex-wrap:wrap}
@@ -23,7 +30,7 @@
 .flow-qa-context{display:flex;align-items:center;gap:8px;background:#f4f8f6;padding:8px 14px;flex-shrink:0;min-width:0}
 .flow-qa-context-label{font-size:11px;color:#718079;flex:none}
 .flow-qa-context>span:nth-child(2){min-width:0;overflow-wrap:anywhere;line-height:1.4;flex:1}
-.flow-qa-transcript{flex:1;min-height:72px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:0 16px}
+.flow-qa-transcript{flex:1;min-height:72px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:0 22px}
 .flow-qa-transcript:focus-visible{outline:2px solid #80b8a9;outline-offset:-2px}
 .flow-qa-entry{display:block;background:transparent;border:0;border-radius:0;box-shadow:none;margin:0;padding:16px 0 18px;border-bottom:1px solid #e4eae7;overflow-wrap:anywhere}
 .flow-qa-entry:last-child{border-bottom:0}
@@ -32,13 +39,34 @@
 .flow-qa-entry-state{flex:none;color:#9c6b24}
 .flow-qa-pick{display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;flex:none;min-height:24px;color:#49735f}
 .flow-qa-pick input{appearance:auto;display:inline-block;width:15px;height:15px;min-width:15px;margin:0;padding:0;accent-color:#216e65;border-radius:3px;cursor:pointer}
-.flow-qa-question{font-size:13px;font-weight:650;line-height:1.65;margin:0 0 9px;color:#263d34;white-space:pre-wrap;overflow-wrap:anywhere;letter-spacing:0}
-.flow-qa-answer{font-size:13px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere;color:#485650}
+.flow-qa-message{min-width:0;margin-top:16px}
+.flow-qa-message-user{margin-left:36px;padding:12px 15px;background:#edf6f2;border-radius:8px}
+.flow-qa-message-assistant{padding:0 2px 2px}
+.flow-qa-role{display:block;font-size:12px;font-weight:650;line-height:1.5;margin-bottom:8px;color:#216e65}
+.flow-qa-role-user{text-align:right;color:#426b5c}
+.flow-qa-role-assistant{color:#416079}
+.flow-qa-question{font-size:15px;font-weight:500;line-height:1.75;margin:0;color:#263d34;white-space:pre-wrap;overflow-wrap:anywhere;letter-spacing:0}
+.flow-qa-answer{font-size:15px;line-height:1.85;white-space:normal;overflow-wrap:anywhere;color:#33443d}
+.flow-qa-answer p{font:inherit;color:inherit;margin:0 0 12px}
+.flow-qa-answer>:last-child{margin-bottom:0}
+.flow-qa-answer h1,.flow-qa-answer h2,.flow-qa-answer h3,.flow-qa-answer h4{font-size:17px;line-height:1.6;letter-spacing:0;margin:16px 0 8px}
+.flow-qa-answer ol,.flow-qa-answer ul{margin:8px 0 14px;padding-left:24px;list-style:decimal}
+.flow-qa-answer ul{list-style:disc}
+.flow-qa-answer li{background:none;border:0;padding:2px 0;margin:3px 0;position:static}
+.flow-qa-answer li+li:before{content:none}
+.flow-qa-answer code{font:13px/1.75 Consolas,"Courier New",monospace;background:#edf2f5;color:#405968;padding:2px 4px;border-radius:3px;overflow-wrap:anywhere}
+.flow-qa-answer pre{margin:12px 0;padding:12px 14px;background:#f3f6f8;border:1px solid #e1e7eb;border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere}
+.flow-qa-answer pre code{padding:0;background:transparent}
+.flow-qa-answer blockquote{margin:12px 0;border-left:3px solid #a1b9b0;padding-left:14px;color:#62766c}
+.flow-qa-table{max-width:100%;overflow:auto;margin:12px 0}
+.flow-qa-table table{border-collapse:collapse;width:100%;font-size:14px}
+.flow-qa-table th,.flow-qa-table td{padding:7px 10px;border:1px solid #dce6e1;text-align:left;min-width:64px}
+.flow-qa-table th{background:#f3f7f5}
 .flow-qa-empty{font-size:13px;text-align:center;color:#849189;margin:42px 0}
 .flow-qa-status{flex-shrink:0;margin:0;padding:9px 15px 5px;color:#60776b;font-size:11px;line-height:1.5;overflow-wrap:anywhere;max-height:72px;overflow:auto}
 .flow-qa-status.flow-qa-error{color:#a14332}
 .flow-qa-form{padding:6px 14px 12px;flex-shrink:0;margin:0}
-.flow-qa-draft{display:block;resize:vertical;min-height:74px;max-height:140px;width:100%;min-width:0;border:1px solid #cad8d0;border-radius:6px;padding:9px 11px;background:#fcfdfc;color:#263b32;font:13px/1.65 "Microsoft YaHei",system-ui,sans-serif;letter-spacing:0;overflow-wrap:anywhere}
+.flow-qa-draft{display:block;resize:vertical;min-height:88px;max-height:160px;width:100%;min-width:0;border:1px solid #cad8d0;border-radius:6px;padding:11px 13px;background:#fcfdfc;color:#263b32;font:15px/1.65 "Microsoft YaHei",system-ui,sans-serif;letter-spacing:0;overflow-wrap:anywhere}
 .flow-qa-draft::placeholder{color:#88968f}
 .flow-qa-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:8px;min-height:36px}
 .flow-qa-cancel{color:#9a4234}
@@ -50,12 +78,16 @@
 .flow-qa-result a{color:#216e65;font-size:13px;font-weight:600;text-underline-offset:3px}
 .flow-qa-ask-node{margin-top:18px;font-size:14px}
 @media(max-width:1050px){
-  .flow-qa-shell.flow-qa-open{grid-template-columns:minmax(0,1fr) 340px;gap:12px}
+  .flow-qa-shell.flow-qa-open{gap:12px}
 }
 @media(max-width:800px){
   .flow-qa-shell.flow-qa-open{display:block}
-  .flow-qa-panel{position:fixed;z-index:20;left:0;right:0;bottom:0;width:100%;height:min(78dvh,760px);max-height:calc(100dvh - 28px);min-height:0;border-radius:8px 8px 0 0;border-bottom:0;box-shadow:0 -8px 30px #21362c24;padding-bottom:env(safe-area-inset-bottom)}
-  .flow-qa-header{padding-top:12px}
+  .flow-qa-panel{position:fixed;z-index:20;left:0;right:0;bottom:0;width:100%;height:var(--flow-qa-mobile-height,86dvh);max-height:calc(100dvh - 16px);min-height:0;border-radius:8px 8px 0 0;border-bottom:0;box-shadow:0 -8px 30px #21362c24;padding-bottom:env(safe-area-inset-bottom)}
+  .flow-qa-shell.flow-qa-open>#viewport{height:72vh}
+  .flow-qa-panel .flow-qa-resize-width,.flow-qa-panel .flow-qa-resize-corner{display:none}
+  .flow-qa-panel .flow-qa-resize-top{display:flex;top:0;left:0;width:100%;height:14px;cursor:ns-resize}
+  .flow-qa-resize-top svg{transform:rotate(90deg);width:24px;height:12px}
+  .flow-qa-header{padding-top:20px}
   .flow-qa-tools{margin-left:0;gap:5px}
   .flow-qa-draft{resize:none;min-height:65px;max-height:94px;font-size:16px;line-height:1.45}
   .flow-qa-form{padding-bottom:9px}
@@ -64,7 +96,7 @@
   .flow-qa-status{max-height:52px}
 }
 @media(max-height:520px) and (max-width:800px){
-  .flow-qa-panel{height:calc(100dvh - 12px);max-height:none}
+  .flow-qa-panel{height:var(--flow-qa-mobile-height,calc(100dvh - 16px))}
   .flow-qa-context,.flow-qa-badge{display:none}
   .flow-qa-header{padding-block:5px}
   .flow-qa-draft{min-height:45px;height:45px}

@@ -39,12 +39,19 @@ This is a dedicated ephemeral Codex context, not the active desktop task.
 
 - A node's **追问这个节点** button opens the Q&A panel with that node selected.
   The general Q&A button also accepts questions about the entire flow.
+- Enter sends; Shift+Enter inserts a newline, and IME composition must not send.
+  The panel resizes from its left edge/corner, or its top edge on narrow screens.
+  Keep user questions distinct from AI answers and retain formatted Markdown in
+  offline exports without executing answer HTML or loading external content.
 - The model answers from authored details and recent completed answers first.
   Missing evidence can trigger one bounded host-side keyword lookup within
   authorized text/code directories, followed by an answer with relative source
   citations. No project code runs, no source files change, and the model has no
   external-action tools. This is not exhaustive semantic code search; missing
   results are an evidence gap, not proof that a behavior does not exist.
+- Answer in the reader's language with a direct conclusion and short steps or
+  one numeric example. Explain technical terms before naming code fields and
+  place source citations at the end; do not bury the answer under jargon.
 - HTML stays unchanged during Q&A. Completed, failed and cancelled entries are
   saved locally in `.flow-session.json`; only completed answers can be selected.
   Browser refresh restores history. Drafts and partial answers are not compiled.
