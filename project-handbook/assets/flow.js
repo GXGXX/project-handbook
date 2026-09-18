@@ -6,10 +6,11 @@ let scale=1, width=1040, height=1;
 function svg(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v]of Object.entries(attrs))e.setAttribute(k,v);if(text)e.textContent=text;return e;}
 function showDetail(n){$('detail-title').textContent=n.title;$('detail-formula').textContent=n.lines;$('detail-text').textContent=n.detail;const source=data.sources.find(s=>s.id===n.source);$('source').textContent=source?source.locator+'\n\n'+(source.excerpt||'分享副本未附原始摘录。'):'未附来源';document.dispatchEvent(new CustomEvent('flow:node-selected',{detail:{id:n.id}}));$('detail').showModal();}
 function zoom(value,center=true){const old=scale, x=(viewport.scrollLeft+viewport.clientWidth/2)/old,y=(viewport.scrollTop+viewport.clientHeight/2)/old;const minimum=Math.min(.1,(viewport.clientWidth-24)/width,(viewport.clientHeight-24)/height);scale=Math.max(minimum,Math.min(2,value));$('canvas').style.transform=`scale(${scale})`;$('stage').style.width=width*scale+'px';$('stage').style.height=height*scale+'px';$('zoom-value').textContent=(scale<.01?(scale*100).toFixed(2):Math.round(scale*100))+'%';if(center){viewport.scrollLeft=x*scale-viewport.clientWidth/2;viewport.scrollTop=y*scale-viewport.clientHeight/2;}}
-function fit(){zoom(Math.min(1,(viewport.clientWidth-24)/width,(viewport.clientHeight-24)/height),false);viewport.scrollLeft=0;viewport.scrollTop=0;}
+function fit(){matchPinned=false;zoom(Math.min(1,(viewport.clientWidth-24)/width,(viewport.clientHeight-24)/height),false);viewport.scrollLeft=0;viewport.scrollTop=0;}
 viewport.addEventListener('wheel',event=>{
  if(!event.ctrlKey||!event.deltaY)return;
  event.preventDefault();
+ matchPinned=false;
  const before=$('canvas').getBoundingClientRect(),x=(event.clientX-before.left)/scale,y=(event.clientY-before.top)/scale;
  const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?viewport.clientHeight:1);
  zoom(scale*Math.exp(-Math.max(-300,Math.min(300,delta))*.002),false);
@@ -54,19 +55,56 @@ function draw(){
   if(e.label){const t=svg('text',{x:lx,y:ly,'text-anchor':anchor,class:'edge-label '+(e.route||'normal')},e.label);layer.append(t);const r=t.getBBox();layer.insertBefore(svg('rect',{x:r.x-5,y:r.y-3,width:r.width+10,height:r.height+6,rx:4,fill:'#fff'}),t);}
  }
 }
-$('graph-title').textContent='完整流程';$('graph-note').textContent='所有步骤在同一画布；拖动空白处移动，点击节点查看解答。';
+$('graph-title').textContent='完整流程';$('graph-note').textContent='拖动空白处移动；Ctrl+滚轮缩放。点节点看细节，需要追问时点问答。';
 const columns=Math.max(...current.nodes.map(n=>n.col))+1;
 width=40+columns*380+(columns-1)*90+140;
 $('canvas').style.width=width+'px';$('nodes').style.gridTemplateColumns=`repeat(${columns},380px)`;
 for(const n of current.nodes){const b=document.createElement('button');b.id=n.id;b.className='node '+n.kind;b.style.gridRow=n.row+1;b.style.gridColumn=n.col+1;const t=document.createElement('strong');t.textContent=n.title;const l=document.createElement('span');l.textContent=n.lines;b.append(t,l);b.addEventListener('click',()=>showDetail(n));$('nodes').append(b);}
-function layout(){height=$('canvas').offsetHeight;zoom(scale,false);draw();}
+function layout(){height=$('canvas').offsetHeight;zoom(scale,false);draw();if(matchPinned)centerMatch();}
 $('zoom-in').addEventListener('click',()=>zoom(scale*1.2));$('zoom-out').addEventListener('click',()=>zoom(scale/1.2));$('zoom-reset').addEventListener('click',()=>zoom(1));$('zoom-fit').addEventListener('click',fit);
-$('search').addEventListener('input',()=>{const q=$('search').value.trim().toLowerCase();for(const n of current.nodes)$(n.id).classList.toggle('match',!!q&&(n.title+n.lines+n.detail).toLowerCase().includes(q));});
-$('locate').addEventListener('click',()=>{const n=document.querySelector('.node.match');if(!n)return;zoom(1,false);const r=n.getBoundingClientRect(),v=viewport.getBoundingClientRect();viewport.scrollLeft+=r.left-v.left-(viewport.clientWidth-r.width)/2;viewport.scrollTop+=r.top-v.top-(viewport.clientHeight-r.height)/2;n.focus({preventScroll:true});});
+const search=$('search');
+let matches=[],matchIndex=-1,composing=false,matchPinned=false;
+for(const id of ['zoom-in','zoom-out','zoom-reset'])$(id).addEventListener('click',()=>{matchPinned=false;});
+$('search-count').style.width=Math.max(5,String(current.nodes.length).length*2+1)+'ch';
+function centerMatch(){
+ const node=matches[matchIndex];if(!node)return;
+ const v=viewport.getBoundingClientRect(),top=v.top+viewport.clientTop;
+ const visibleTop=Math.max(0,top),visibleHeight=Math.min(window.innerHeight,top+viewport.clientHeight)-visibleTop;
+ const viewHeight=visibleHeight>64?visibleHeight:viewport.clientHeight,offset=visibleHeight>64?visibleTop-top:0;
+ zoom(Math.min(1,(viewport.clientWidth-32)/node.offsetWidth,(viewHeight-32)/node.offsetHeight),false);
+ const r=node.getBoundingClientRect();
+ const targetTop=Math.max(0,viewport.scrollTop+r.top-top-offset-(viewHeight-r.height)/2);
+ // Leave enough scroll room to show late matches above the browser's bottom edge.
+ $('stage').style.height=Math.max(height*scale,targetTop+viewport.clientHeight)+'px';
+ viewport.scrollLeft+=r.left-v.left-viewport.clientLeft-(viewport.clientWidth-r.width)/2;
+ viewport.scrollTop=targetTop;
+}
+function updateCurrentMatch(center=true){
+ for(const [i,node]of matches.entries())node.classList.toggle('current-match',i===matchIndex);
+ $('search-count').textContent=(matchIndex+1)+'/'+matches.length;
+ $('search-prev').disabled=$('search-next').disabled=!matches.length;
+ if(center){matchPinned=matches.length>0;if(matches.length)centerMatch();else zoom(scale,false);}
+}
+function updateMatches(event){
+ const q=search.value.trim().toLowerCase();matches=[];
+ for(const n of current.nodes){const node=$(n.id),matched=!!q&&(n.title+n.lines+n.detail).toLowerCase().includes(q);node.classList.toggle('match',matched);node.classList.remove('current-match');if(matched)matches.push(node);}
+ matchIndex=matches.length?0:-1;updateCurrentMatch(!composing&&!event?.isComposing);
+}
+function moveMatch(direction){if(!matches.length||composing)return;matchIndex=(matchIndex+direction+matches.length)%matches.length;updateCurrentMatch();}
+search.addEventListener('input',updateMatches);
+search.addEventListener('compositionstart',()=>{composing=true;});
+search.addEventListener('compositionend',()=>{composing=false;updateMatches();});
+search.addEventListener('keydown',event=>{
+ if(event.key!=='Enter'||event.isComposing||composing||event.keyCode===229)return;
+ event.preventDefault();moveMatch(event.shiftKey?-1:1);
+});
+$('search-prev').addEventListener('click',()=>moveMatch(-1));
+$('search-next').addEventListener('click',()=>moveMatch(1));
+updateMatches();
 let drag=null;
-viewport.addEventListener('pointerdown',e=>{if(e.target.closest('button')||e.button!==0||e.pointerType==='touch')return;drag={x:e.clientX,y:e.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};viewport.setPointerCapture(e.pointerId);viewport.classList.add('dragging');});
+viewport.addEventListener('pointerdown',e=>{if(e.target.closest('button')||e.button!==0||e.pointerType==='touch')return;matchPinned=false;drag={x:e.clientX,y:e.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};viewport.setPointerCapture(e.pointerId);viewport.classList.add('dragging');});
 viewport.addEventListener('pointermove',e=>{if(!drag)return;viewport.scrollLeft=drag.left+drag.x-e.clientX;viewport.scrollTop=drag.top+drag.y-e.clientY;});
 function endDrag(){drag=null;viewport.classList.remove('dragging');}viewport.addEventListener('pointerup',endDrag);viewport.addEventListener('pointercancel',endDrag);
 function activateNavigation(item){document.querySelectorAll('nav a').forEach(el=>{el.classList.toggle('nav-active',el===item);if(el===item)el.setAttribute('aria-current','location');else el.removeAttribute('aria-current');});}
 document.querySelectorAll('nav a').forEach(el=>el.addEventListener('click',()=>activateNavigation(el)));
-window.addEventListener('resize',layout);layout();document.fonts.ready.then(()=>{layout();fit();});
+window.addEventListener('resize',layout);layout();document.fonts.ready.then(()=>{layout();if(matchIndex<0)fit();});

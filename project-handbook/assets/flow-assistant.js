@@ -23,10 +23,11 @@
     const live = location.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)
       && runtime && runtime.api === '/api' && typeof runtime.token === 'string' && runtime.token.length > 0;
     const authoredNodes = book.canvas?.nodes || (book.graphs || []).flatMap(graph => graph.nodes || []);
-    const selected = new Set();
     let entries = normalizeEntries(book.qa, true), nodeId = null, active = null, externalBusy = false;
+    const selected = new Set(entries.filter(entry => entry.status === 'complete').map(entry => entry.id));
     let available = !!live, loading = !!live, exporting = false, polling = null, refreshing = false;
     let connected = false, backendMessage = '';
+    let reachable = !!live;
     let returnFocus = null, localCounter = 0;
     const icons = {
       chat: ['M21 15a4 4 0 0 1-4 4H7l-4 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z'],
@@ -34,12 +35,12 @@
       send: ['m22 2-7 20-4-9-9-4Z', 'M22 2 11 13'],
       download: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm7 10 5 5 5-5', 'M12 15V3'],
       image: ['M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z', 'm21 15-5-5L5 21', 'M8.5 8.5h.01'],
-      camera: ['M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z', 'M16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0'],
       grip: ['M9 5h.01', 'M9 12h.01', 'M9 19h.01', 'M15 5h.01', 'M15 12h.01', 'M15 19h.01'],
       resize: ['M15 3h6v6', 'm21 3-7 7', 'M3 15v6h6', 'm3 21 7-7'],
       refresh: ['M3 12a9 9 0 0 1 15.36-6.36L21 8', 'M21 3v5h-5', 'M21 12a9 9 0 0 1-15.36 6.36L3 16', 'M8 16H3v5'],
       compile: ['M12 3v12', 'm8 11 4 4 4-4', 'M5 17v4h14v-4'],
-      stop: ['M6 6h12v12H6z']
+      stop: ['M6 6h12v12H6z'],
+      check: ['M20 6 9 17l-5-5']
     };
     function element(tag, className, text) {
       const result = document.createElement(tag);
@@ -70,6 +71,7 @@
         node_id: typeof value.node_id === 'string' ? value.node_id : null,
         question: value.question, answer: value.answer,
         status: value.status || (authored ? 'complete' : 'error'),
+        error: typeof value.error === 'string' ? value.error.slice(0, 240) : '',
         created_at: typeof value.created_at === 'string' ? value.created_at : ''
       })).filter(value => { if (found.has(value.id)) return false; found.add(value.id); return true; });
     }
@@ -78,9 +80,10 @@
     tools.dataset.flowQaUi = '';
     const toggle = button('flow-qa-toggle', '问答', 'chat', true);
     const share = button('flow-qa-share', '导出离线 HTML', 'download');
+    share.title = '导出当前流程图和已加入整理的回答，可离线打开；离线文件不能继续追问';
     const pngFull = button('flow-qa-png-full', '导出全图 PNG', 'image');
-    const pngView = button('flow-qa-png-view', '导出当前视图 PNG', 'camera');
-    tools.append(toggle, share, pngFull, pngView); toolbar.append(tools);
+    pngFull.title = '只导出整张流程图，不含问答记录';
+    tools.append(toggle, share, pngFull); toolbar.append(tools);
     const shell = element('div', 'flow-qa-shell');
     viewportElement.before(shell); shell.append(viewportElement);
     const aside = element('aside', 'flow-qa-panel');
@@ -100,24 +103,28 @@
     const contextText = element('span', '', '整个流程');
     const clearContext = button('flow-qa-clear-context', '取消节点限定', 'close'); clearContext.hidden = true;
     context.append(element('span', 'flow-qa-context-label', '当前范围'), contextText, clearContext);
+    const contextHint = element('p', 'flow-qa-hint', '提问会按这个范围回答。问整张图时，先点取消节点限定。');
     const transcript = element('div', 'flow-qa-transcript');
     transcript.setAttribute('role', 'log'); transcript.setAttribute('aria-label', '问答记录'); transcript.tabIndex = 0;
     const result = element('div', 'flow-qa-result'); result.hidden = true;
     const status = element('p', 'flow-qa-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const form = element('form', 'flow-qa-form');
     const draft = element('textarea', 'flow-qa-draft');
-    draft.rows = 3; draft.maxLength = 4000; draft.placeholder = '有什么疑问？'; draft.setAttribute('aria-label', '问题');
+    draft.rows = 3; draft.maxLength = 4000; draft.placeholder = live ? '有什么疑问？Enter 发送，Shift+Enter 换行' : '这是离线副本，不能继续追问'; draft.setAttribute('aria-label', '问题');
+    const composerHint = element('p', 'flow-qa-hint', live ? '请用本机预览地址提问。Enter 发送，Shift+Enter 换行。' : '离线副本只能阅读和导出，不能继续追问。');
     const actions = element('div', 'flow-qa-actions');
     const send = button('flow-qa-send flow-qa-primary', '发送', 'send', true); send.type = 'submit';
     const cancel = button('flow-qa-cancel', '停止', 'stop', true); cancel.hidden = true;
-    actions.append(cancel, send); form.append(draft, actions);
+    actions.append(cancel, send); form.append(draft, composerHint, actions);
     const footer = element('div', 'flow-qa-footer');
     const count = element('span', 'flow-qa-selection');
     const exportButton = button('flow-qa-export', '离线 HTML', 'download', true);
+    exportButton.title = '导出当前流程图和已加入整理的回答';
     const compile = button('flow-qa-compile', '整理新版本', 'compile', true);
-    compile.title = '将选中的回答整理成完整版本，保留原版';
+    compile.title = '将已加入的回答整理成新版本，原版保留';
+    const footerHint = element('p', 'flow-qa-hint', '打开回答末尾的开关后，再整理新版本或导出离线 HTML。整理会生成新文件，原版不动。');
     const footerActions = element('div', 'flow-qa-footer-actions'); footerActions.append(exportButton, compile);
-    footer.append(count, footerActions); aside.append(head, context, transcript, result, status, form, footer, widthHandle, cornerHandle, topHandle); shell.append(aside);
+    footer.append(count, footerHint, footerActions); aside.append(head, context, contextHint, transcript, result, status, form, footer, widthHandle, cornerHandle, topHandle); shell.append(aside);
     let panelWidth = null, panelHeight = null, mobileHeight = null;
     const isNarrow = () => window.matchMedia('(max-width:800px)').matches;
     function resizePanel(newWidth, newHeight) {
@@ -183,7 +190,7 @@
       if (connected) return '已连接本地问答';
       const problem = connectionProblem();
       if (problem) return problem;
-      return available ? 'Codex 可用；首个问题将尝试连接' : '问答暂不可用；可阅读与导出';
+      return available ? '还没连上问答。发送第一个问题会尝试连接本机 Codex。' : '问答暂不可用；可阅读与导出';
     }
     function connectionProblem() {
       if (/sign.?in|log.?in|auth/i.test(backendMessage)) return '请先在本机 Codex 登录，再重试提问。';
@@ -193,14 +200,20 @@
     }
     function updateControls() {
       const busy = !!active || externalBusy;
-      send.disabled = !live || !available || loading || busy || !draft.value.trim();
-      compile.disabled = !live || !available || loading || busy || !selected.size;
+      send.disabled = !live || !reachable || !available || loading || busy || !draft.value.trim();
+      compile.disabled = !live || !reachable || !available || loading || busy || !selected.size;
+      compile.title = !live ? '离线副本不能整理新版本' : !selected.size ? '打开回答末尾的开关，把要用的内容加入整理' : '把已加入的回答整理进新版本，原版保留';
+      transcript.querySelectorAll('.flow-qa-retry').forEach(button => {button.disabled = !reachable || !available || loading || busy;});
       cancel.hidden = !live || !busy;
       cancel.disabled = !!active?.cancelling;
       refresh.disabled = !!active || refreshing;
       exportButton.disabled = share.disabled = exporting;
-      pngFull.disabled = pngView.disabled = exporting;
-      count.textContent = `已选 ${selected.size} 条完整回答`;
+      pngFull.disabled = exporting;
+      const completeCount = entries.filter(entry => entry.status === 'complete').length;
+      count.textContent = selected.size ? `将整理 ${selected.size} / ${completeCount} 条完整回答` : completeCount ? '打开回答末尾的开关后，才能整理或导出选中内容' : '有完整回答后，才能整理新版本';
+      footerHint.textContent = !live ? '离线副本不能整理新版本，但仍可导出已加入的回答。' : selected.size ? `将把 ${selected.size} 条已加入的回答编进新版本或离线 HTML；不想用的先关掉开关。整理会生成新文件，原版不动。` : completeCount ? '打开回答末尾的开关后，再整理新版本或导出离线 HTML。' : '先得到完整回答，再整理新版本或导出。';
+      composerHint.textContent = live ? (nodeId ? '当前只问这个节点。问整张图时，先点上面的取消节点限定。Enter 发送，Shift+Enter 换行。' : '请用本机预览地址提问。Enter 发送，Shift+Enter 换行。') : '离线副本只能阅读和导出，不能继续追问。';
+      contextHint.hidden = !nodeId;
       transcript.setAttribute('aria-busy', active?.kind === 'ask' ? 'true' : 'false');
     }
     function openPanel(trigger = toggle) {
@@ -208,6 +221,7 @@
       returnFocus = trigger;
       aside.hidden = false; shell.classList.add('flow-qa-open'); toggle.setAttribute('aria-expanded', 'true');
       window.dispatchEvent(new Event('resize'));
+      if (live) schedulePoll(15000);
     }
     function closePanel() {
       if (aside.hidden) return;
@@ -246,20 +260,42 @@
         const meta = element('div', 'flow-qa-entry-meta');
         const node = authoredNodes.find(item => item.id === entry.node_id);
         meta.append(element('span', '', node ? node.title : '整个流程'));
-        if (entry.status === 'complete') {
-          const label = element('label', 'flow-qa-pick');
-          const checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = selected.has(entry.id);
-          checkbox.setAttribute('aria-label', '选择回答：' + entry.question);
-          checkbox.addEventListener('change', () => { if (checkbox.checked) selected.add(entry.id); else selected.delete(entry.id); updateControls(); });
-          label.append(checkbox, element('span', '', '选用')); meta.append(label);
-        } else {
+        if (entry.status !== 'complete') {
           meta.append(element('span', 'flow-qa-entry-state', entry.status === 'streaming' ? '回答中' : entry.status === 'cancelled' ? '已停止' : '未完成'));
         }
         const userMessage = element('div', 'flow-qa-message flow-qa-message-user');
         userMessage.append(element('span', 'flow-qa-role flow-qa-role-user', '你'), element('h4', 'flow-qa-question', entry.question));
         const assistantMessage = element('div', 'flow-qa-message flow-qa-message-assistant');
-        assistantMessage.append(element('span', 'flow-qa-role flow-qa-role-assistant', 'Codex · AI'), renderAnswer(entry.answer || (entry.status === 'streaming' ? '正在思考…' : '暂无回答')));
+        assistantMessage.append(element('span', 'flow-qa-role flow-qa-role-assistant', 'Codex · AI'));
+        if (entry.status === 'streaming') assistantMessage.append(renderAnswer(entry.answer || '正在思考…'));
+        else if (entry.status === 'complete') {
+          const chosen = selected.has(entry.id);
+          const togglePick = element('button', 'flow-qa-pick' + (chosen ? ' flow-qa-pick-on' : ''));
+          togglePick.type = 'button';
+          togglePick.setAttribute('aria-pressed', chosen ? 'true' : 'false');
+          togglePick.setAttribute('aria-label', (chosen ? '已加入整理：' : '加入整理：') + entry.question);
+          togglePick.title = chosen ? '点击后，这条回答不再进入整理和新版本' : '点击后，把这条回答加入整理和新版本';
+          const mark = element('span', 'flow-qa-pick-switch'); mark.setAttribute('aria-hidden', 'true');
+          if (chosen) togglePick.append(icon('check'));
+          togglePick.append(mark, element('span', 'flow-qa-pick-label', chosen ? '已加入整理' : '加入整理'));
+          togglePick.addEventListener('click', () => {
+            if (selected.has(entry.id)) selected.delete(entry.id); else selected.add(entry.id);
+            renderEntries();
+          });
+          assistantMessage.append(renderAnswer(entry.answer), togglePick, element('p', 'flow-qa-pick-hint', chosen ? '已加入整理和新版本。关掉后这条不会导出。' : '打开后，这条会进入整理和新版本。'));
+        }
+        else {
+          if (entry.answer) assistantMessage.append(renderAnswer(entry.answer));
+          const empty = element('div', 'flow-qa-answer flow-qa-answer-empty');
+          empty.append(element('p', '', failureText(entry)));
+          assistantMessage.append(empty);
+        }
         article.append(meta, userMessage, assistantMessage);
+        if (live && ['error', 'cancelled'].includes(entry.status)) {
+          const retry = button('flow-qa-retry', '重试这条提问', 'refresh', true);
+          retry.addEventListener('click', () => {if (!retry.disabled) askQuestion(entry.question, entry.node_id, entry);});
+          article.append(retry);
+        }
         transcript.append(article);
       }
       transcript.scrollTop = scroll || nearBottom ? transcript.scrollHeight : oldScroll;
@@ -279,7 +315,7 @@
       if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); if (!send.disabled) form.requestSubmit(); }
     });
 
-    async function request(endpoint, body, signal) {
+    async function request(endpoint, body, signal, renewed = false) {
       if (!live) throw new Error('离线副本无法连接问答');
       const response = await fetch(runtime.api + endpoint, {
         method: body === undefined ? 'GET' : 'POST',
@@ -290,18 +326,28 @@
       if (!response.ok) {
         let message = `请求失败（${response.status}）`;
         try { const value = await response.json(); message = value.message || value.error || message; } catch (_) { /* HTTP status is the fallback. */ }
+        if (response.status === 403 && message === 'Connection token required' && !renewed) {
+          if (!runtime.book_id) throw new Error('页面连接已过期，请刷新页面后重试。');
+          const renewedResponse = await fetch('/api/session', {signal: AbortSignal.timeout(10000), credentials: 'same-origin', cache: 'no-store', redirect: 'error'});
+          if (!renewedResponse.ok) throw new Error('无法恢复本地连接，请刷新页面后重试。');
+          const session = await renewedResponse.json();
+          if (session.book_id !== runtime.book_id || typeof session.token !== 'string' || !session.token) throw new Error('此地址的手册已改变，请重新打开原手册。');
+          runtime.token = session.token;
+          return request(endpoint, body, signal, true);
+        }
         if (response.status === 409) { externalBusy = true; schedulePoll(); }
         throw new Error(typeof message === 'string' ? message : '请求失败');
       }
       return response;
     }
-    function schedulePoll() {
+    function schedulePoll(delay = 1800) {
       if (!live || polling) return;
-      polling = setTimeout(() => { polling = null; if (!active) refreshState(true); else schedulePoll(); }, 1800);
+      polling = setTimeout(() => { polling = null; if (!active) refreshState(true); else schedulePoll(delay); }, delay);
     }
     async function refreshState(quiet = false, readinessOnly = false) {
       if (!live || active || refreshing) return;
       refreshing = true; updateControls();
+      const wasReachable = reachable;
       try {
         const value = await (await request('/state', undefined, AbortSignal.timeout(10000))).json();
         if (active) return;
@@ -309,26 +355,48 @@
           || typeof value.backend.available !== 'boolean' || typeof value.backend.connected !== 'boolean') throw new Error('历史记录格式错误');
         if (!readinessOnly) {
           const history = normalizeEntries(value.entries);
-          // Retain local failed turns and authored QAs that the server does not own.
           const known = new Set(history.map(entry => entry.id));
-          entries = [...entries.filter(entry => !known.has(entry.id)), ...history];
+          const locals = new Map(entries.map(entry => [entry.id, entry]));
+          const knownBefore = new Set(entries.map(entry => entry.id));
+          entries = collapseIncomplete([
+            ...entries.filter(entry => !known.has(entry.id)),
+            ...history.map(entry => {
+              const local = locals.get(entry.id);
+              if (local?.error && ['error', 'cancelled'].includes(entry.status) && !entry.error) return {...entry, error: local.error};
+              return entry;
+            })
+          ]);
+          for (const entry of entries) {
+            if (entry.status === 'complete' && !knownBefore.has(entry.id)) selected.add(entry.id);
+            if (entry.status !== 'complete') selected.delete(entry.id);
+          }
         }
         externalBusy = value.busy;
+        reachable = true;
         updateReadiness(value.backend);
-        if (readinessOnly) {
-          if (!connected && connectionProblem() && status.classList.contains('flow-qa-error')) setStatus(connectionProblem(), true);
+        if (!wasReachable) {
+          setStatus('连接已恢复；可重试未完成的提问');
+          if (!readinessOnly) renderEntries();
+        } else if (readinessOnly) {
+          if (!status.classList.contains('flow-qa-error') && !connected && connectionProblem()) setStatus(connectionProblem(), true);
         } else {
-          if (!quiet || !externalBusy) setStatus(externalBusy ? '已有任务正在处理' : readinessSummary(), !available);
+          if (externalBusy) setStatus('已有任务正在处理');
+          else if (!quiet || !status.classList.contains('flow-qa-error')) setStatus(readinessSummary(), !available);
           renderEntries();
         }
         if (externalBusy) schedulePoll();
+        else if (!aside.hidden) schedulePoll(15000);
       } catch (error) {
-        connected = false; backendMessage = '';
-        badge.textContent = '状态未知'; badge.dataset.state = 'unknown'; badge.title = '';
-        if (!readinessOnly) setStatus('连接检查失败；可重试，已有问答仍可阅读与导出', true);
+        reachable = false; connected = false; backendMessage = '';
+        badge.textContent = '连接断开'; badge.dataset.state = 'unavailable'; badge.title = '';
+        setStatus('暂时连不上本地问答服务，正在尝试恢复。已有问题和回答仍可阅读与导出。', true);
+        if (polling) {clearTimeout(polling); polling = null;}
+        schedulePoll(2500);
       } finally { loading = false; refreshing = false; updateControls(); }
     }
     refresh.addEventListener('click', () => refreshState());
+    window.addEventListener('online', () => refreshState());
+    document.addEventListener('visibilitychange', () => {if (!document.hidden && live) refreshState(true);});
     async function stream(endpoint, payload, operation, receive) {
       const response = await request(endpoint, payload, operation.controller.signal);
       if (!response.body) throw new Error('浏览器无法读取实时回答');
@@ -369,14 +437,53 @@
       updateControls();
       await refreshState(true, true);
     }
-    form.addEventListener('submit', async event => {
+    form.addEventListener('submit', event => {
       event.preventDefault();
       if (send.disabled || active) return;
       const question = draft.value.trim();
-      const originalDraft = draft.value;
+      draft.value = '';
+      askQuestion(question, nodeId);
+    });
+    function collapseIncomplete(list) {
+      const completed = new Set();
+      for (const entry of list) {
+        if (entry.status === 'complete') completed.add(String(entry.node_id) + '\0' + entry.question);
+      }
+      const latest = new Map();
+      const result = [];
+      for (const entry of list) {
+        const key = String(entry.node_id) + '\0' + entry.question;
+        if (!['error', 'cancelled'].includes(entry.status)) { result.push(entry); continue; }
+        if (completed.has(key)) continue;
+        const index = latest.get(key);
+        if (index == null) { latest.set(key, result.length); result.push(entry); }
+        else result[index] = entry;
+      }
+      return result;
+    }
+    function withRetryHint(text) {
+      return /重试/.test(text) ? text : text.replace(/。?$/, '。点重试。');
+    }
+    function failureText(entry) {
+      if (typeof entry.error === 'string' && entry.error.trim()) return withRetryHint(entry.error);
+      if (entry.status === 'cancelled') return '已停止这次回答。需要结果时，点重试。';
+      if (entry.answer) return '回答中断了。点重试可继续这条提问。';
+      return '这次没有生成回答。确认已用网页预览打开，并且 Codex 已登录，然后点重试。';
+    }
+    async function askQuestion(question, scope, existing) {
+      if (active || externalBusy || !reachable || !available || loading) return;
       const operation = newOperation('ask');
-      const entry = {id: `local-${Date.now()}-${++localCounter}`, node_id: nodeId, question, answer: '', status: 'streaming'};
-      entries.push(entry); renderEntries(true); setStatus('正在回答…');
+      let entry = existing && entries.includes(existing) && ['error', 'cancelled'].includes(existing.status) ? existing : null;
+      if (entry) {
+        selected.delete(entry.id);
+        entry.answer = '';
+        entry.error = '';
+        entry.status = 'streaming';
+      } else {
+        entry = {id: `local-${Date.now()}-${++localCounter}`, node_id: scope, question, answer: '', status: 'streaming', error: ''};
+        entries.push(entry);
+      }
+      renderEntries(true); setStatus('正在连接并回答…');
       try {
         await stream('/ask', {question, node_id: entry.node_id}, operation, event => {
           if (operation.complete) throw new Error('完成结果之后出现多余数据');
@@ -393,21 +500,34 @@
           } else if (event.type === 'done') {
             const final = normalizeEntries([event.entry])[0];
             if (!final || final.status !== 'complete' || final.question !== question || final.node_id !== entry.node_id) throw new Error('完成结果格式错误');
-            Object.assign(entry, final); operation.complete = true;
+            Object.assign(entry, final); selected.add(entry.id); operation.complete = true;
           } else { throw new Error('未知回答事件'); }
           renderEntries();
         });
-        if (draft.value === originalDraft) draft.value = '';
         setStatus('回答已保存');
       } catch (error) {
         selected.delete(entry.id);
         entry.status = operation.cancelling ? 'cancelled' : 'error';
-        setStatus(operation.cancelling ? '已停止；草稿已保留' : '回答失败：' + safeMessage(error), !operation.cancelling);
+        entry.error = operation.cancelling ? '已停止这次回答。需要结果时，点重试。' : explainFailure(error);
+        setStatus(entry.error, !operation.cancelling);
         renderEntries();
       } finally { await finishOperation(operation); }
-    });
+    }
     function safeMessage(error) {
+      if (/Failed to fetch|NetworkError|Load failed|network|terminated/i.test(String(error?.message))) return '本地问答连接已断开；问题保留在记录中，恢复连接后可重试。';
       return redactText(String(error?.message || '请求中断')).slice(0, 240);
+    }
+    function explainFailure(error) {
+      const message = safeMessage(error);
+      const text = String(error?.message || '');
+      if (/sign.?in|log.?in|\bauth\b|登录/.test(text + message)) return '本机 Codex 尚未登录。打开 Codex 完成登录后，点重试。';
+      if (/insufficient|balance|quota|额度/.test(text + message)) return '当前模型额度不足。更换可用模型或处理额度后，点重试。';
+      if (/not found|could not start|找不到/.test(text)) return '没有找到本机 Codex。安装或启动 Codex 后，点重试。';
+      if (/cannot verify|cannot enforce|unavailable|no model turn|安全连接|暂不可用/.test(text + message)) return '暂时无法完成回答。检查本机 Codex 后点重试；流程图仍可阅读和导出。';
+      if (/timed out|超时/.test(text + message)) return '这次回答超时了。点重试，或把问题拆得更短一些。';
+      if (/断开|connection closed|closed unexpectedly/.test(text + message)) return '本机问答连接中断了。确认 Codex 仍在运行，并用网页预览打开本页，然后点重试。';
+      if (message && !/Failed to fetch|请求失败|回答数据格式错误|未知回答事件/.test(message)) return withRetryHint(message);
+      return '这次没有生成回答。确认已用网页预览打开，并且 Codex 已登录，然后点重试。';
     }
     cancel.addEventListener('click', async () => {
       if (!live || active?.cancelling) return;
@@ -538,25 +658,23 @@
     }
     share.addEventListener('click', () => { openPanel(share); exportHtml(); });
     exportButton.addEventListener('click', exportHtml);
-    async function exportPng(whole) {
+    async function exportPng() {
       if (exporting) return;
       exporting = true; updateControls();
       try {
         if (typeof window.html2canvas !== 'function') throw new Error('此副本未包含图片组件，请导出离线 HTML');
         await document.fonts.ready;
         const canvasElement = document.getElementById('canvas');
-        const width = Math.ceil(whole ? canvasElement.offsetWidth : viewportElement.clientWidth);
-        const height = Math.ceil(whole ? canvasElement.offsetHeight : viewportElement.clientHeight);
+        const width = Math.ceil(canvasElement.offsetWidth);
+        const height = Math.ceil(canvasElement.offsetHeight);
         const scale = Math.min(2, window.devicePixelRatio || 1);
-        if (!width || !height || width * scale > 16384 || height * scale > 16384 || width * height * scale * scale > 32 * 1024 * 1024) throw new Error('图片尺寸过大；请导出当前视图或离线 HTML');
-        const target = whole ? canvasElement : viewportElement;
-        const scrollLeft = viewportElement.scrollLeft, scrollTop = viewportElement.scrollTop;
+        if (!width || !height || width * scale > 16384 || height * scale > 16384 || width * height * scale * scale > 32 * 1024 * 1024) throw new Error('图片尺寸过大；请导出离线 HTML');
         const nodeSizes = new Map([...canvasElement.querySelectorAll('.node')].map(node => {
           const style = getComputedStyle(node);
           return [node.id, {width: style.width, height: style.height}];
         }));
         setStatus('正在生成图片…');
-        const image = await window.html2canvas(target, {
+        const image = await window.html2canvas(canvasElement, {
           width, height, scale, backgroundColor: '#ffffff', useCORS: false, allowTaint: false, logging: false,
           imageTimeout: 1500,
           ignoreElements: node => ['IFRAME', 'OBJECT', 'EMBED'].includes(node.tagName) || !!node.closest?.('.flow-qa-panel'),
@@ -568,27 +686,20 @@
               if (size) Object.assign(node.style, {width: size.width, height: size.height, minHeight: size.height, maxHeight: size.height, overflow: 'hidden'});
             }
             sanitizeDom(canvas);
-            if (whole) {
-              // Only the cloned wrappers are expanded. Node geometry and edge routes stay intact.
-              canvas.style.transform = 'none'; canvas.style.position = 'relative'; canvas.style.left = '0'; canvas.style.top = '0';
-              canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
-              for (const parent of [stage, view]) { parent.style.width = width + 'px'; parent.style.height = height + 'px'; parent.style.overflow = 'visible'; parent.style.maxHeight = 'none'; parent.style.maxWidth = 'none'; }
-              view.scrollLeft = 0; view.scrollTop = 0;
-            } else {
-              view.scrollLeft = scrollLeft; view.scrollTop = scrollTop;
-              view.style.width = width + 'px'; view.style.height = height + 'px';
-              view.style.minHeight = '0'; view.style.overflow = 'hidden';
-            }
+            // Only the cloned wrappers are expanded. Node geometry and edge routes stay intact.
+            canvas.style.transform = 'none'; canvas.style.position = 'relative'; canvas.style.left = '0'; canvas.style.top = '0';
+            canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
+            for (const parent of [stage, view]) { parent.style.width = width + 'px'; parent.style.height = height + 'px'; parent.style.overflow = 'visible'; parent.style.maxHeight = 'none'; parent.style.maxWidth = 'none'; }
+            view.scrollLeft = 0; view.scrollTop = 0;
           }
         });
         const blob = await new Promise(resolve => image.toBlob(resolve, 'image/png'));
-        if (!blob) throw new Error('浏览器未能生成图片，请缩小视图');
-        saveBlob(blob, whole ? 'handbook-full.png' : 'handbook-view.png'); setStatus('图片已导出；敏感路径已隐藏');
+        if (!blob) throw new Error('浏览器未能生成图片，请导出离线 HTML');
+        saveBlob(blob, 'handbook-full.png'); setStatus('图片已导出；敏感路径已隐藏');
       } catch (error) { openPanel(); setStatus('图片导出失败：' + safeMessage(error), true); }
       finally { exporting = false; updateControls(); }
     }
-    pngFull.addEventListener('click', () => exportPng(true));
-    pngView.addEventListener('click', () => exportPng(false));
+    pngFull.addEventListener('click', exportPng);
     renderEntries();
     setStatus(live ? '正在检查本地问答…' : '离线副本；可阅读与导出已有问答');
     if (live) refreshState();

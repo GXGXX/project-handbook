@@ -17,7 +17,7 @@ def validate(data):
             'detail-title', 'detail-text', 'detail-formula', 'source', 'next',
             'search', 'graph-title', 'graph-note', 'arrow', 'amber-arrow',
             'viewport', 'stage', 'zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit',
-            'zoom-value', 'locate'}
+            'zoom-value', 'search-prev', 'search-next', 'search-count'}
     def identifier(value):
         if not isinstance(value, str) or not re.fullmatch(r'[a-zA-Z][a-zA-Z0-9_-]*', value) or value in used or value.startswith('flow-qa-'):
             raise ValueError('Invalid or duplicate ID: ' + str(value))

@@ -8,7 +8,7 @@ the reader should not need to run commands or paste credentials into a page.
 Run with the installed Python runtime, quoting paths as appropriate:
 
 ```text
-python scripts/flow_server.py NEW_OUTPUT --source-root CLIENT --source-root SERVER --source-root DOCS
+python scripts/flow_server.py NEW_OUTPUT --source-root CLIENT --source-root SERVER --source-root DOCS --background
 ```
 
 The command above assumes the installed `project-handbook` skill directory is
@@ -22,10 +22,12 @@ unrelated project for convenience. The port defaults to an available loopback
 port. The script prints the reading URL and writes safe startup information
 (`url`, `pid`) to `NEW_OUTPUT/.flow-server.json` without a connection token.
 
-Keep the local helper running independently of an interactive terminal. On
-Windows use `Start-Process -WindowStyle Hidden`, explicit quoted arguments and
-logs inside the generated output directory. Read the startup file, verify the
-page responds, and open its URL for the user. Do not start a second helper for
+Use `--background` so the helper survives the calling terminal and task cleanup.
+The launcher waits for a matching process and live page before returning the URL.
+On Windows it uses a hidden local WMI process: `Start-Process` and plain detached
+children can still inherit an outer kill-on-close job. On other systems it starts
+a separate process session. Logs stay inside the generated output directory.
+Read the startup file, verify the page responds, and open its URL. Do not start a second helper for
 the same output; reuse the running address. To stop, terminate only the helper
 PID you verified belongs to this output, not every Python or Codex process.
 
@@ -40,6 +42,13 @@ This is a dedicated ephemeral Codex context, not the active desktop task.
 - A node's **追问这个节点** button opens the Q&A panel with that node selected.
   The general Q&A button also accepts questions about the entire flow.
 - Enter sends; Shift+Enter inserts a newline, and IME composition must not send.
+  Clear the composer immediately and retain the question in its transcript entry.
+  Failed or cancelled questions keep the reason and next step in the transcript
+  card, not only in the status line; retry the same card instead of adding a
+  duplicate. Preserve any new draft. Connection recovery checks state only,
+  never blindly resends model requests.
+  A renewed token must belong to the same book, using the same-origin session
+  endpoint; Host/Origin and cross-site checks remain enforced.
   The panel resizes from its left edge/corner, or its top edge on narrow screens.
   Keep user questions distinct from AI answers and retain formatted Markdown in
   offline exports without executing answer HTML or loading external content.
@@ -55,6 +64,11 @@ This is a dedicated ephemeral Codex context, not the active desktop task.
 - HTML stays unchanged during Q&A. Completed, failed and cancelled entries are
   saved locally in `.flow-session.json`; only completed answers can be selected.
   Browser refresh restores history. Drafts and partial answers are not compiled.
+- Newly completed answers are included by default. The compile control stays
+  disabled until at least one completed answer is turned on. Put a trailing
+  include switch after the answer so a long reply does not hide the action.
+  Keep a short on-screen hint at the switch, composer, and footer; do not rely
+  on README text for first-time use. Offline copies must say they cannot ask.
 - **整理新版本** asks the model to update affected node details, flow and examples.
   Validate the generated manifest before writing `versions/ID/handbook.html`.
   Do not replace the original. Structural validation does not independently

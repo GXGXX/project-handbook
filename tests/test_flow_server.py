@@ -78,6 +78,15 @@ class FlowServerTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as cm:
             self.request('/api/state', token=False)
         self.assertEqual(cm.exception.code, 403)
+
+    def test_session_recovery_is_same_origin_and_book_bound(self):
+        session = json.loads(self.request('/api/session', token=False))
+        self.assertEqual(session['token'], self.server.token)
+        self.assertIn(session['book_id'], self.request('/'))
+        for origin in ('https://evil.invalid', 'http://localhost:3000'):
+            with self.assertRaises(HTTPError) as cm:
+                self.request('/api/session', token=False, origin=origin)
+            self.assertEqual(cm.exception.code, 403)
         with self.assertRaises(HTTPError) as cm:
             self.request('/api/ask', {'question': 'test'}, origin='https://evil.invalid')
         self.assertEqual(cm.exception.code, 403)
@@ -180,8 +189,24 @@ class FlowServerTests(unittest.TestCase):
         result = self.request('/api/ask', {'question': 'Explain'})
         self.assertNotIn('private-token', result)
         self.assertNotIn('C:/private', result)
-        self.assertEqual(json.loads(result.splitlines()[-1])['type'], 'error')
-        self.assertFalse(json.loads(self.request('/api/state'))['busy'])
+        event = json.loads(result.splitlines()[-1])
+        self.assertEqual(event['type'], 'error')
+        self.assertIn('点重试', event['message'])
+        state = json.loads(self.request('/api/state'))
+        self.assertFalse(state['busy'])
+        self.assertEqual(state['entries'][0]['status'], 'error')
+        self.assertEqual(state['entries'][0]['error'], event['message'])
+        self.assertNotIn('private-token', state['entries'][0]['error'])
+
+    def test_signin_failure_explains_next_step(self):
+        def fail(*args, **kwargs):
+            raise RuntimeError('Sign in using the local Codex app or CLI, then retry.')
+        self.backend.ask = fail
+        self.backend.status = lambda: {'available': True, 'connected': False, 'message': 'Sign in using the local Codex app or CLI, then retry.'}
+        event = json.loads(self.request('/api/ask', {'question': 'Explain'}).splitlines()[-1])
+        self.assertEqual(event['type'], 'error')
+        self.assertIn('登录', event['message'])
+        self.assertNotIn('Sign in', event['message'])
 
     def test_general_question_can_be_exported(self):
         result = self.request('/api/ask', {'question': 'Explain the whole flow'})

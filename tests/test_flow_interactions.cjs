@@ -80,7 +80,8 @@ const {spawnSync} = require('node:child_process');
     assert.equal(await page.locator('.flow-qa-answer img,.flow-qa-answer script,.flow-qa-answer a').count(), 0);
     assert.equal(await page.evaluate(() => window.pwned), undefined);
     assert.doesNotMatch(await page.locator('.flow-qa-status').textContent(), /safety checks|Codex found/);
-    assert.equal(await page.locator('.flow-qa-png-view svg').getAttribute('data-icon'), 'camera');
+    assert.equal(await page.locator('.flow-qa-png-view').count(), 0);
+    assert.match(await page.locator('.flow-qa-footer .flow-qa-hint').textContent(), /整理新版本|离线 HTML/);
 
     await panel.scrollIntoViewIfNeeded();
     const before = await panel.boundingBox();

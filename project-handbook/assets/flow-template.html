@@ -1,7 +1,19 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>@@TITLE@@</title><style>@@CSS@@</style></head><body>
 @@HEADER@@
 @@NAV@@
-<main><section id="diagram"><div class="heading"><div><h2 id="graph-title"></h2><p id="graph-note"></p></div><div class="search-tools"><label>查找节点 <input id="search" placeholder="搜索流程或字段" type="search"></label><button id="locate">定位</button></div></div><div class="legend"><span>实线箭头 → 执行顺序</span><span class="amber">判断框：按是 / 否选路</span><span>侧边处理后 → 回到主线</span><span>点击节点查看详情</span></div><p class="mobile-hint">图较宽时可左右滑动；公式单位和取整口径请查看对应节点。</p><div class="canvas-tools"><button id="zoom-out" aria-label="缩小">−</button><output id="zoom-value">100%</output><button id="zoom-in" aria-label="放大">＋</button><button id="zoom-reset">实际大小</button><button id="zoom-fit">查看全图</button></div><div class="scroll" id="viewport" tabindex="0" aria-label="完整流程画布"><div id="stage"><div id="canvas"><svg id="edges" aria-label="执行连线"></svg><div id="nodes"></div></div></div></div></section>
+<main><section id="diagram"><div class="heading"><div><h2 id="graph-title"></h2><p id="graph-note"></p></div><div class="search-tools"><label>查找节点 <input id="search" placeholder="输入名称，如 攻击" type="search"></label><output id="search-count" for="search" aria-live="polite" aria-atomic="true" aria-label="当前匹配 / 总匹配数">0/0</output>
+<!-- Lucide icons: ISC License, Copyright (c) Lucide Contributors.
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. -->
+<button id="search-prev" type="button" title="上一个匹配" aria-label="上一个匹配" disabled><svg data-icon="chevron-up" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m18 15-6-6-6 6"/></svg></button><button id="search-next" type="button" title="下一个匹配" aria-label="下一个匹配" disabled><svg data-icon="chevron-down" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></button></div></div><div class="legend"><span>实线箭头 → 执行顺序</span><span class="amber">判断框：按是 / 否选路</span><span>侧边处理后 → 回到主线</span><span>点击节点查看详情</span></div><p class="mobile-hint">图较宽时可左右滑动。查找会显示当前项和总数，点上一个或下一个跳到对应节点。公式和取整口径点节点查看。</p><div class="canvas-tools"><button id="zoom-out" aria-label="缩小">−</button><output id="zoom-value">100%</output><button id="zoom-in" aria-label="放大">＋</button><button id="zoom-reset">实际大小</button><button id="zoom-fit">查看全图</button></div><div class="scroll" id="viewport" tabindex="0" aria-label="完整流程画布"><div id="stage"><div id="canvas"><svg id="edges" aria-label="执行连线"></svg><div id="nodes"></div></div></div></div></section>
 <section id="examples"><span class="eyebrow">沿数值验证理解</span><h2>跟着例子走一遍</h2><p>展开查看例子的输入、每一步变化与结果；演示与实测以例子标签为准。</p>@@EXAMPLES@@</section>
 </main>
 <dialog id="detail"><form method="dialog"><button class="close" aria-label="关闭">关闭 ×</button></form><span class="eyebrow">节点下钻</span><h2 id="detail-title"></h2><pre id="detail-formula"></pre><p id="detail-text"></p><details><summary>查看对应来源摘录</summary><pre id="source"></pre></details></dialog>

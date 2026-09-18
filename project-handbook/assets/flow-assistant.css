@@ -7,7 +7,7 @@
 .flow-qa-button svg{flex:none;width:18px;height:18px;pointer-events:none}
 .flow-qa-button:hover:not(:disabled){background:#f1f6f4;border-color:#86a89e}
 .flow-qa-button:disabled{opacity:.46;cursor:not-allowed}
-.flow-qa-button:focus-visible,.flow-qa-draft:focus-visible,.flow-qa-pick input:focus-visible{outline:3px solid #80b8a9;outline-offset:2px}
+.flow-qa-button:focus-visible,.flow-qa-draft:focus-visible,.flow-qa-pick:focus-visible{outline:3px solid #80b8a9;outline-offset:2px}
 .flow-qa-button.flow-qa-primary,.canvas-tools .flow-qa-toggle[aria-expanded=true]{background:#216e65;border-color:#216e65;color:#fff}
 .flow-qa-button.flow-qa-primary:hover:not(:disabled){background:#195c54}
 .flow-qa-panel{position:relative;height:var(--flow-qa-height,82vh);min-height:480px;max-height:1400px;display:flex;flex-direction:column;min-width:0;background:#fff;border:1px solid #d2dedb;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px #233b3210;color:#273b35;font-size:15px;line-height:1.7;letter-spacing:0}
@@ -30,6 +30,10 @@
 .flow-qa-context{display:flex;align-items:center;gap:8px;background:#f4f8f6;padding:8px 14px;flex-shrink:0;min-width:0}
 .flow-qa-context-label{font-size:11px;color:#718079;flex:none}
 .flow-qa-context>span:nth-child(2){min-width:0;overflow-wrap:anywhere;line-height:1.4;flex:1}
+.flow-qa-hint,.flow-qa-pick-hint{margin:0;color:#718079;font-size:12px;line-height:1.55}
+.flow-qa-context+.flow-qa-hint{padding:0 14px 8px;background:#f4f8f6}
+.flow-qa-form .flow-qa-hint{margin:6px 0 0}
+.flow-qa-footer .flow-qa-hint{margin:0 0 8px}
 .flow-qa-transcript{flex:1;min-height:72px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:0 22px}
 .flow-qa-transcript:focus-visible{outline:2px solid #80b8a9;outline-offset:-2px}
 .flow-qa-entry{display:block;background:transparent;border:0;border-radius:0;box-shadow:none;margin:0;padding:16px 0 18px;border-bottom:1px solid #e4eae7;overflow-wrap:anywhere}
@@ -37,8 +41,15 @@
 .flow-qa-entry-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#6a7c73;font-size:11px;line-height:1.5;margin-bottom:8px}
 .flow-qa-entry-meta>span:first-child{min-width:0;overflow-wrap:anywhere}
 .flow-qa-entry-state{flex:none;color:#9c6b24}
-.flow-qa-pick{display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;flex:none;min-height:24px;color:#49735f}
-.flow-qa-pick input{appearance:auto;display:inline-block;width:15px;height:15px;min-width:15px;margin:0;padding:0;accent-color:#216e65;border-radius:3px;cursor:pointer}
+.flow-qa-pick{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;cursor:pointer;white-space:nowrap;min-height:36px;margin:12px 0 0;padding:6px 10px 6px 8px;border:1px solid #c5d7cf;border-radius:999px;background:#fff;color:#3d5b50;font-size:13px;font-weight:650;letter-spacing:0}
+.flow-qa-pick svg{width:14px;height:14px;flex:none}
+.flow-qa-pick-switch{position:relative;width:34px;height:20px;border-radius:999px;background:#c9d6d0;flex:none}
+.flow-qa-pick-switch:after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #1d3a321f}
+.flow-qa-pick-on{background:#e7f4ef;border-color:#216e65;color:#216e65}
+.flow-qa-pick-on .flow-qa-pick-switch{background:#216e65}
+.flow-qa-pick-on .flow-qa-pick-switch:after{left:16px}
+.flow-qa-pick:hover{border-color:#86a89e;background:#f4faf7}
+.flow-qa-pick-hint{margin:6px 0 0}
 .flow-qa-message{min-width:0;margin-top:16px}
 .flow-qa-message-user{margin-left:36px;padding:12px 15px;background:#edf6f2;border-radius:8px}
 .flow-qa-message-assistant{padding:0 2px 2px}
@@ -47,6 +58,8 @@
 .flow-qa-role-assistant{color:#416079}
 .flow-qa-question{font-size:15px;font-weight:500;line-height:1.75;margin:0;color:#263d34;white-space:pre-wrap;overflow-wrap:anywhere;letter-spacing:0}
 .flow-qa-answer{font-size:15px;line-height:1.85;white-space:normal;overflow-wrap:anywhere;color:#33443d}
+.flow-qa-answer-empty{color:#8a4b3a;background:#fbf3f0;border:1px solid #f0d9d3;border-radius:8px;padding:12px 14px;margin-top:4px}
+.flow-qa-answer-empty p{margin:0;color:inherit}
 .flow-qa-answer p{font:inherit;color:inherit;margin:0 0 12px}
 .flow-qa-answer>:last-child{margin-bottom:0}
 .flow-qa-answer h1,.flow-qa-answer h2,.flow-qa-answer h3,.flow-qa-answer h4{font-size:17px;line-height:1.6;letter-spacing:0;margin:16px 0 8px}

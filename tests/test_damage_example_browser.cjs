@@ -46,7 +46,7 @@ const { pathToFileURL } = require('url');
     });
     assert.deepEqual(collisions, []);
     await page.locator('#search').fill('固定值');
-    await page.locator('#locate').click();
+    assert.notEqual(await page.locator('#search-count').textContent(), '0/0');
     await page.locator('#fixed-value').click();
     assert(await page.locator('#detail').isVisible());
     assert((await page.locator('#detail-text').textContent()).includes('1600+500'));

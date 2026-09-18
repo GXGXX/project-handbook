@@ -2,7 +2,7 @@
 name: project-handbook
 description: Use when a newcomer provides code and documentation directories and asks a vague project question, or needs an offline HTML explanation from framework and end-to-end flow to details, worked examples and evidence. Not for ordinary README edits or API reference generation.
 metadata:
-  version: "1.3.0"
+  version: "1.4.0"
   source-inspiration: "https://github.com/lili-luo/aicoding-cookbook"
 ---
 

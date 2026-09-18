@@ -4,17 +4,21 @@ from __future__ import annotations
 import argparse
 import copy
 import hmac
+import hashlib
 import json
 import os
 import re
 import secrets
+import sys
 import tempfile
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
+from urllib.request import urlopen
 
 from build_flow import render, validate
 
@@ -30,6 +34,33 @@ def validate_source_roots(roots):
         if path not in result:
             result.append(path)
     return result
+
+
+def public_ask_failure(backend=None, cancelled=False):
+    """User-facing next step only; never return backend internals or paths."""
+    if cancelled:
+        return '已停止这次回答。需要结果时，点重试。'
+    message = ''
+    try:
+        message = str((backend.status() or {}).get('message') or '')
+    except Exception:
+        message = ''
+    text = message.lower()
+    if re.search(r'sign.?in|log.?in|\bauth\b', text):
+        return '本机 Codex 尚未登录。打开 Codex 完成登录后，点重试。'
+    if re.search(r'insufficient|balance|quota|billing|payment required', text):
+        return '当前模型额度不足。更换可用模型或处理额度后，点重试。'
+    if 'not found' in text or 'could not start' in text:
+        return '没有找到本机 Codex。安装或启动 Codex 后，点重试。'
+    if re.search(r'cannot verify|cannot enforce|no model turn|unavailable', text):
+        return '当前 Codex 无法安全建立问答连接。检查或更新 Codex 后点重试；流程图仍可阅读和导出。'
+    if 'timed out' in text:
+        return '这次回答超时了。点重试，或把问题拆得更短一些。'
+    if 'closed unexpectedly' in text or 'connection closed' in text:
+        return '本机问答连接中断了。确认 Codex 仍在运行后，点重试。'
+    if 'rejected' in text:
+        return 'Codex 拒绝了这次请求。检查本机登录和配置后，点重试。'
+    return '这次没能完成回答。确认 Codex 已登录，且仍通过网页预览地址打开本页，然后点重试。'
 
 
 def make_context(data, node_id, question, history):
@@ -74,6 +105,7 @@ class FlowServer(ThreadingHTTPServer):
         if address[0] != '127.0.0.1':
             raise ValueError('The Q&A server must bind to 127.0.0.1')
         self.book_dir = Path(book_dir).resolve()
+        self.book_id = hashlib.sha256(str(self.book_dir).encode('utf-8')).hexdigest()
         self.data = json.loads((self.book_dir / 'flow.json').read_text(encoding='utf-8'))
         validate(self.data)
         self.roots = validate_source_roots(roots)
@@ -105,7 +137,8 @@ class FlowServer(ThreadingHTTPServer):
                 saved = json.loads(self.state_path.read_text(encoding='utf-8'))
                 self.entries = [e for e in saved['entries'] if isinstance(e, dict)
                                 and e.get('status') in ('complete', 'cancelled', 'error')
-                                and all(isinstance(e.get(k), str) for k in ('id', 'question', 'answer'))]
+                                and all(isinstance(e.get(k), str) for k in ('id', 'question', 'answer'))
+                                and (not e.get('error') or isinstance(e.get('error'), str))]
             except (OSError, ValueError, KeyError, TypeError):
                 self.entries = []
         known = {e['id'] for e in self.entries}
@@ -212,12 +245,15 @@ class FlowHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
-        if not self.allowed(api=path.startswith('/api/')):
+        if not self.allowed(api=path.startswith('/api/') and path != '/api/session'):
             return
         if path in ('/', '/handbook.html'):
             data = copy.deepcopy(self.server.data)
-            data['runtime'] = {'token': self.server.token, 'api': '/api'}
+            data['runtime'] = {'token': self.server.token, 'api': '/api', 'book_id': self.server.book_id}
             self.reply(200, render(data), 'text/html; charset=utf-8')
+        elif path == '/api/session':
+            # Same access policy as the root page, which already embeds this token.
+            self.reply(200, {'token': self.server.token, 'book_id': self.server.book_id, 'pid': os.getpid()})
         elif path == '/api/state':
             with self.server.state_lock:
                 entries = copy.deepcopy(self.server.entries)
@@ -354,12 +390,13 @@ class FlowHandler(BaseHTTPRequestHandler):
         except Exception:
             entry['answer'] = ''.join(chunks)
             entry['status'] = 'cancelled' if self.server.cancel_event.is_set() else 'error'
+        if entry['status'] != 'complete':
+            entry['error'] = public_ask_failure(self.server.backend, cancelled=entry['status'] == 'cancelled')
         self.server.save_entry(entry)
         if entry['status'] == 'complete':
             self.event('done', entry=entry)
         else:
-            message = '已停止回答。' if entry['status'] == 'cancelled' else '回答未完成，请检查 Codex 连接后重试。'
-            self.event('error', message=message)
+            self.event('error', message=entry['error'], id=entry['id'])
 
     def compile(self, selected):
         from flow_exports import write_revision
@@ -399,6 +436,48 @@ class FlowHandler(BaseHTTPRequestHandler):
             self.server.backend.reset_context()
 
 
+def launch_background(args):
+    book = args.book.resolve(strict=True)
+    validate(json.loads((book / 'flow.json').read_text(encoding='utf-8')))
+    roots = validate_source_roots(args.source_root)
+    command = [sys.executable, str(Path(__file__).resolve()), str(book), '--port', str(args.port)]
+    for root in roots:
+        command.extend(['--source-root', str(root)])
+    for option, value in (('--model', args.model), ('--codex-bin', args.codex_bin)):
+        if value:
+            command.extend([option, value])
+    stamp = uuid.uuid4().hex[:10]
+    errors = book / ('server-' + stamp + '.err')
+    command.extend(['--background-log', 'server-' + stamp])
+    from flow_background import spawn
+    child = spawn(command, book)
+    ready = book / '.flow-server.json'
+    deadline = time.monotonic() + 15
+    try:
+        while time.monotonic() < deadline:
+            if child.poll() is not None:
+                raise RuntimeError('Local server did not start. See ' + str(errors))
+            try:
+                info = json.loads(ready.read_text(encoding='utf-8'))
+                if info.get('pid') == child.pid and re.fullmatch(r'http://127\.0\.0\.1:\d+', info.get('url', '')):
+                    with urlopen(info['url'] + '/api/session', timeout=1) as response:
+                        session = json.load(response)
+                    if session.get('pid') == child.pid and session.get('book_id') == hashlib.sha256(str(book).encode('utf-8')).hexdigest():
+                        return info['url']
+            except (OSError, ValueError, TypeError):
+                pass
+            time.sleep(.1)
+        raise RuntimeError('Local server startup timed out. See ' + str(errors))
+    except BaseException:
+        if child.poll() is None:
+            child.terminate()
+            child.wait(timeout=5)
+        raise
+    finally:
+        if hasattr(child, 'close'):
+            child.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('book', type=Path)
@@ -406,7 +485,20 @@ def main():
     parser.add_argument('--port', type=int, default=0)
     parser.add_argument('--model')
     parser.add_argument('--codex-bin')
+    parser.add_argument('--background', action='store_true', help='Start a detached local connection and exit after verification')
+    parser.add_argument('--background-log', help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.background_log:
+        if not re.fullmatch(r'server-[a-f0-9]{10}', args.background_log) or args.background:
+            parser.error('Invalid background log identifier')
+        sys.stdout = (args.book / (args.background_log + '.log')).open('x', encoding='utf-8', buffering=1)
+        sys.stderr = (args.book / (args.background_log + '.err')).open('x', encoding='utf-8', buffering=1)
+    ready = args.book.resolve() / '.flow-server.json'
+    if ready.is_symlink() or ready.resolve().parent != args.book.resolve():
+        parser.error('Startup information must stay inside the output directory')
+    if args.background:
+        print(launch_background(args), flush=True)
+        return
     server = FlowServer(('127.0.0.1', args.port), args.book, roots=args.source_root,
                         model=args.model, binary=args.codex_bin)
     ready = server.book_dir / '.flow-server.json'

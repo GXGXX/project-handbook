@@ -10,6 +10,7 @@ const {pathToFileURL} = require('node:url');
 const assets = path.resolve(__dirname, '../project-handbook/assets');
 const read = name => fs.existsSync(path.join(assets, name)) ? fs.readFileSync(path.join(assets, name), 'utf8') : '';
 const token = 'synthetic-runtime-token-not-for-sharing';
+let servingToken = token;
 const saved = {id: 'saved-1', node_id: 'entry', question: '已保存的问题', answer: '**已保存的答案**\n\n1. 先检查 `金额`。\n2. 再保存结果。\n\n/repository/private/module.py\n~/private/project\nhttps://internal.example/team\ncookie="session-private"\nBasic cHJpdmF0ZTpwYXNz\neyJhbGciOiJIUzI1NiJ9.eyJwcml2YXRlIjp0cnVlfQ.signature\nAKIA1234567890ABCDEF', status: 'complete', created_at: '2026-09-16T10:00:00Z'};
 const failed = {id: 'failed-1', node_id: 'entry', question: '失败的问题', answer: '未完成的私人草稿', status: 'error'};
 const nodes = [
@@ -22,7 +23,7 @@ function fixture(runtime, qa = [saved, failed]) {
   const manifest = {
     title: '订单流程', summary: '合成问答测试', sources: [{id: 'demo', locator: 'C:\\private\\orders.py', excerpt: 'RAW-PRIVATE-SOURCE'}],
     graphs: [{id: 'order', title: '订单', source: 'demo', nodes, edges}], canvas: {nodes, edges}, examples: [], qa,
-    filesystem: {root: 'C:\\private\\root'}, credentials: {password: 'hidden-password'}, runtime
+    filesystem: {root: 'C:\\private\\root'}, credentials: {password: 'hidden-password'}, runtime: runtime ? {...runtime, book_id: 'test-book'} : undefined
   };
   const replacements = {
     TITLE: manifest.title, HEADER: '<header><h1>订单流程</h1></header>', NAV: '<nav><a href="#diagram">整体流程</a><a href="#examples">例子</a></nav>', EXAMPLES: '',
@@ -54,7 +55,9 @@ async function until(check, message) {
     let body = '';
     for await (const chunk of request) body += chunk;
     calls.push({url: request.url, headers: request.headers, body: body ? JSON.parse(body) : null});
-    if (request.headers['x-flow-token'] !== token) { json(response, {message: 'missing token'}, 403); return; }
+    if (mode === 'offline') {response.destroy(); return;}
+    if (request.url === '/api/session') {json(response, {token: servingToken, book_id: 'test-book'}); return;}
+    if (request.headers['x-flow-token'] !== servingToken) { json(response, {error: 'Connection token required'}, 403); return; }
     if (request.url === '/api/state') { json(response, {entries: stateEntries, busy: false, backend}); return; }
     if (request.url === '/api/cancel') { if (pendingResponse && !pendingResponse.destroyed) pendingResponse.end(JSON.stringify({type: 'error', message: 'cancelled'}) + '\n'); json(response, {ok: true}); return; }
     if (request.url === '/api/export') {
@@ -77,7 +80,7 @@ async function until(check, message) {
       if (mode === 'stream-error') { response.end(JSON.stringify({type: 'error', message: '模型暂不可用'}) + '\n'); return; }
       if (mode === 'auth-error') {
         backend = {...backend, connected: false, message: 'Sign-in required. password:"synthetic secret phrase" https://internal.example/auth /data/private/auth.json'};
-        response.end(JSON.stringify({type: 'error', message: '连接未建立'}) + '\n'); return;
+        response.end(JSON.stringify({type: 'error', message: '本机 Codex 尚未登录。打开 Codex 完成登录后，点重试。'}) + '\n'); return;
       }
       response.write(JSON.stringify({type: 'status', message: '正在查阅来源 <b>只读</b> password:"synthetic secret phrase" https://internal.example/progress /data/private/progress.py'}) + '\n');
       const answer = '实时答案 <img src=x onerror=alert(1)> 第一段。第二段。';
@@ -130,9 +133,11 @@ async function until(check, message) {
     await offline.getByRole('button', {name: '问答', exact: true}).click();
     assert(await offline.locator('#flow-qa-panel').isVisible());
     assert.match(await offline.locator('.flow-qa-status').textContent(), /离线/);
+    assert.match(await offline.locator('.flow-qa-form .flow-qa-hint').textContent(), /不能继续追问/);
     assert(await offline.locator('.flow-qa-send').isDisabled());
     assert.equal(await offline.locator('.flow-qa-entry').count(), 2, 'all saved conversation, including incomplete answers, stays readable');
-    assert.equal(await offline.locator('.flow-qa-entry input[type=checkbox]').count(), 1, 'only complete answers can be selected');
+    assert.equal(await offline.locator('.flow-qa-pick').count(), 1, 'only complete answers can be selected');
+    assert.equal(await offline.locator('.flow-qa-pick').getAttribute('aria-pressed'), 'true');
     await offline.locator('.flow-qa-close').click();
     await offline.locator('#entry').click();
     assert(await offline.locator('#detail').isVisible(), 'existing detail dialog remains modal');
@@ -140,7 +145,9 @@ async function until(check, message) {
     await offline.getByRole('button', {name: '追问这个节点', exact: true}).click();
     assert.equal(await offline.locator('#detail').evaluate(element => element.open), false);
     assert.match(await offline.locator('.flow-qa-context').textContent(), /提交订单/);
-    await offline.locator('.flow-qa-entry input').check();
+    await offline.locator('.flow-qa-pick').click();
+    assert.equal(await offline.locator('.flow-qa-pick').getAttribute('aria-pressed'), 'false');
+    await offline.locator('.flow-qa-pick').click();
     await offline.locator('.flow-qa-draft').fill('UNSELECTED-PRIVATE-DRAFT');
     const exported = await download(offline, '.flow-qa-export');
     const html = fs.readFileSync(exported, 'utf8');
@@ -195,7 +202,8 @@ async function until(check, message) {
     const parityPage = await pageFor(pathToFileURL(parityPath).href);
     const originalData = await parityPage.locator('#data').evaluate(element => JSON.parse(element.textContent));
     await parityPage.getByRole('button', {name: '问答', exact: true}).click();
-    await parityPage.locator('.flow-qa-entry input').check();
+    await parityPage.locator('.flow-qa-pick').click();
+    await parityPage.locator('.flow-qa-pick').click();
     const parityExport = await download(parityPage, '.flow-qa-export');
     const parityShared = await pageFor(pathToFileURL(parityExport).href);
     const sharedData = await parityShared.locator('#data').evaluate(element => JSON.parse(element.textContent));
@@ -224,7 +232,7 @@ async function until(check, message) {
     await until(() => live.locator('.flow-qa-entry').count().then(count => count === 2), 'server history not loaded');
     await until(() => live.locator('.flow-qa-entry').first().textContent().then(text => text.includes('仅在服务器历史')), 'history must come from the server, not just embedded data.qa');
     assert.doesNotMatch(await live.locator('.flow-qa-status').textContent(), /已连接/, 'executable discovery must not claim authentication or connection success');
-    assert.match(await live.locator('.flow-qa-status').textContent(), /首个问题.*连接/, 'pending readiness should explain the first-question connection attempt');
+    assert.match(await live.locator('.flow-qa-status').textContent(), /还没连上|第一个问题/, 'pending readiness should explain the first-question connection attempt');
     assert.match(await live.locator('.flow-qa-badge').textContent(), /待连接|未连接/);
     await live.locator('#entry').click();
     await live.getByRole('button', {name: '追问这个节点', exact: true}).click();
@@ -233,14 +241,18 @@ async function until(check, message) {
     await live.locator('.flow-qa-send').click();
     await until(() => live.locator('.flow-qa-status').textContent().then(text => /正在查阅来源|正在核对来源/.test(text)), 'source lookup status must not fail the ask stream');
     assert.equal(await live.locator('.flow-qa-status b').count(), 0, 'lookup status must remain plain text');
-    assert.equal(await live.locator('.flow-qa-entry').last().locator('input').count(), 0, 'lookup status must not complete an answer');
-    assert.equal(await live.locator('.flow-qa-draft').inputValue(), '为什么检查订单？');
+    assert.equal(await live.locator('.flow-qa-entry').last().locator('.flow-qa-pick').count(), 0, 'lookup status must not complete an answer');
+    assert.equal(await live.locator('.flow-qa-draft').inputValue(), '', 'accepted question clears immediately while streaming');
     await until(() => live.locator('.flow-qa-entry').last().textContent().then(text => text.includes('第一段')), 'stream delta was not displayed before completion');
-    assert.equal(await live.locator('.flow-qa-entry').last().locator('input').count(), 0, 'streaming answer must not be selectable');
+    assert.equal(await live.locator('.flow-qa-entry').last().locator('.flow-qa-pick').count(), 0, 'streaming answer must not be selectable');
     assert(await live.locator('.flow-qa-send').isDisabled());
-    await until(() => live.locator('.flow-qa-entry input').count().then(count => count === 2), 'complete answer not selectable');
+    await until(() => live.locator('.flow-qa-pick').count().then(count => count === 2), 'complete answer not selectable');
     await until(() => live.locator('.flow-qa-badge').textContent().then(text => text === '已连接'), 'first successful question should refresh confirmed connection readiness');
     assert.equal(await live.locator('.flow-qa-draft').inputValue(), '');
+    assert.equal(await live.locator('.flow-qa-entry').last().locator('.flow-qa-pick').getAttribute('aria-pressed'), 'true', 'a newly completed answer should be selected so compile is usable');
+    assert.match(await live.locator('.flow-qa-entry').last().locator('.flow-qa-pick-hint').textContent(), /已加入整理/);
+    assert.match(await live.locator('.flow-qa-footer .flow-qa-hint').textContent(), /已加入/);
+    assert.equal(await live.locator('.flow-qa-compile').isDisabled(), false);
     assert.equal(await live.locator('.flow-qa-entry img').count(), 0, 'model output must be plain text');
     assert.equal(await live.locator('.flow-qa-entry').last().locator('.flow-qa-answer').textContent(), '实时答案 <img src=x onerror=alert(1)> 第一段。第二段。', 'status events must not enter the saved answer');
     const ask = calls.find(call => call.url === '/api/ask');
@@ -252,12 +264,11 @@ async function until(check, message) {
     await until(() => restored.locator('.flow-qa-entry').count().then(count => count === 3), 'server-saved conversation did not survive reopening');
     assert.match(await restored.locator('.flow-qa-entry').last().textContent(), /为什么检查订单/);
     await restored.close();
-    await live.locator('.flow-qa-entry input').last().check();
     await live.locator('.flow-qa-compile').click();
     await until(() => live.locator('.flow-qa-result a').count().then(count => count === 1), 'compiled link not shown');
     assert.equal(await live.locator('.flow-qa-result a').getAttribute('href'), origin + '/versions/new/handbook.html');
     assert.equal(live.url(), origin + '/', 'compilation must not replace the open original');
-    assert.deepEqual(calls.find(call => call.url === '/api/compile').body, {entry_ids: ['new-1'], redact: true});
+    assert.deepEqual(calls.find(call => call.url === '/api/compile').body, {entry_ids: ['saved-1', 'new-1'], redact: true});
     const popupPending = live.waitForEvent('popup');
     await live.locator('.flow-qa-result a').click();
     const compiled = await popupPending;
@@ -268,6 +279,8 @@ async function until(check, message) {
     assert.match(await compiled.locator('.flow-qa-entry').textContent(), /实时答案/);
     assert.equal(await compiled.locator('#data').evaluate(element => JSON.parse(element.textContent).runtime), undefined);
     await compiled.close();
+    await live.locator('.flow-qa-pick').first().click();
+    assert.equal(await live.locator('.flow-qa-pick').first().getAttribute('aria-pressed'), 'false');
     const liveExport = await download(live, '.flow-qa-export');
     assert.match(fs.readFileSync(liveExport, 'utf8'), /SERVER-STATIC-EXPORT/);
     assert.deepEqual(calls.find(call => call.url === '/api/export').body, {entry_ids: ['new-1'], redact: true});
@@ -298,20 +311,23 @@ async function until(check, message) {
       mode = failure;
       await live.locator('.flow-qa-draft').fill(`保留草稿 ${failure}`);
       await live.locator('.flow-qa-send').click();
-      await until(() => live.locator('.flow-qa-send').isEnabled(), `${failure} left send stuck`);
-      assert.equal(await live.locator('.flow-qa-draft').inputValue(), `保留草稿 ${failure}`);
-      assert.equal(await live.locator('.flow-qa-entry').last().locator('input').count(), 0);
-      assert.match(await live.locator('.flow-qa-status').textContent(), /失败|错误|中断|不可用/);
+      await until(() => live.locator('.flow-qa-transcript').getAttribute('aria-busy').then(value => value === 'false'), `${failure} left send stuck`);
+      assert.equal(await live.locator('.flow-qa-draft').inputValue(), '');
+      assert.equal(await live.locator('.flow-qa-entry').last().locator('.flow-qa-question').textContent(), `保留草稿 ${failure}`);
+      assert.equal(await live.locator('.flow-qa-entry').last().locator('.flow-qa-pick').count(), 0);
+      assert.match(await live.locator('.flow-qa-status').textContent(), /失败|错误|中断|不可用|没有生成|点重试/);
+      assert.doesNotMatch(await live.locator('.flow-qa-entry').last().locator('.flow-qa-answer-empty').textContent(), /暂无回答/);
+      assert.match(await live.locator('.flow-qa-entry').last().locator('.flow-qa-answer-empty').textContent(), /点重试/);
     }
     mode = 'cancel';
     await live.locator('.flow-qa-draft').fill('取消后保留');
     await live.locator('.flow-qa-send').click();
     await until(() => live.locator('.flow-qa-entry').last().textContent().then(text => text.includes('部分回答')), 'pending answer missing');
     await live.locator('.flow-qa-cancel').click();
-    await until(() => live.locator('.flow-qa-send').isEnabled(), 'cancel did not release UI');
-    assert.equal(await live.locator('.flow-qa-draft').inputValue(), '取消后保留');
+    await until(() => live.locator('.flow-qa-transcript').getAttribute('aria-busy').then(value => value === 'false'), 'cancel did not release UI');
+    assert.equal(await live.locator('.flow-qa-draft').inputValue(), '');
     assert(calls.some(call => call.url === '/api/cancel' && call.headers['x-flow-token'] === token));
-    assert.equal(await live.locator('.flow-qa-entry').last().locator('input').count(), 0);
+    assert.equal(await live.locator('.flow-qa-entry').last().locator('.flow-qa-pick').count(), 0);
     mode = 'bad-url';
     await live.locator('.flow-qa-compile').click();
     await until(() => live.locator('.flow-qa-compile').isEnabled(), 'invalid URL left compile stuck');
@@ -324,7 +340,8 @@ async function until(check, message) {
     await until(() => readiness.locator('.flow-qa-status').textContent().then(text => text.includes('安全连接')), 'unavailable backend should show an understandable failure reason');
     assert.match(await readiness.locator('.flow-qa-badge').textContent(), /不可用/);
     await readiness.locator('.flow-qa-draft').fill('保留待连接的问题');
-    await readiness.locator('.flow-qa-entry input').first().check();
+    await readiness.locator('.flow-qa-pick').first().click();
+    await readiness.locator('.flow-qa-pick').first().click();
     assert(await readiness.locator('.flow-qa-send').isDisabled());
     assert(await readiness.locator('.flow-qa-compile').isDisabled());
     assert(await readiness.locator('.flow-qa-export').isEnabled(), 'unavailable backend must preserve offline export');
@@ -338,10 +355,11 @@ async function until(check, message) {
     mode = 'auth-error';
     await readiness.locator('.flow-qa-send').click();
     await until(() => readiness.locator('.flow-qa-status').textContent().then(text => text.includes('登录')), 'failed first connection should explain how to restore sign-in');
+    assert.match(await readiness.locator('.flow-qa-entry').last().locator('.flow-qa-answer-empty').textContent(), /登录/);
     assert.doesNotMatch(await readiness.locator('.flow-qa-badge').textContent(), /已连接/);
-    assert.equal(await readiness.locator('.flow-qa-draft').inputValue(), '保留待连接的问题');
-    assert(await readiness.locator('.flow-qa-send').isEnabled(), 'failed authentication must permit retry after external sign-in');
-    assert.equal(await readiness.locator('.flow-qa-entry').last().locator('input').count(), 0, 'readiness refresh must not replace the failed turn with old history');
+    assert.equal(await readiness.locator('.flow-qa-draft').inputValue(), '');
+    assert(await readiness.locator('.flow-qa-retry').last().isEnabled(), 'failed authentication must permit explicit retry after external sign-in');
+    assert.equal(await readiness.locator('.flow-qa-entry').last().locator('.flow-qa-pick').count(), 0, 'readiness refresh must not replace the failed turn with old history');
     for (const secret of ['synthetic secret phrase', 'internal.example', '/data/private']) assert(!(await readiness.locator('.flow-qa-status').textContent()).includes(secret));
     backend = {...backend, connected: true, message: 'Connected: synthetic test connection.'};
     await readiness.locator('.flow-qa-refresh').click();
@@ -350,6 +368,27 @@ async function until(check, message) {
     await readiness.close();
     mode = 'success';
     console.log('PASS readiness: pending first connection, confirmed connection, unavailable backend, safe failure messages and auth retry');
+
+    mode = 'offline';
+    await live.locator('.flow-qa-draft').fill('攻击怎么判断是否命中？');
+    await live.locator('.flow-qa-send').click();
+    await until(() => live.locator('.flow-qa-badge').textContent().then(text => text.includes('断开')), 'offline helper not detected');
+    assert.equal(await live.locator('.flow-qa-draft').inputValue(), '');
+    assert.doesNotMatch(await live.locator('.flow-qa-status').textContent(), /Failed to fetch/);
+    const beforeRecovery = calls.filter(call => call.url === '/api/ask').length;
+    mode = 'success'; servingToken = 'rotated-test-token';
+    await live.locator('.flow-qa-refresh').click();
+    await until(() => live.locator('.flow-qa-badge').textContent().then(text => text === '已连接'), 'restarted helper token not recovered');
+    assert.equal(calls.filter(call => call.url === '/api/ask').length, beforeRecovery, 'recovery must not repeat model requests automatically');
+    await live.locator('.flow-qa-draft').fill('下一条尚未发送的问题');
+    const beforeRetry = await live.locator('.flow-qa-entry').count();
+    const retryCard = live.locator('.flow-qa-entry').filter({hasText: '攻击怎么判断是否命中？'});
+    await retryCard.locator('.flow-qa-retry').click();
+    await until(() => retryCard.locator('.flow-qa-pick[aria-pressed=true]').count().then(count => count === 1), 'failed question retry did not finish');
+    assert.equal(await live.locator('.flow-qa-entry').count(), beforeRetry, 'retry must reuse the failed card instead of adding a blank duplicate');
+    assert.equal(await live.locator('.flow-qa-draft').inputValue(), '下一条尚未发送的问题');
+    assert.equal(calls.filter(call => call.url === '/api/ask').at(-1).body.question, '攻击怎么判断是否命中？');
+    console.log('PASS clear-on-send, disconnected helper, token recovery, explicit retry and independent next draft');
 
     await offline.evaluate(() => {
       window.captureCalls = [];
@@ -366,21 +405,20 @@ async function until(check, message) {
     const transform = await offline.locator('#canvas').evaluate(element => element.style.transform);
     const fullPNG = await download(offline, '.flow-qa-png-full');
     assert.equal(fs.readFileSync(fullPNG).subarray(1, 4).toString(), 'PNG');
-    await download(offline, '.flow-qa-png-view');
+    assert.equal(await offline.locator('.flow-qa-png-view').count(), 0, 'current-view PNG feature was removed');
     const captures = await offline.evaluate(() => window.captureCalls);
-    assert.equal(captures.length, 2);
+    assert.equal(captures.length, 1);
     assert.equal(captures[0].transform, 'none', 'whole-canvas clone must not keep zoom transforms');
     assert.equal(captures[0].overflow, 'visible');
     assert.equal(captures[0].liveTransform, transform);
-    assert.equal(captures[1].target, 'viewport');
     assert.equal(await offline.locator('#canvas').evaluate(element => element.style.transform), transform);
     assert.deepEqual(captures[0].options, {allowTaint: false, useCORS: false});
     await offline.locator('#canvas').evaluate(element => { element.style.height = '40000px'; });
     await offline.locator('.flow-qa-png-full').click();
     await until(() => offline.locator('.flow-qa-status').textContent().then(text => /过大|尺寸|大小/.test(text)), 'oversize PNG lacks an actionable error');
-    assert.equal(await offline.evaluate(() => window.captureCalls.length), 2, 'oversized canvas must be rejected before rendering');
+    assert.equal(await offline.evaluate(() => window.captureCalls.length), 1, 'oversized canvas must be rejected before rendering');
     await offline.locator('#canvas').evaluate(element => { element.style.height = ''; });
-    console.log('PASS PNG: clone-only zoom reset, whole/viewport capture, size guard, PNG download');
+    console.log('PASS PNG: full-canvas capture, size guard, no current-view control');
 
     // Exercise the pinned renderer, including its SVG rasterization, under the server CSP.
     const pngPage = await pageFor(origin);
@@ -425,16 +463,12 @@ async function until(check, message) {
     assert(real.edgePixels >= 3, 'SVG connector pixels are missing from whole-canvas PNG');
     assert.deepEqual(real.geometry.after, real.geometry.before, 'redaction must not resize or move nodes relative to SVG edges');
     assert(!real.geometry.text.includes('long-private-source'));
-    const actualView = await download(pngPage, '.flow-qa-png-view');
-    const actualViewport = await pngPage.evaluate(() => window.realCaptures[1]);
-    assert(actualViewport.nonwhite > 800 && actualViewport.edgePixels >= 3, 'viewport PNG must contain nodes and connectors');
     assert.deepEqual(await pngPage.evaluate(() => window.cspFailures), []);
     if (screenshots) {
       fs.copyFileSync(actualFull, path.join(screenshots, 'flow-assistant-full.png'));
-      fs.copyFileSync(actualView, path.join(screenshots, 'flow-assistant-view.png'));
     }
     await pngPage.close();
-    console.log(`PASS pinned html2canvas/CSP: full ${real.width}x${real.height}, ${real.nonwhite} nonwhite pixels, ${real.edgePixels} connector pixels; viewport ${actualViewport.width}x${actualViewport.height}, ${actualViewport.edgePixels} connector pixels`);
+    console.log(`PASS pinned html2canvas/CSP: full ${real.width}x${real.height}, ${real.nonwhite} nonwhite pixels, ${real.edgePixels} connector pixels`);
 
     const layout = await offline.evaluate(() => {
       const v = document.getElementById('viewport').getBoundingClientRect(), a = document.getElementById('flow-qa-panel').getBoundingClientRect();

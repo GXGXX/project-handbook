@@ -32,7 +32,7 @@ const {pathToFileURL} = require('node:url');
   try {
     await page.goto(url);
     await page.locator('#search').fill('固定值');
-    await page.locator('#locate').click();
+    assert.notEqual(await page.locator('#search-count').textContent(), '0/0');
     await page.locator('#fixed-value').click();
     await page.locator('.flow-qa-ask-node').click();
     await page.locator('.flow-qa-draft').fill('只按这张教学图回答：固定伤害 500，护盾 100，血量充足，实际扣血为什么是 400 而不是把之前的 1600 加进去？用三句话说明。');
@@ -44,7 +44,8 @@ const {pathToFileURL} = require('node:url');
     assert(events.at(-1).entry.answer.includes('400'));
     assert.equal(events.at(-1).entry.node_id, 'fixed-value');
     const entryId = events.at(-1).entry.id;
-    await page.locator(`[data-entry-id="${entryId}"] input[type=checkbox]`).check();
+    await page.locator(`[data-entry-id="${entryId}"] .flow-qa-pick`).click();
+    await page.locator(`[data-entry-id="${entryId}"] .flow-qa-pick`).click();
     await page.locator('#zoom-fit').click();
     await page.locator('#diagram').screenshot({path: path.join(output, 'damage-qa.png')});
     console.log('PASS real Codex: streamed node-context answer contains the verified teaching result 400.');
@@ -84,7 +85,7 @@ const {pathToFileURL} = require('node:url');
     await offlinePage.close();
     console.log('PASS offline sharing: selected answer, all nodes, disabled live send, zero network requests.');
 
-    for (const [selector, filename] of [['.flow-qa-png-full', 'handbook-full.png'], ['.flow-qa-png-view', 'handbook-view.png']]) {
+    for (const [selector, filename] of [['.flow-qa-png-full', 'handbook-full.png']]) {
       const imagePromise = page.waitForEvent('download');
       await page.locator(selector).click();
       const image = await imagePromise;
@@ -108,7 +109,7 @@ const {pathToFileURL} = require('node:url');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({path: path.join(output, 'damage-qa-mobile.png')});
     assert.deepEqual(errors, []);
-    console.log('PASS full/current PNG nonblank, history reload, narrow layout, no JavaScript errors.');
+    console.log('PASS full PNG nonblank, history reload, narrow layout, no JavaScript errors.');
     if (process.env.FLOW_LIVE_LOOKUP === '1') {
       // The opt-in server must allow a synthetic combat.lua with followup_delay_ms = 75.
       await page.evaluate(() => {delete window.__flowSmoke.ask;});
