@@ -63,7 +63,3 @@ Codex 会输出 HTML 文件并打开本机阅读地址。安装后若未显示�
 - **只要图片**：导出 **全图 PNG**。图片保留画面；交互细节和问答适合用离线 HTML 分享。
 
 分享副本默认移除连接凭据、原始来源摘录和可识别的私人路径等信息。业务名称、数字和文字内容仍需在对外分享前自行确认。
-
-## 致谢
-
-本项目的出发点受到 [docs-to-book](https://github.com/lili-luo/aicoding-cookbook/tree/main/skills/claude%20code/docs-to-book) 启发，侧重围绕一个业务问题梳理可追问的流程。
