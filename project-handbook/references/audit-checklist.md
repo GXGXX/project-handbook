@@ -1,5 +1,7 @@
 # Audit checklist
 
+> Not the default: applies only to the multi-page documentation site (book.json). See [other-formats.md](other-formats.md); flowcharts follow SKILL.md.
+
 Use this checklist before writing pages. The goal is not to describe every
 file; it is to collect the facts a new maintainer needs to act safely.
 

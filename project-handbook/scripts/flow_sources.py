@@ -8,7 +8,7 @@ import stat
 import sys
 import time
 
-from chat_server import terms
+from search_terms import terms
 from flow_exports import _redact_text
 
 EXTENSIONS = {'.md', '.txt', '.rst', '.lua', '.py', '.js', '.ts', '.tsx', '.jsx',
