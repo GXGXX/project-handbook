@@ -1,0 +1,75 @@
+{
+  "title": "近战攻击一次，伤害是怎么算出来的",
+  "summary": "命中后先掷出目标的护甲值，再掷基础伤害并乘上各种倍率，取整交给防守方的 defenseProc，然后才减护甲、乘易伤、过攻击方的 attackProc，最后扣血。护甲虽然一开始就掷出，但要等倍率和 defenseProc 都算完才减。",
+  "sources": [
+    {"id": "char-attack", "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:372-512",
+     "excerpt": "attack()：无敌检查 → hit() → enemy.drRoll() → damageRoll() → 倍率 → Math.round 后进 defenseProc → max(伤害 - dr, 0) → Vulnerable ×1.33 → attackProc → enemy.damage"}
+  ],
+  "graphs": [
+    {
+      "id": "melee",
+      "title": "Char.attack 通用路径",
+      "source": "char-attack",
+      "nodes": [
+        {"id": "start", "row": 0, "col": 0, "kind": "terminal", "title": "发起近战攻击",
+         "lines": "attack(enemy, dmgMulti, dmgBonus, accMulti)", "detail": "普通近战调用时 dmgMulti=1、dmgBonus=0、accMulti=1；技能会传入别的值。"},
+        {"id": "invul", "row": 1, "col": 0, "kind": "decision", "title": "目标无敌？",
+         "lines": "enemy.isInvulnerable(攻击者类型)", "detail": "无敌时只显示提示和格挡音效，整次攻击结束。"},
+        {"id": "invul-end", "row": 1, "col": 1, "kind": "terminal", "title": "不造成伤害",
+         "lines": "attack 返回 false", "detail": "后面的步骤都不执行。"},
+        {"id": "hit", "row": 2, "col": 0, "kind": "decision", "title": "命中？",
+         "lines": "hit()：acuRoll ≥ defRoll", "detail": "命中值和闪避值各掷一次比大小，细节见命中判定那张图。"},
+        {"id": "miss-end", "row": 2, "col": 1, "kind": "terminal", "title": "未命中",
+         "lines": "显示目标的闪避文字", "detail": "不掷伤害，目标 HP 不变。"},
+        {"id": "armor-roll", "row": 3, "col": 0, "kind": "process", "title": "先掷出目标的护甲减伤值 dr",
+         "lines": "dr = enemy.drRoll() × 飞升挑战修正", "detail": "这里只掷出数值，先存着，要到 defenseProc 之后才用。狙击手远程射击、武僧徒手技能会把 dr 置 0。"},
+        {"id": "damage-roll", "row": 4, "col": 0, "kind": "process", "title": "掷基础伤害",
+         "lines": "dmg = damageRoll()（有 Preparation 时用它的伤害）", "detail": "英雄按武器和力量掷，怪物按各自的伤害区间掷，由子类实现。"},
+        {"id": "multipliers", "row": 5, "col": 0, "kind": "process", "title": "乘以各种倍率",
+         "lines": "dmg × dmgMulti + dmgBonus；Fury ×1.5；Weakness ×0.67；等等", "detail": "攻击方：Berserk、Fury、PowerOfMany、精英怪、飞升挑战修正、Endure；防守方：Endure、ScrollOfChallenge 竞技场 ×0.67、AuraOfProtection、武僧冥想 ×0.2。全部用小数连乘，不中途取整。"},
+        {"id": "defense-proc", "row": 6, "col": 0, "kind": "process", "title": "四舍五入后交给防守方",
+         "lines": "effective = enemy.defenseProc(Math.round(dmg))", "detail": "护甲刻印等防守效果在这里改动伤害。"},
+        {"id": "negative", "row": 7, "col": 0, "kind": "decision", "title": "defenseProc 返回值 ≥ 0？",
+         "lines": "effectiveDamage >= 0", "detail": "返回负数表示防守方要求跳过后续的命中效果。"},
+        {"id": "skip", "row": 7, "col": 1, "kind": "process", "title": "跳过后续调整",
+         "lines": "不减护甲、不乘易伤、不触发 attackProc", "detail": "直接拿 defenseProc 的返回值进入扣血。"},
+        {"id": "armor-subtract", "row": 8, "col": 0, "kind": "process", "title": "减去护甲",
+         "lines": "effective = max(effective - dr, 0)", "detail": "最低为 0。用的是第一步就掷好的 dr。"},
+        {"id": "vulnerable", "row": 9, "col": 0, "kind": "process", "title": "易伤 ×1.33",
+         "lines": "有 Vulnerable 时 effective ×= 1.33", "detail": "在减护甲之后乘。effective 是整数，乘完直接截断小数，不是四舍五入。"},
+        {"id": "attack-proc", "row": 10, "col": 0, "kind": "process", "title": "攻击方的 attackProc",
+         "lines": "effective = attackProc(enemy, effective)", "detail": "武器附魔等攻击效果在这里改动伤害。"},
+        {"id": "apply", "row": 11, "col": 0, "kind": "process", "title": "扣血",
+         "lines": "enemy.damage(effective, 攻击者)", "detail": "如果 defenseProc 阶段目标已经死了，就不再扣。"},
+        {"id": "end", "row": 12, "col": 0, "kind": "terminal", "title": "后续效果",
+         "lines": "火焰/冰霜附加、刺杀斩杀、击杀提示", "detail": "这些发生在扣血之后。"}
+      ],
+      "edges": [
+        {"a": "start", "b": "invul"},
+        {"a": "invul", "b": "invul-end", "label": "是"},
+        {"a": "invul", "b": "hit", "label": "否"},
+        {"a": "hit", "b": "armor-roll", "label": "是"},
+        {"a": "hit", "b": "miss-end", "label": "否"},
+        {"a": "armor-roll", "b": "damage-roll"},
+        {"a": "damage-roll", "b": "multipliers"},
+        {"a": "multipliers", "b": "defense-proc"},
+        {"a": "defense-proc", "b": "negative"},
+        {"a": "negative", "b": "armor-subtract", "label": "是"},
+        {"a": "negative", "b": "skip", "label": "否"},
+        {"a": "skip", "b": "apply", "route": "outer"},
+        {"a": "armor-subtract", "b": "vulnerable"},
+        {"a": "vulnerable", "b": "attack-proc"},
+        {"a": "attack-proc", "b": "apply"},
+        {"a": "apply", "b": "end"}
+      ]
+    }
+  ],
+  "examples": [
+    {"title": "狂怒状态打一只易伤的怪", "provenance": "演示推演，非实测",
+     "input": "命中；目标 dr 掷出 4；基础伤害掷出 10；攻击方有 Fury；目标有 Vulnerable；无刻印、无附魔。",
+     "trace": ["命中，继续。", "目标护甲掷出 dr=4，先存着。", "基础伤害 10。", "Fury：10×1.5=15。",
+               "四舍五入 15，defenseProc 原样返回 15。", "减护甲：max(15-4,0)=11。",
+               "易伤：11×1.33=14.63，整数截断为 14。", "attackProc 原样返回 14，扣血 14。"],
+     "result": "扣 14 点。若先减护甲再乘狂怒，会算成 (10-4)×1.5×1.33≈11，差 3 点。"}
+  ]
+}

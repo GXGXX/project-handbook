@@ -1,0 +1,62 @@
+{
+  "title": "攻击时怎么判定命中还是闪避",
+  "summary": "先取攻击方的命中值和防守方的闪避值。偷袭或专注会把其中一边改成无限；先看闪避是否无限，再看命中是否无限，所以两边都无限时算闪避。都不是无限时，两边各在 0 到自己的数值之间掷一个骰子，乘上祝福、妖术、眩晕等修正，命中骰不小于闪避骰就算命中。",
+  "sources": [
+    {"id": "char-hit", "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:612-685",
+     "excerpt": "hit()：偷袭→命中值无限；专注→闪避值无限；先判无限闪避再判无限命中；acuRoll、defRoll 各自 Random.Float 后乘修正；acuRoll >= defRoll 为命中"}
+  ],
+  "graphs": [
+    {
+      "id": "hit-check",
+      "title": "Char.hit",
+      "source": "char-hit",
+      "nodes": [
+        {"id": "start", "row": 0, "col": 0, "kind": "terminal", "title": "开始一次命中判定",
+         "lines": "hit(攻击方, 防守方, accMulti, magic)", "detail": "普通近战 accMulti=1；魔法攻击走三参数重载时 accMulti = 2，即命中骰 ×2。"},
+        {"id": "skills", "row": 1, "col": 0, "kind": "process", "title": "取命中值和闪避值",
+         "lines": "acuStat = attackSkill(防守方)；defStat = defenseSkill(攻击方)", "detail": "英雄、各种怪物各自实现这两个数值。"},
+        {"id": "overrides", "row": 2, "col": 0, "kind": "process", "title": "偷袭和专注改写数值",
+         "lines": "隐身且能偷袭：命中值设为 INFINITE_ACCURACY；防守方有武僧 Focus：闪避值设为 INFINITE_EVASION", "detail": "无限值是 1,000,000，数值达到它就当作无限。"},
+        {"id": "inf-eva", "row": 3, "col": 0, "kind": "decision", "title": "闪避值无限？",
+         "lines": "defStat 达到 INFINITE_EVASION", "detail": "先判这一条，所以必闪压过必中。"},
+        {"id": "dodge-all", "row": 3, "col": 1, "kind": "terminal", "title": "闪避",
+         "lines": "返回 false", "detail": "不掷骰。"},
+        {"id": "inf-acc", "row": 4, "col": 0, "kind": "decision", "title": "命中值无限？",
+         "lines": "acuStat 达到 INFINITE_ACCURACY", "detail": "偷袭的情况走这里。"},
+        {"id": "hit-all", "row": 4, "col": 1, "kind": "terminal", "title": "命中",
+         "lines": "返回 true", "detail": "不掷骰。"},
+        {"id": "acc-roll", "row": 5, "col": 0, "kind": "process", "title": "掷命中骰",
+         "lines": "acuRoll = Random.Float(命中值)，再乘修正和 accMulti", "detail": "修正：祝福 Bless ×1.25、妖术 Hex ×0.8、眩晕 Daze ×0.5、精英怪、飞升挑战；非牧师英雄有 Bless 天赋时，盟友再乘 1.03 或 1.05。"},
+        {"id": "def-roll", "row": 6, "col": 0, "kind": "process", "title": "掷闪避骰",
+         "lines": "defRoll = Random.Float(闪避值)，再乘修正", "detail": "同一组修正，外加 FerretTuft 饰品的闪避倍率；不乘 accMulti。"},
+        {"id": "compare", "row": 7, "col": 0, "kind": "decision", "title": "命中骰 ≥ 闪避骰？",
+         "lines": "acuRoll >= defRoll", "detail": "相等也算命中。"},
+        {"id": "hit-roll", "row": 8, "col": 0, "kind": "terminal", "title": "命中",
+         "lines": "返回 true", "detail": "之后进入伤害计算。"},
+        {"id": "dodge-roll", "row": 7, "col": 1, "kind": "terminal", "title": "闪避",
+         "lines": "返回 false", "detail": "显示防守方的闪避文字。"}
+      ],
+      "edges": [
+        {"a": "start", "b": "skills"},
+        {"a": "skills", "b": "overrides"},
+        {"a": "overrides", "b": "inf-eva"},
+        {"a": "inf-eva", "b": "dodge-all", "label": "是"},
+        {"a": "inf-eva", "b": "inf-acc", "label": "否"},
+        {"a": "inf-acc", "b": "hit-all", "label": "是"},
+        {"a": "inf-acc", "b": "acc-roll", "label": "否"},
+        {"a": "acc-roll", "b": "def-roll"},
+        {"a": "def-roll", "b": "compare"},
+        {"a": "compare", "b": "hit-roll", "label": "是"},
+        {"a": "compare", "b": "dodge-roll", "label": "否"}
+      ]
+    }
+  ],
+  "examples": [
+    {"title": "被祝福的攻击方对眩晕的防守方", "provenance": "演示推演，非实测",
+     "input": "命中值 20，闪避值 15；攻击方有祝福，防守方被眩晕；两边都不是无限。",
+     "trace": ["命中骰在 0～20 之间掷出 10，乘祝福 1.25 得 12.5。",
+               "闪避骰在 0～15 之间掷出 14，乘眩晕 0.5 得 7。",
+               "12.5 ≥ 7，命中。"],
+     "result": "命中。同样两次掷骰如果没有这两个状态，10 < 14 会闪避。"}
+  ]
+}

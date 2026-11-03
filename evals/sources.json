@@ -1,0 +1,10 @@
+{
+  "shattered-pixel-dungeon": {
+    "url": "https://github.com/00-Evan/shattered-pixel-dungeon",
+    "tag": "v4.0.2",
+    "commit": "57a4e06a4caf162446d1c28caa7983f0493fecf0",
+    "license": "GPL-3.0",
+    "roots": ["core/src/main/java/com/shatteredpixel/shatteredpixeldungeon"],
+    "why": "Java roguelike with about 1,300 source files: combat, hit and loot rules are real code with buffs, early exits and order-sensitive formulas, but small enough to check by hand."
+  }
+}
