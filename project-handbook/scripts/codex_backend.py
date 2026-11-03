@@ -144,6 +144,7 @@ class CodexBackend:
         self._reader = None
         self._thread_id = None
         self._turn_id = None
+        self._account_checked = False
         self._sequence = 0
         self._closed = False
         self._checked = False
@@ -158,7 +159,7 @@ class CodexBackend:
     def status(self):
         # No login, network, model turn, or process launch from polling status.
         with self._lifecycle:
-            connected = bool(self._process and self._process.poll() is None and self._thread_id)
+            connected = bool(self._process and self._process.poll() is None and self._account_checked)
             if self._process and self._process.poll() is not None and not self._closed:
                 self._message = 'Codex connection closed unexpectedly.'
             return {'available': self._binary is not None, 'connected': connected,
@@ -396,7 +397,9 @@ class CodexBackend:
         self._preflight()
         if cancel.is_set():
             raise RuntimeError('Request cancelled.')
-        if self._process and self._process.poll() is None and self._thread_id:
+        if self._process and self._process.poll() is None and self._account_checked:
+            if not self._thread_id:
+                self._start_thread(cancel)
             return
         if self._session_dir is None:
             self._session_dir = tempfile.TemporaryDirectory(prefix='flow-codex-session-')
@@ -416,6 +419,10 @@ class CodexBackend:
         account = self._rpc('account/read', {'refreshToken': False}, cancel)
         if account.get('requiresOpenaiAuth') is not False and not account.get('account'):
             raise RuntimeError('Sign in using the local Codex app or CLI, then retry.')
+        self._account_checked = True
+        self._start_thread(cancel)
+
+    def _start_thread(self, cancel):
         params = {'cwd': self._session_dir.name, 'approvalPolicy': 'never', 'approvalsReviewer': 'user',
                   'sandbox': 'read-only', 'dynamicTools': [], 'ephemeral': True,
                   'experimentalRawEvents': False, 'environments': [],
@@ -616,6 +623,7 @@ class CodexBackend:
             process, reader = self._process, self._reader
             self._process = self._reader = None
             self._thread_id = self._turn_id = None
+            self._account_checked = False
         if process:
             try:
                 if process.poll() is None:
@@ -634,6 +642,23 @@ class CodexBackend:
                         stream.close()
                     except OSError:
                         pass
+
+    def fresh_thread(self):
+        """Start the next ask in a new ephemeral thread on the verified process.
+
+        Callers send self-contained prompts, so keeping earlier turns would only
+        grow the model context with duplicates. The process, its safety checks
+        and sign-in check are reused; the new thread is verified again.
+        """
+        if not self._operation.acquire(blocking=False):
+            raise RuntimeError('Cannot start a new thread while a Codex request is running.')
+        try:
+            with self._lifecycle:
+                if self._closed:
+                    raise RuntimeError('Codex backend closed.')
+                self._thread_id = self._turn_id = None
+        finally:
+            self._operation.release()
 
     def reset_context(self):
         """Discard owned conversation state; reject overlap with an active ask.

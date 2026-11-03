@@ -50,7 +50,8 @@ async function until(check, message) {
   const server = http.createServer(async (request, response) => {
     const security = {'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"};
     if (request.url === '/') { response.writeHead(200, security); response.end(fixture({api: '/api', token})); return; }
-    if (request.url === '/versions/new/handbook.html') { response.writeHead(200, security); response.end(fixture(undefined, stateEntries.filter(entry => entry.id === 'new-1'))); return; }
+    // Like flow_server.py: a compiled version is served live and names its version.
+    if (request.url === '/versions/new/handbook.html') { response.writeHead(200, security); response.end(fixture({api: '/api', token, version: 'new'}, stateEntries.filter(entry => entry.id === 'new-1'))); return; }
     if (request.url === '/favicon.ico') { response.writeHead(204); response.end(); return; }
     let body = '';
     for await (const chunk of request) body += chunk;
@@ -196,6 +197,8 @@ async function until(check, message) {
       'eyJhbGciOiJIUzI1NiJ9.eyJwcml2YXRlIjp0cnVlfQ.signature',
       '-----BEGIN RSA PRIVATE KEY-----\nsynthetic-private-key-material\n-----END RSA PRIVATE KEY-----'
     ];
+    const keptFormulas = ['最终伤害=(攻击-防御)/2，最低为1', '伤害/攻击/防御', '见 D:/策划文档/伤害表.xlsx，第3行'];
+    redactionCases.push(...keptFormulas);
     const fullFlow = {id: 'whole-flow-qa', node_id: null, question: '整个流程如何校验？', answer: '公开说明保留。\n' + redactionCases.join('\n')};
     const parityPath = path.join(temp, 'redaction-parity.html');
     fs.writeFileSync(parityPath, fixture(undefined, [fullFlow]));
@@ -210,6 +213,10 @@ async function until(check, message) {
     assert(Object.hasOwn(sharedData.qa[0], 'node_id'), 'full-flow exports must retain the node_id key');
     assert.equal(sharedData.qa[0].node_id, null, 'whole-flow scope must remain null');
     assert.match(sharedData.qa[0].answer, /^公开说明保留。/);
+    for (const kept of ['最终伤害=(攻击-防御)/2，最低为1', '伤害/攻击/防御', '，第3行']) {
+      assert(sharedData.qa[0].answer.includes(kept), `redaction must keep formula or prose: ${kept}`);
+    }
+    assert(!sharedData.qa[0].answer.includes('策划文档'), 'Chinese absolute paths must be redacted');
     for (const secret of ['synthetic secret phrase', 'another private phrase', 'service user private phrase', 'quoted key phrase', 'opaque-session-value', 'private cookie phrase', 'cHJpdmF0ZTpwYXNz', 'internal.example', '127.0.0.1', 'private.example', '/data/private', 'another-private-module', 'Private Folder', 'private-host', 'private-project', 'AKIA1234567890ABCDEF', 'eyJhbGciOiJIUzI1NiJ9', 'synthetic-private-key-material']) {
       assert(!sharedData.qa[0].answer.includes(secret), `redaction parity fixture leaked ${secret}`);
     }
@@ -274,10 +281,9 @@ async function until(check, message) {
     const compiled = await popupPending;
     await compiled.waitForLoadState('domcontentloaded');
     await compiled.getByRole('button', {name: '问答', exact: true}).click();
-    assert(await compiled.locator('.flow-qa-send').isDisabled());
-    assert.equal(await compiled.locator('.flow-qa-entry').count(), 1);
-    assert.match(await compiled.locator('.flow-qa-entry').textContent(), /实时答案/);
-    assert.equal(await compiled.locator('#data').evaluate(element => JSON.parse(element.textContent).runtime), undefined);
+    assert.equal(await compiled.locator('#data').evaluate(element => JSON.parse(element.textContent).runtime.version), 'new');
+    assert.doesNotMatch(await compiled.locator('.flow-qa-badge').textContent(), /离线副本/, 'a compiled version must keep follow-ups');
+    await until(() => compiled.locator('.flow-qa-entry', {hasText: '实时答案'}).count().then(count => count >= 1), 'compiled version history not shown');
     await compiled.close();
     await live.locator('.flow-qa-pick').first().click();
     assert.equal(await live.locator('.flow-qa-pick').first().getAttribute('aria-pressed'), 'false');
@@ -483,6 +489,18 @@ async function until(check, message) {
     await offline.keyboard.press('Escape');
     assert.equal(await offline.locator('#flow-qa-panel').isVisible(), false);
     console.log('PASS layout: desktop alongside canvas, mobile drawer, no document overflow, Escape close');
+
+    mode = 'success';
+    const versionPage = await pageFor(origin + '/versions/new/handbook.html');
+    await versionPage.getByRole('button', {name: '问答', exact: true}).click();
+    await versionPage.locator('.flow-qa-draft').fill('新版本还能追问吗？');
+    await until(() => versionPage.locator('.flow-qa-send').isEnabled(), 'compiled version must accept a question');
+    await versionPage.locator('.flow-qa-send').click();
+    await until(() => calls.some(call => call.url === '/api/ask' && call.body?.question === '新版本还能追问吗？'), 'version ask not sent');
+    const versionAsk = calls.filter(call => call.url === '/api/ask').at(-1);
+    assert.equal(versionAsk.body.version, 'new', 'questions from a compiled version must name that version');
+    await versionPage.close();
+    console.log('PASS compiled version: served live, keeps history and asks against its own flow');
 
     for (const runtime of [{api: 'https://example.com/api', token}, {api: '/api/elsewhere', token}]) {
       const restricted = await browser.newPage();

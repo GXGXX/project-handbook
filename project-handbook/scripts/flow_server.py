@@ -174,6 +174,22 @@ class FlowServer(ThreadingHTTPServer):
     def origin(self):
         return 'http://127.0.0.1:' + str(self.server_port)
 
+    def flow_data(self, version=None):
+        """Return the original flow, or a compiled version inside this book."""
+        if version is None:
+            return self.data
+        if not isinstance(version, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,80}', version):
+            raise ValueError('Invalid version')
+        versions = self.book_dir / 'versions'
+        path = versions / version / 'flow.json'
+        if (versions.is_symlink() or path.is_symlink() or not path.is_file()
+                or path.resolve().parent.parent != versions.resolve()
+                or versions.resolve().parent != self.book_dir):
+            raise ValueError('Unknown version')
+        data = json.loads(path.read_text(encoding='utf-8'))
+        validate(data)
+        return data
+
     def save_entry(self, entry):
         with self.state_lock:
             updated = self.entries + [entry]
@@ -259,12 +275,16 @@ class FlowHandler(BaseHTTPRequestHandler):
                 entries = copy.deepcopy(self.server.entries)
             self.reply(200, {'entries': entries, 'busy': self.server.operation_lock.locked(),
                              'backend': self.server.backend.status()})
-        elif re.fullmatch(r'/versions/[a-zA-Z0-9_-]+/handbook\.html', path):
-            target = (self.server.book_dir / path.lstrip('/')).resolve()
-            if self.server.book_dir not in target.parents or not target.is_file():
+        elif match := re.fullmatch(r'/versions/([a-zA-Z0-9_-]{1,80})/handbook\.html', path):
+            # Render live so a compiled version can keep answering follow-ups.
+            try:
+                data = copy.deepcopy(self.server.flow_data(match[1]))
+            except (OSError, ValueError, KeyError, TypeError):
                 self.error(404, 'Page not found')
-            else:
-                self.reply(200, target.read_text(encoding='utf-8'), 'text/html; charset=utf-8')
+                return
+            data['runtime'] = {'token': self.server.token, 'api': '/api',
+                               'book_id': self.server.book_id, 'version': match[1]}
+            self.reply(200, render(data), 'text/html; charset=utf-8')
         else:
             self.error(404, 'Page not found')
 
@@ -309,24 +329,29 @@ class FlowHandler(BaseHTTPRequestHandler):
                 self.server.cancel_event.set()
                 self.reply(200, {'ok': True})
                 return
+            data = self.server.flow_data(body.get('version'))
             if path == '/api/ask':
                 question = body.get('question')
                 node_id = body.get('node_id') or None
                 if not isinstance(question, str) or not question.strip() or len(question) > 4000:
                     raise ValueError('Question must contain 1 to 4000 characters')
-                ids = {n['id'] for g in self.server.data['graphs'] for n in g['nodes']}
+                ids = {n['id'] for g in data['graphs'] for n in g['nodes']}
                 if node_id is not None and (not isinstance(node_id, str) or node_id not in ids):
                     raise ValueError('Unknown flow node')
                 selection = None
             else:
                 selection = self.selected(body, required=path == '/api/compile')
-        except (ValueError, TypeError, UnicodeError):
-            self.error(400, 'Invalid question, node, or answer selection')
+        except (OSError, ValueError, KeyError, TypeError, UnicodeError):
+            self.error(400, 'Invalid question, node, version, or answer selection')
             return
         if path == '/api/export':
             from flow_exports import export_html
-            self.reply(200, {'filename': 'handbook-share.html',
-                             'html': export_html(self.server.data, selection, redact=True)})
+            try:
+                page = export_html(data, selection, redact=True)
+            except ValueError:
+                self.error(400, 'Selected answers do not match this flow')
+                return
+            self.reply(200, {'filename': 'handbook-share.html', 'html': page})
             return
         if not self.server.operation_lock.acquire(blocking=False):
             self.error(409, 'Another answer or revision is still running')
@@ -335,9 +360,9 @@ class FlowHandler(BaseHTTPRequestHandler):
         try:
             self.headers_for(200, 'application/x-ndjson; charset=utf-8')
             if path == '/api/ask':
-                self.answer(question.strip(), node_id)
+                self.answer(data, question.strip(), node_id)
             else:
-                self.compile(selection)
+                self.compile(data, selection)
         except (BrokenPipeError, ConnectionError, TimeoutError, OSError):
             self.server.cancel_event.set()
         finally:
@@ -347,7 +372,16 @@ class FlowHandler(BaseHTTPRequestHandler):
         self.wfile.write((json.dumps({'type': kind, **values}, ensure_ascii=False) + '\n').encode('utf-8'))
         self.wfile.flush()
 
-    def answer(self, question, node_id):
+    def fresh_context(self):
+        """Each prompt already carries the flow and recent answers, so start a
+        new model thread instead of letting every question pile up in one."""
+        backend = self.server.backend
+        if hasattr(backend, 'fresh_thread'):
+            backend.fresh_thread()
+        else:
+            backend.reset_context()
+
+    def answer(self, data, question, node_id):
         entry = {'id': uuid.uuid4().hex, 'node_id': node_id, 'question': question,
                  'answer': '', 'status': 'error', 'created_at': datetime.now(timezone.utc).isoformat()}
         self.event('start', id=entry['id'])
@@ -357,7 +391,7 @@ class FlowHandler(BaseHTTPRequestHandler):
             self.event('delta', text=text)
         try:
             history = [e for e in self.server.entries if e['status'] == 'complete']
-            prompt = make_context(self.server.data, node_id, question, history)
+            prompt = make_context(data, node_id, question, history)
             prompt += '\nAuthorized source directory count: ' + str(len(self.server.roots))
             prefix = []
             released = False
@@ -373,11 +407,15 @@ class FlowHandler(BaseHTTPRequestHandler):
                     released = True
                     emit(''.join(prefix))
                     prefix.clear()
+            self.fresh_context()
             answer = self.server.backend.ask(prompt, first_emit, self.server.cancel_event)
             if answer.lstrip().startswith(marker):
                 from flow_sources import lookup_sources
                 self.event('status', message='正在只读检索相关资料。')
                 evidence = lookup_sources(self.server.roots, answer.lstrip()[len(marker):], self.server.cancel_event)
+                # The second prompt repeats the full context, so it must not
+                # land in the thread that already holds the first copy.
+                self.fresh_context()
                 answer = self.server.backend.ask(prompt + '\nLOOKUP_RESULT:\n' + evidence,
                                                 emit, self.server.cancel_event)
             elif prefix:
@@ -398,13 +436,13 @@ class FlowHandler(BaseHTTPRequestHandler):
         else:
             self.event('error', message=entry['error'], id=entry['id'])
 
-    def compile(self, selected):
+    def compile(self, data, selected):
         from flow_exports import write_revision
         self.event('start', id=uuid.uuid4().hex)
         self.event('delta', text='正在整理选中的问答，并核对流程关系。')
-        flow = {key: copy.deepcopy(self.server.data[key]) for key in
+        flow = {key: copy.deepcopy(data[key]) for key in
                 ('title', 'summary', 'graphs', 'connections', 'examples', 'sources', 'common')
-                if key in self.server.data}
+                if key in data}
         prompt = (
             'REVISION_REQUEST\nRevise the supplied authored flow using only the selected completed answers. '
             'Return one JSON object, no markdown. Allowed optional fields: title, summary, graphs, connections, examples. '
@@ -425,7 +463,9 @@ class FlowHandler(BaseHTTPRequestHandler):
                 self.event('error', message='已停止整理，原版未改变。')
                 return
             patch = json.loads(output)
-            path = write_revision(self.server.book_dir, self.server.data, patch, selected, redact=True,
+            # A version is a local working copy like the original: it keeps the
+            # source excerpts. Redaction happens only when exporting to share.
+            path = write_revision(self.server.book_dir, data, patch, selected, redact=False,
                                   cancel_event=self.server.cancel_event)
             self.event('compiled', url='/' + str(path).replace('\\', '/').lstrip('/'))
         except InterruptedError:

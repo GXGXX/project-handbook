@@ -47,8 +47,18 @@ _TOKEN = re.compile(
     r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b')
 # No network/DNS lookup can reliably decide whether a URL names a private service.
 _URL = re.compile(r'''(?i)(?:\b[a-z][a-z0-9+.-]*://|(?<![\w:/])//)[^\s<>"']+''')
-_PATH = re.compile(
-    r'''(?x)(?<![\w/<])(?:[A-Za-z]:[\\/]|\\\\|~[/\\]|/(?![/\s<>]))[^\r\n<>"'|,;]*''')
+# Absolute paths only. A slash right after a word, digit or closing bracket is
+# division ("(攻击-防御)/2"), and a root slash needs a second segment or a file
+# extension. A space stays inside a path only when ASCII words lead to another
+# separator ("Program Files (x86)\\"), so "D:/demo/client 是客户端目录" keeps its
+# prose. Mirrored in flow-assistant.js.
+_PATH = re.compile(r'''(?x)
+    (?<![\w/<)\]}）])
+    (?: [A-Za-z]:[\\/] | \\\\ | ~[/\\]
+      | /(?=[^\s/<>"'|,;，。；）)\]}]+(?:[\\/]|\.[A-Za-z][A-Za-z0-9]{0,7}(?![A-Za-z0-9]))) )
+    (?: [^\s<>"'|,;，。；）)\]}]
+      | [\x20\t]+(?=[A-Za-z0-9\x20._()-]*[\\/])
+      | [)）](?=[\\/]) )*''')
 
 
 def _project(value, schema, strict=False):
@@ -193,8 +203,12 @@ def export_html(data, entries, redact=True):
     return _render(share_data(data, entries, redact))
 
 
-def write_revision(book_dir, data, patch, selected, redact=True, cancel_event=None):
+def write_revision(book_dir, data, patch, selected, redact=False, cancel_event=None):
     """Validate and stage a version, then publish it with one directory rename.
+
+    A version is a local working copy, like the original handbook: it keeps
+    source excerpts and locators so later questions and revisions still have
+    evidence. Runtime state is never stored. Use export_html to share.
 
     Cancellation raises InterruptedError before publication and removes only this
     call's staging directory. The rename is the commit point: after it succeeds,

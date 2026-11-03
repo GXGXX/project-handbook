@@ -19,6 +19,8 @@ class FakeBackend:
         self.prompts = []
         self.closed = False
         self.resets = []
+        self.fresh = []
+        self.lookup = False
 
     def status(self):
         return {'available': True, 'connected': True, 'model': 'test-model'}
@@ -27,6 +29,8 @@ class FakeBackend:
         self.prompts.append(prompt)
         if 'REVISION_REQUEST' in prompt:
             return json.dumps({'summary': 'Reviewed synthetic explanation'})
+        if self.lookup and '\nLOOKUP_RESULT:\n' not in prompt:
+            return 'LOOKUP_REQUEST: damage'
         emit('First ')
         emit('answer.')
         return 'First answer.'
@@ -36,6 +40,9 @@ class FakeBackend:
 
     def reset_context(self):
         self.resets.append(len(self.prompts))
+
+    def fresh_thread(self):
+        self.fresh.append(len(self.prompts))
 
 
 class FlowServerTests(unittest.TestCase):
@@ -118,9 +125,46 @@ class FlowServerTests(unittest.TestCase):
         result = self.request(rows[-1]['url'])
         self.assertIn('Reviewed synthetic explanation', result)
         self.assertIn('First answer.', result)
-        self.assertNotIn(self.server.token, result)
+        # Served live so the new version can keep asking; the file on disk stays token-free.
+        self.assertIn(self.server.token, result)
+        stored = self.book / rows[-1]['url'].lstrip('/')
+        self.assertNotIn(self.server.token, stored.read_text(encoding='utf-8'))
+        saved = json.loads(stored.with_name('flow.json').read_text(encoding='utf-8'))
+        self.assertEqual(saved['sources'], self.data['sources'])
         self.assertEqual(before, (self.book / 'handbook.html').read_bytes())
         self.assertEqual(self.backend.resets, [1, 2])
+
+    def test_compiled_version_answers_from_its_own_flow(self):
+        entry = json.loads(self.request('/api/ask', {'node_id': 'fixed-value', 'question': 'Why?'}).splitlines()[-1])['entry']
+        rows = [json.loads(x) for x in self.request('/api/compile', {'entry_ids': [entry['id']], 'redact': True}).splitlines()]
+        version = rows[-1]['url'].split('/')[2]
+        page = self.request(rows[-1]['url'])
+        self.assertIn('"version": "' + version + '"', page.replace('":"', '": "'))
+        events = [json.loads(x) for x in self.request(
+            '/api/ask', {'node_id': 'fixed-value', 'question': 'Again?', 'version': version}).splitlines()]
+        self.assertEqual(events[-1]['type'], 'done')
+        self.assertIn('Reviewed synthetic explanation', self.backend.prompts[-1])
+        exported = json.loads(self.request('/api/export', {'entry_ids': [entry['id']], 'redact': True,
+                                                            'version': version}))
+        self.assertIn('Reviewed synthetic explanation', exported['html'])
+        for bad in ('missing', '../book', 'a/b', 3):
+            with self.subTest(version=bad), self.assertRaises(HTTPError) as cm:
+                self.request('/api/ask', {'question': 'x', 'version': bad})
+            self.assertEqual(cm.exception.code, 400)
+        with self.assertRaises(HTTPError) as cm:
+            self.request('/versions/missing/handbook.html')
+        self.assertEqual(cm.exception.code, 404)
+
+    def test_every_model_call_starts_a_fresh_thread(self):
+        for question in ('One?', 'Two?'):
+            self.request('/api/ask', {'question': question})
+        self.assertEqual(self.backend.fresh, [0, 1])
+        self.backend.lookup = True
+        self.request('/api/ask', {'question': 'Needs lookup?'})
+        # The repeated full prompt after a lookup goes to a new thread as well.
+        self.assertEqual(self.backend.fresh, [0, 1, 2, 3])
+        self.assertEqual(self.backend.prompts[-2].count('QUESTION:'), 1)
+        self.assertIn('\nLOOKUP_RESULT:\n', self.backend.prompts[-1])
 
     def test_bad_inputs_and_busy_are_rejected(self):
         for body in ({'question': ''}, {'question': 'x', 'node_id': '../secret'}, {'question': 'x' * 4001}):

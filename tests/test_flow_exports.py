@@ -235,6 +235,33 @@ class FlowExportTests(unittest.TestCase):
         self.assertEqual(shared['summary'], self.data['summary'])
         self.assertEqual(shared['sources'][0]['locator'], 'Synthetic rules')
 
+    def test_redaction_keeps_division_in_chinese_formulas(self):
+        formulas = ['最终伤害=(攻击-防御)/2，最低为1，再乘暴击系数',
+                    '伤害 × (1+暴击伤害)/100 后向下取整',
+                    '减伤率=防御/(防御+500)，上限75%',
+                    '伤害/攻击/防御', 'max(a,b)/c', '50%/2']
+        for value in formulas:
+            with self.subTest(value=value):
+                self.data['graphs'][0]['nodes'][0]['lines'] = value
+                self.data['graphs'][0]['nodes'][0]['detail'] = value
+                self.data['examples'][0]['trace'] = [value]
+                shared = exports.share_data(self.data, [completed(answer=value)])
+                node = shared['graphs'][0]['nodes'][0]
+                self.assertEqual(node['lines'], value)
+                self.assertEqual(node['detail'], value)
+                self.assertEqual(shared['examples'][0]['trace'], [value])
+                self.assertEqual(shared['qa'][0]['answer'], value)
+
+    def test_path_redaction_stops_at_chinese_prose(self):
+        cases = {'客户端在 D:/demo/client 是客户端目录': '客户端在 [redacted path] 是客户端目录',
+                 '见 D:/策划文档/伤害表.xlsx，第3行': '见 [redacted path]，第3行',
+                 'D:/demo/client 和 D:/demo/server': '[redacted path] 和 [redacted path]',
+                 r'C:\Program Files (x86)\Steam\x.exe 安装': '[redacted path] 安装'}
+        for value, expected in cases.items():
+            with self.subTest(value=value):
+                self.data['summary'] = value
+                self.assertEqual(exports.share_data(self.data, [])['summary'], expected)
+
     def test_share_output_is_independent_and_redact_requires_a_boolean(self):
         entry = completed()
         original = copy.deepcopy((self.data, entry))
@@ -361,11 +388,29 @@ class FlowExportTests(unittest.TestCase):
                 self.assertEqual(data['title'], title)
                 self.assertNotIn('LIVE-RUNTIME-TOKEN', page)
                 self.assertNotIn('runtime', data)
-                self.assertNotIn('excerpt', data['sources'][0])
+                # Versions are local working copies: evidence survives repeated revisions.
+                self.assertEqual(data['sources'], self.data['sources'])
                 self.assertEqual(json.loads(PageData(page).payload)['qa'], data['qa'])
             self.assertEqual((book / first).read_bytes(), first_content)
             self.assertEqual(original_html.read_text(encoding='utf-8'), 'ORIGINAL HTML')
             self.assertEqual(original_json.read_text(encoding='utf-8'), 'ORIGINAL JSON')
+
+    def test_revision_of_a_revision_keeps_formulas_and_evidence(self):
+        formula = '最终伤害=(攻击-防御)/2，最低为1'
+        self.data['graphs'][0]['nodes'][0]['lines'] = formula
+        with tempfile.TemporaryDirectory() as temp:
+            first = Path(temp) / exports.write_revision(temp, self.data, {'title': 'First'}, [completed()])
+            revised = json.loads(first.with_name('flow.json').read_text(encoding='utf-8'))
+            second = Path(temp) / exports.write_revision(temp, revised, {'title': 'Second'}, [])
+            final = json.loads(second.with_name('flow.json').read_text(encoding='utf-8'))
+        self.assertEqual(final['graphs'][0]['nodes'][0]['lines'], formula)
+        self.assertEqual(final['sources'], self.data['sources'])
+
+    def test_redacted_revision_remains_available_on_request(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / exports.write_revision(temp, self.data, {}, [], redact=True)
+            saved = json.loads(path.with_name('flow.json').read_text(encoding='utf-8'))
+        self.assertNotIn('excerpt', saved['sources'][0])
 
     def test_invalid_revision_is_atomic_even_before_versions_directory_exists(self):
         with tempfile.TemporaryDirectory() as temp:
