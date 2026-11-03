@@ -1,0 +1,63 @@
+{
+  "title": "怪物死后怎么决定掉落",
+  "summary": "只有敌对怪物死亡才判定掉落。英雄等级超过怪物的 maxLvl + 2 时直接结束，什么都不掉。否则先看有没有被盗贼护腕偷过：没偷过才按加成后的掉落率掷普通掉落；不管普通掉落掷没掷中、有没有被偷，财富戒指的额外掉落和幸运附魔都会再判定一次。",
+  "sources": [
+    {"id": "mob-loot", "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java:1022-1165",
+     "excerpt": "die() 对 Alignment.ENEMY 调 rollToDropLoot；rollToDropLoot 先判 hero.lvl > maxLvl + 2 就 return；未被偷才 Random.Float() < lootChance() → createLoot；随后财富戒指 tryForBonusDrop（普通 1、小 Boss 5、Boss 15）与 Lucky"}
+  ],
+  "graphs": [
+    {
+      "id": "loot",
+      "title": "Mob.die → rollToDropLoot",
+      "source": "mob-loot",
+      "nodes": [
+        {"id": "start", "row": 0, "col": 0, "kind": "terminal", "title": "怪物死亡",
+         "lines": "Mob.die(cause)", "detail": "坠入深渊死亡时经验减半，与掉落无关。"},
+        {"id": "enemy", "row": 1, "col": 0, "kind": "decision", "title": "敌对阵营？",
+         "lines": "alignment == Alignment.ENEMY", "detail": "随从、被腐化的怪物死了不走掉落判定。"},
+        {"id": "not-enemy", "row": 1, "col": 1, "kind": "terminal", "title": "不掉落",
+         "lines": "跳过 rollToDropLoot", "detail": "只结算死亡本身。"},
+        {"id": "level", "row": 2, "col": 0, "kind": "decision", "title": "英雄等级 > maxLvl + 2？",
+         "lines": "Dungeon.hero.lvl > maxLvl + 2", "detail": "每种怪物有自己的 maxLvl，英雄练得太高就刷不出东西。"},
+        {"id": "too-high", "row": 2, "col": 1, "kind": "terminal", "title": "直接结束",
+         "lines": "rollToDropLoot 立即 return", "detail": "后面的普通掉落、戒指和附魔判定都不跑。"},
+        {"id": "stolen", "row": 3, "col": 0, "kind": "decision", "title": "被盗贼护腕偷过？",
+         "lines": "StolenTracker.itemWasStolen()", "detail": "偷过的怪物不再给普通掉落，但后面的戒指和附魔照常判定。"},
+        {"id": "calc", "row": 4, "col": 0, "kind": "process", "title": "算加成后的掉落率",
+         "lines": "怪物基础掉落率 × dropBonus", "detail": "dropBonus = 财富戒指的掉落倍率 + 赏金猎人加成 + (遗忘碎片倍率 − 1)。赏金猎人：备战每级 0.02 × 2^(等级−1)，再乘天赋点数。"},
+        {"id": "roll", "row": 5, "col": 0, "kind": "decision", "title": "掷中掉落率？",
+         "lines": "Random.Float() < lootChance()", "detail": "掷 0～1 的随机数，小于掉落率就掉。"},
+        {"id": "create", "row": 6, "col": 0, "kind": "process", "title": "生成并放到地上",
+         "lines": "createLoot()", "detail": "loot 是类别就用 Generator 按默认权重随机；是具体类就生成该类，药水和卷轴还有机会换成 Exotic 异种版本；是物品实例就直接掉它。"},
+        {"id": "wealth", "row": 7, "col": 0, "kind": "process", "title": "财富戒指额外掉落",
+         "lines": "RingOfWealth.tryForBonusDrop(英雄, 次数)", "detail": "戴着财富戒指才有：普通怪掷 1 次，小 Boss 掷 5 次，Boss 掷 15 次。"},
+        {"id": "lucky", "row": 8, "col": 0, "kind": "process", "title": "幸运附魔额外掉落",
+         "lines": "Lucky.LuckProc 存在时 genLoot()", "detail": "武器幸运附魔触发过才有。"},
+        {"id": "end", "row": 9, "col": 0, "kind": "terminal", "title": "掉落结束",
+         "lines": "之后可能触发灵魂吞噬天赋", "detail": ""}
+      ],
+      "edges": [
+        {"a": "start", "b": "enemy"},
+        {"a": "enemy", "b": "level", "label": "是"},
+        {"a": "enemy", "b": "not-enemy", "label": "否"},
+        {"a": "level", "b": "too-high", "label": "是"},
+        {"a": "level", "b": "stolen", "label": "否"},
+        {"a": "stolen", "b": "calc", "label": "否"},
+        {"a": "stolen", "b": "wealth", "label": "是", "route": "outer"},
+        {"a": "calc", "b": "roll"},
+        {"a": "roll", "b": "create", "label": "是"},
+        {"a": "roll", "b": "wealth", "label": "否", "route": "bypass"},
+        {"a": "create", "b": "wealth"},
+        {"a": "wealth", "b": "lucky"},
+        {"a": "lucky", "b": "end"}
+      ]
+    }
+  ],
+  "examples": [
+    {"title": "戴财富戒指打死一只小 Boss，普通掉落没掷中", "provenance": "演示推演，非实测",
+     "input": "敌对；英雄 10 级，怪物 maxLvl 12；没被偷；基础掉落率 0.25，dropBonus 1.2；随机数 0.4；戴着财富戒指。",
+     "trace": ["敌对，进入掉落判定。", "10 ≤ 12 + 2，继续。", "没被偷，算掉落率：0.25 × 1.2 = 0.3。",
+               "随机数 0.4 不小于 0.3，普通掉落没掷中。", "财富戒指照样判定：小 Boss 掷 5 次。"],
+     "result": "普通掉落为空，额外掉落看戒指那 5 次的结果。"}
+  ]
+}

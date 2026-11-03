@@ -8,3 +8,4 @@ examples/
 
 # Local design notes may contain private source paths.
 docs/superpowers/
+evals/.sources/
