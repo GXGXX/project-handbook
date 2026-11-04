@@ -40,18 +40,31 @@ def _text(node):
     return ' '.join(str(node.get(key, '')) for key in ('title', 'lines', 'detail')).lower()
 
 
+def _position(text, word):
+    """Index of the first match of one keyword in lowercased text, or -1.
+
+    "re:" starts a regular expression for statements that real answers word
+    in many ways ("尚未接入", "没有被调用"). Any other keyword that starts with an
+    ASCII letter must not continue a longer identifier, so "Vulnerable" does
+    not match inside "isInvulnerable" while "drRoll" still matches
+    "enemy.drRoll()"."""
+    if word.startswith('re:'):
+        found = re.search(word[3:], text, re.IGNORECASE)
+    elif word[:1].isascii() and word[:1].isalpha():
+        found = re.search(r'(?<![a-z])' + re.escape(word.lower()), text)
+    else:
+        index = text.find(word.lower())
+        return index
+    return found.start() if found else -1
+
+
 def _matches(text, words):
-    """Keyword search. A keyword that starts with an ASCII letter must not
-    continue a longer identifier, so "Vulnerable" does not match inside
-    "isInvulnerable" while "drRoll" still matches "enemy.drRoll()"."""
-    for word in words:
-        word = word.lower()
-        if word[:1].isascii() and word[:1].isalpha():
-            if re.search(r'(?<![a-z])' + re.escape(word), text):
-                return True
-        elif word in text:
-            return True
-    return False
+    return any(_position(text, word) >= 0 for word in words)
+
+
+def _first(text, words):
+    found = [index for index in (_position(text, word) for word in words) if index >= 0]
+    return min(found) if found else -1
 
 
 def _graph(flow):
@@ -94,13 +107,21 @@ def _place(nodes, words):
     return []
 
 
-def _order(edges, first, then):
-    """Some node of the earlier step must lead to some node of the later one."""
+def _order(edges, first, then, texts=None, before_words=(), after_words=()):
+    """Some node of the earlier step must lead to some node of the later one.
+
+    When both steps sit in one node, the node's own text can still state the
+    order ("减甲 → 延迟 → 易伤"): the earlier step must be named first."""
     if not first or not then:
         return 0.0, 'missing step'
     if any(a != b and _reaches(edges, a, b) for a in first for b in then):
         return 1.0, 'ok'
-    if set(first) & set(then):
+    shared = set(first) & set(then)
+    if shared:
+        for nid in shared:
+            a, b = _first(texts[nid], before_words), _first(texts[nid], after_words)
+            if texts and 0 <= a < b:
+                return 1.0, 'ok (order written inside one node)'
         return 0.5, 'both in one node; order not shown'
     return 0.0, 'wrong order or not connected'
 
@@ -154,7 +175,8 @@ def score(case, flow):
     for rule in case.get('order', []):
         kind = rule.get('type', 'order')
         if kind == 'order':
-            value, note = _order(edges, placed[rule['before']], placed[rule['after']])
+            value, note = _order(edges, placed[rule['before']], placed[rule['after']], texts,
+                                 concepts[rule['before']]['any'], concepts[rule['after']]['any'])
             rule_id = rule['before'] + ' -> ' + rule['after']
         else:
             deciders = [nid for nid in covering[rule['decision']] if kinds[nid] in ('decision', 'switch')]

@@ -1,0 +1,402 @@
+{
+  "title": "血红激光炮（1004）的灼烧如何扣血？",
+  "summary": "在灼烧成功挂上、此前没有同类 Burn 的前提下：每跳 260 点生命，每隔 0.3 秒触发，持续 4 秒，不暴击。重复命中只刷新持续时间。点击节点可核对参数、执行代码与证据边界。",
+  "sources": [
+    {
+      "id": "skill-data",
+      "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1004.asset:18–123",
+      "excerpt": "18:     ReferencedUnityObjects:\n19:     - {fileID: 11400000, guid: c5c27029ce116c7469c7a1246fa5e2ec, type: 2}\n20:     SerializedBytesString: \n21:     Prefab: {fileID: 0}\n22:     PrefabModificationsReferencedUnityObjects: []\n23:     PrefabModifications: []\n24:     SerializationNodes:\n25:     - Name: Effects\n26:       Entry: 7\n27:       Data: 0|System.Collections.Generic.List`1[[EGamePlay.Combat.Effect, Assembly-CSharp]],\n28:         mscorlib\n29:     - Name: \n30:       Entry: 12\n31:       Data: 2\n32:     - Name: \n33:       Entry: 7\n34:       Data: 1|EGamePlay.Combat.DamageEffect, Assembly-CSharp\n35:     - Name: IsSkillEffect\n36:       Entry: 5\n37:       Data: true\n38:     - Name: Enabled\n39:       Entry: 5\n40:       Data: true\n41:     - Name: Decorators\n42:       Entry: 6\n43:       Data: \n44:     - Name: EffectTypeName\n45:       Entry: 1\n46:       Data: \"(\\u6DFB\\u52A0\\u6548\\u679C\\u4FEE\\u9970)\"\n47:     - Name: DamageType\n48:       Entry: 3\n49:       Data: 1\n50:     - Name: DamageValueFormula\n51:       Entry: 1\n52:       Data: 10000\n53:     - Name: CanCrit\n54:       Entry: 5\n55:       Data: false\n56:     - Name: \n57:       Entry: 8\n58:       Data: \n59:     - Name: \n60:       Entry: 7\n61:       Data: 2|EGamePlay.Combat.AddStatusEffect, Assembly-CSharp\n62:     - Name: IsSkillEffect\n63:       Entry: 5\n64:       Data: true\n65:     - Name: Enabled\n66:       Entry: 5\n67:       Data: true\n68:     - Name: Decorators\n69:       Entry: 6\n70:       Data: \n71:     - Name: EffectTypeName\n72:       Entry: 1\n73:       Data: \"(\\u6DFB\\u52A0\\u6548\\u679C\\u4FEE\\u9970)\"\n74:     - Name: AddStatus\n75:       Entry: 10\n76:       Data: 0\n77:     - Name: Duration\n78:       Entry: 4\n79:       Data: 4\n80:     - Name: Params\n81:       Entry: 7\n82:       Data: 3|System.Collections.Generic.Dictionary`2[[System.String, mscorlib],[System.String,\n83:         mscorlib]], mscorlib\n84:     - Name: comparer\n85:       Entry: 7\n86:       Data: 4|System.Collections.Generic.GenericEqualityComparer`1[[System.String,\n87:         mscorlib]], mscorlib\n88:     - Name: \n89:       Entry: 8\n90:       Data: \n91:     - Name: \n92:       Entry: 12\n93:       Data: 2\n94:     - Name: \n95:       Entry: 7\n96:       Data: \n97:     - Name: $k\n98:       Entry: 1\n99:       Data: \"\\u4F24\\u5BB3\\u53D6\\u503C\"\n100:     - Name: $v\n101:       Entry: 1\n102:       Data: 260\n103:     - Name: \n104:       Entry: 8\n105:       Data: \n106:     - Name: \n107:       Entry: 7\n108:       Data: \n109:     - Name: $k\n110:       Entry: 1\n111:       Data: \"\\u95F4\\u9694\\u65F6\\u95F4\"\n112:     - Name: $v\n113:       Entry: 1\n114:       Data: 0.3\n115:     - Name: \n116:       Entry: 8\n117:       Data: \n118:     - Name: \n119:       Entry: 13\n120:       Data: \n121:     - Name: \n122:       Entry: 8\n123:       Data: "
+    },
+    {
+      "id": "buff-data",
+      "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Buff/Buff_10041.asset:49–95",
+      "excerpt": "49:       Data: \n50:     - Name: \n51:       Entry: 8\n52:       Data: \n53:     - Name: EffectTypeName\n54:       Entry: 1\n55:       Data: \"(\\u6DFB\\u52A0\\u4FEE\\u9970)\"\n56:     - Name: DamageType\n57:       Entry: 3\n58:       Data: 0\n59:     - Name: DamageValueFormula\n60:       Entry: 1\n61:       Data: \"\\u4F24\\u5BB3\\u53D6\\u503C\"\n62:     - Name: CanCrit\n63:       Entry: 5\n64:       Data: false\n65:     - Name: \n66:       Entry: 8\n67:       Data: \n68:     - Name: \n69:       Entry: 13\n70:       Data: \n71:     - Name: \n72:       Entry: 8\n73:       Data: \n74:   Id: 10041\n75:   ShowName: \"\\u707C\\u70E7\"\n76:   SkillSpellType: 1\n77:   AffectTargetType: 2\n78:   TargetSelectType: 0\n79:   TriggerActions:\n80:   - Enabled: 1\n81:     TriggerType: 2\n82:     AutoTriggerType: 3\n83:     ActionPointType: 0\n84:     ConditionType: 4\n85:     ConditionParam: \"\\u95F4\\u9694\\u65F6\\u95F4\"\n86:     AddSkillEffectTargetType: 1\n87:     StateCheckList: []\n88:     TriggerEffects:\n89:     - EffectApplyType: 0\n90:       Params: []\n91:   EffectTypeName: \"(\\u6DFB\\u52A0\\u6548\\u679C)\""
+    },
+    {
+      "id": "buff-guid",
+      "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Buff/Buff_10041.asset.meta:1–5",
+      "excerpt": "1: fileFormatVersion: 2\n2: guid: c5c27029ce116c7469c7a1246fa5e2ec\n3: NativeFormatImporter:\n4:   externalObjects: {}\n5:   mainObjectFileID: 11400000"
+    },
+    {
+      "id": "table",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ThirdParty/Config/Texts/AbilityConfig.txt:7–15",
+      "excerpt": "7: \"1004\":{\"Id\":1004,\"Name\":\"血红激光炮\",\"Type\":\"Skill\",\"TargetGroup\":\"敌方\",\"TargetSelect\":\"碰撞检测\",\"Cooldown\":0,\"BuffType\":\"None\"},\n8: \"1005\":{\"Id\":1005,\"Name\":\"火弹\",\"Type\":\"Skill\",\"TargetGroup\":\"敌方\",\"TargetSelect\":\"碰撞检测\",\"Cooldown\":0,\"Description\":\"每命中一个目标后下一次伤害会减少20%，最低减到40%\",\"BuffType\":\"None\"},\n9: \"1006\":{\"Id\":1006,\"Name\":\"灵魂锁链\",\"Type\":\"Skill\",\"TargetGroup\":\"敌方\",\"TargetSelect\":\"条件指定\",\"Cooldown\":0,\"BuffType\":\"None\"},\n10: \"1008\":{\"Id\":1008,\"Name\":\"火球\",\"Type\":\"Skill\",\"TargetGroup\":\"敌方\",\"TargetSelect\":\"碰撞检测\",\"Cooldown\":0,\"BuffType\":\"None\"},\n11: \"3001\":{\"Id\":3001,\"Name\":\"mini\",\"Type\":\"Skill\",\"TargetGroup\":\"敌方\",\"TargetSelect\":\"手动指定\",\"Cooldown\":0,\"BuffType\":\"None\"},\n12: \"2001\":{\"Id\":2001,\"Name\":\"光盾\",\"Type\":\"Skill\",\"TargetGroup\":\"自身\",\"TargetSelect\":\"条件指定\",\"Cooldown\":0,\"BuffType\":\"None\"},\n13: \"10011\":{\"Id\":10011,\"KeyName\":\"Weak\",\"Name\":\"虚弱\",\"Type\":\"Buff\",\"TargetGroup\":\"敌方\",\"BuffType\":\"Weaken\",\"StatusSlot\":\"是\",\"CanStack\":\"否\"},\n14: \"10041\":{\"Id\":10041,\"KeyName\":\"Burn\",\"Name\":\"普通灼烧\",\"Type\":\"Buff\",\"TargetGroup\":\"敌方\",\"BuffType\":\"Weaken\",\"StatusSlot\":\"是\",\"CanStack\":\"否\"},\n15: \"20011\":{\"Id\":20011,\"KeyName\":\"Shield\",\"Name\":\"护盾\",\"Type\":\"Buff\",\"TargetGroup\":\"自身\",\"BuffType\":\"Enhance\",\"StatusSlot\":\"是\",\"CanStack\":\"否\"}"
+    },
+    {
+      "id": "attach",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/AddBuffActionSystem.cs:41–123",
+      "excerpt": "41:                 var buffObject = entity.AddStatusEffect.AddStatus;\n42:                 if (buffObject == null)\n43:                 {\n44:                     var statusId = entity.AddStatusEffect.AddStatusId;\n45:                     buffObject = AssetUtils.LoadObject<AbilityConfigObject>($\"{AbilityManagerObject.BuffResFolder}/Buff_{statusId}\");\n46:                 }\n47:                 var buffConfig = AbilityConfigCategory.Instance.Get(buffObject.Id);\n48:                 var canStack = buffConfig.CanStack == \"��\";\n49:                 if (canStack == false)\n50:                 {\n51:                     if (BuffSystem.HasBuff(entity.Target as CombatEntity, buffConfig.KeyName))\n52:                     {\n53:                         var status = BuffSystem.GetBuff(entity.Target as CombatEntity, buffConfig.KeyName);\n54:                         var lifeComp = status.GetComponent<AbilityDurationComponent>();\n55:                         if (lifeComp != null)\n56:                         {\n57:                             var statusLifeTimer = lifeComp.LifeTimer;\n58:                             statusLifeTimer.MaxTime = entity.AddStatusEffect.Duration;\n59:                             statusLifeTimer.Reset();\n60:                         }\n61:                         FinishAction(entity);\n62:                         return true;\n63:                     }\n64:                 }\n65: \n66:                 entity.BuffAbility = BuffSystem.Attach(entity.Target as CombatEntity, buffObject);\n67:                 entity.BuffAbility.OwnerEntity = entity.Creator;\n68:                 entity.BuffAbility.GetComponent<AbilityLevelComponent>().Level = entity.SourceAbility.GetComponent<AbilityLevelComponent>().Level;\n69:                 ProcessInputKVParams(entity, entity.BuffAbility, entity.AddStatusEffect.Params);\n70: \n71:                 if (entity.AddStatusEffect.Duration > 0)\n72:                 {\n73:                     entity.BuffAbility.AddComponent<AbilityDurationComponent>(x => x.Duration = entity.AddStatusEffect.Duration);\n74:                 }\n75:                 AbilitySystem.TryActivateAbility(entity.BuffAbility);\n76:                 return true;\n77:             });\n78: \n79:             FinishAction(entity);\n80:         }\n81: \n82:         /// ���ﴦ�����ܴ���Ĳ�����ֵ�滻\n83:         public static void ProcessInputKVParams(AddBuffAction entity, Ability ability, Dictionary<string, string> Params)\n84:         {\n85:             foreach (var abilityTrigger in ability.AbilityTriggers)\n86:             {\n87:                 var effect = abilityTrigger.TriggerConfig;\n88: \n89:                 if (!string.IsNullOrEmpty(effect.ConditionParam))\n90:                 {\n91:                     abilityTrigger.ConditionParamValue = ProcessReplaceKV(entity, effect.ConditionParam, Params);\n92:                 }\n93:             }\n94: \n95:             foreach (var abilityEffect in ability.AbilityEffects)\n96:             {\n97:                 var effect = abilityEffect.EffectConfig;\n98: \n99:                 if (effect is AttributeModifyEffect attributeModify && abilityEffect.GetComponent<EffectAttributeModifyComponent>() is { } attributeModifyComponent)\n100:                 {\n101:                     attributeModifyComponent.ModifyValueFormula = ProcessReplaceKV(entity, attributeModify.NumericValue, Params);\n102:                 }\n103:                 if (effect is DamageEffect damage && abilityEffect.GetComponent<EffectDamageComponent>() is { } damageComponent)\n104:                 {\n105:                     damageComponent.DamageValueFormula = ProcessReplaceKV(entity, damage.DamageValueFormula, Params);\n106:                 }\n107:                 if (effect is CureEffect cure && abilityEffect.GetComponent<EffectCureComponent>() is { } cureComponent)\n108:                 {\n109:                     cureComponent.CureValueProperty = ProcessReplaceKV(entity, cure.CureValueFormula, Params);\n110:                 }\n111:             }\n112:         }\n113: \n114:         private static string ProcessReplaceKV(AddBuffAction entity, string originValue, Dictionary<string, string> Params)\n115:         {\n116:             foreach (var aInputKVItem in Params)\n117:             {\n118:                 if (!string.IsNullOrEmpty(originValue))\n119:                 {\n120:                     originValue = originValue.Replace(aInputKVItem.Key, aInputKVItem.Value);\n121:                 }\n122:             }\n123:             return originValue;"
+    },
+    {
+      "id": "activate",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilitySystem.cs:87–117",
+      "excerpt": "87:         public void Enable(Ability entity)\n88:         {\n89:             foreach (var item in entity.AbilityEffects)\n90:             {\n91:                 item.Enable = true;\n92:             }\n93:             foreach (var item in entity.AbilityTriggers)\n94:             {\n95:                 item.Enable = true;\n96:             }\n97:         }\n98: \n99:         public void Disable(Ability entity)\n100:         {\n101:             foreach (var item in entity.AbilityEffects)\n102:             {\n103:                 item.Enable = false;\n104:             }\n105:             foreach (var item in entity.AbilityTriggers)\n106:             {\n107:                 item.Enable = false;\n108:             }\n109:         }\n110: \n111:         public void Update(Ability entity)\n112:         {\n113:             if (entity.GetComponent<AbilityDurationComponent>() is { } component)\n114:             {\n115:                 AbilityDurationSystem.Update(entity, component);\n116:             }\n117:         }"
+    },
+    {
+      "id": "trigger",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityTrigger/AbilityTriggerSystem.cs:31–55",
+      "excerpt": "31:         public void Enable(AbilityTrigger entity)\n32:         {\n33:             /// ��������\n34:             if (entity.TriggerConfig.TriggerType == EffectTriggerType.AutoTrigger)\n35:             {\n36:                 /// ��������ʱ����\n37:                 if (entity.TriggerConfig.AutoTriggerType == EffectAutoTriggerType.Instant)\n38:                 {\n39:                     OnTrigger(entity, new TriggerContext() { Target = entity.ParentEntity });\n40:                 }\n41:                 /// ���ж����¼�����\n42:                 if (entity.TriggerConfig.AutoTriggerType == EffectAutoTriggerType.Action)\n43:                 {\n44:                     entity.AddComponent<BehaviourObserveComponent>();\n45:                 }\n46:                 /// ����ʱ״̬�¼�����\n47:                 if (entity.TriggerConfig.AutoTriggerType == EffectAutoTriggerType.Condition)\n48:                 {\n49:                     var conditionType = entity.TriggerConfig.ConditionType;\n50:                     var paramObj = entity.ConditionParamValue;\n51:                     if (float.TryParse((string)paramObj, out var time))\n52:                     {\n53:                         var condition = entity.AddComponent<TimeStateObserveComponent>(x => x.Timer = new GameTimer(time));\n54:                         TimeStateObserveSystem.StartListen(entity, conditionType);\n55:                     }"
+    },
+    {
+      "id": "target",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityTrigger/AbilityTriggerSystem.cs:75–120",
+      "excerpt": "75:         public static void OnTrigger(AbilityTrigger entity, TriggerContext context)\n76:         {\n77:             var newContext = context;\n78:             newContext.AbilityTrigger = entity;\n79:             context = newContext;\n80:             var abilityTrigger = entity;\n81: \n82:             var source = context.TriggerSource;\n83:             var target = context.Target;\n84:             if (target == null && source != null)\n85:             {\n86:                 target = source;\n87:             }\n88:             if (target == null)\n89:             {\n90:                 target = entity.ParentEntity;\n91:             }\n92: \n93:             var stateCheckResult = true;\n94: \n95:             /// ������״̬�жϣ�״̬�ж����ж�Ŀ���״̬�Ƿ�����������������ܴ���Ч��\n96:             if (abilityTrigger.GetComponent<TriggerStateCheckComponent>() is { } component)\n97:             {\n98:                 stateCheckResult = TriggerStateCheckSystem.CheckTargetState(abilityTrigger, target);\n99:             }\n100: \n101:             /// ���������򴥷�Ч��\n102:             if (stateCheckResult)\n103:             {\n104:                 foreach (var item in entity.TriggerConfig.TriggerEffects)\n105:                 {\n106:                     var effects = entity.OwnerAbility.AbilityEffects;\n107:                     for (int i = 0; i < effects.Count; i++)\n108:                     {\n109:                         if (i == (int)item.EffectApplyType - 1 || item.EffectApplyType == EffectApplyType.AllEffects)\n110:                         {\n111:                             var abilityEffect = effects[i];\n112: \n113:                             if (entity.OwnerEntity.EffectAssignAbility.TryMakeAction(out var effectAssign))\n114:                             {\n115:                                 effectAssign.AbilityEffect = abilityEffect;\n116:                                 effectAssign.AssignTarget = target;\n117:                                 effectAssign.SourceAbility = entity.OwnerAbility;\n118:                                 effectAssign.TriggerContext = context;\n119:                                 AssignActionSystem.Execute(effectAssign);\n120:                             }"
+    },
+    {
+      "id": "interval",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityTrigger/TriggerObserver/TimeStateObserveSystem.cs:24–61",
+      "excerpt": "24:         public static void Update(AbilityTrigger entity, TimeStateObserveComponent component)\n25:         {\n26:             var timeStateEvent = component.TimeStateEventType;\n27:             var timer = component.Timer;\n28:             if (!timer.IsRunning)\n29:             {\n30:                 return;\n31:             }\n32: \n33:             if (timeStateEvent == TimeStateEventType.WhenIntervalTime)\n34:             {\n35:                 timer.UpdateAsRepeat(Time.deltaTime);\n36:             }\n37:             if (timeStateEvent == TimeStateEventType.WhenInTimeNoDamage)\n38:             {\n39:                 timer.UpdateAsFinish(Time.deltaTime);\n40:             }\n41:         }\n42: \n43:         public static void StartListen(AbilityTrigger entity, TimeStateEventType timeStateEvent)\n44:         {\n45:             var component = entity.GetComponent<TimeStateObserveComponent>();\n46:             component.TimeStateEventType = timeStateEvent;\n47:             if (timeStateEvent == TimeStateEventType.WhenIntervalTime)\n48:             {\n49:                 component.Timer.OnRepeat(() => OnTimeState(entity));\n50:             }\n51:             if (timeStateEvent == TimeStateEventType.WhenInTimeNoDamage)\n52:             {\n53:                 component.Timer.OnFinish(() => OnTimeState(entity));\n54:             }\n55: \n56:             component.Enable = true;\n57:         }\n58: \n59:         public static void OnTimeState(AbilityTrigger entity)\n60:         {\n61:             AbilityTriggerSystem.OnTrigger(entity, new TriggerContext());"
+    },
+    {
+      "id": "timer",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ThirdParty/Helper/GameTimer.cs:11–81",
+      "excerpt": "11:         public bool IsFinished => _time >= _maxTime;\n12:         public bool IsRunning => _time < _maxTime;\n13: \n14:         public float Time => _time;\n15: \n16:         public float MaxTime\n17:         {\n18:             get => _maxTime;\n19:             set => _maxTime = value;\n20:         }\n21: \n22:         public GameTimer(float maxTime)\n23:         {\n24:             if (maxTime <= 0)\n25:             {\n26:                 throw new Exception($\"_maxTime can not be 0 or negative\");\n27:             }\n28:             _maxTime = maxTime;\n29:             _time = 0f;\n30:         }\n31: \n32:         public void Reset()\n33:         {\n34:             _time = 0f;\n35:         }\n36: \n37:         public GameTimer UpdateAsFinish(float delta, Action onFinish)\n38:         {\n39:             if (!IsFinished)\n40:             {\n41:                 _time += delta;\n42:                 if (onFinish != _onFinish)\n43:                 {\n44:                     _onFinish = onFinish;\n45:                 }\n46:                 if (IsFinished)\n47:                 {\n48:                     _onFinish?.Invoke();\n49:                 }\n50:             }\n51:             return this;\n52:         }\n53: \n54:         public GameTimer UpdateAsFinish(float delta)\n55:         {\n56:             if (!IsFinished)\n57:             {\n58:                 _time += delta;\n59:                 if (IsFinished)\n60:                 {\n61:                     _onFinish?.Invoke();\n62:                 }\n63:             }\n64:             return this;\n65:         }\n66: \n67:         public void UpdateAsRepeat(float delta, Action onRepeat = null)\n68:         {\n69:             if (delta > _maxTime)\n70:             {\n71:                 throw new Exception($\"_maxTime too small, delta:{delta} > _maxTime:{_maxTime}\");\n72:             }\n73:             _time += delta;\n74:             if (onRepeat != null && onRepeat != _onFinish)\n75:             {\n76:                 _onFinish = onRepeat;\n77:             }\n78:             while (_time >= _maxTime)\n79:             {\n80:                 _time -= _maxTime;\n81:                 _onFinish?.Invoke();"
+    },
+    {
+      "id": "life",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityDurationSystem.cs:15–39",
+      "excerpt": "15:         public void Awake(Ability entity, AbilityDurationComponent component)\n16:         {\n17:             var lifeTime = component.Duration;\n18:             component.LifeTimer = new GameTimer(lifeTime);\n19:         }\n20: \n21:         public static void Update(Ability entity, AbilityDurationComponent component)\n22:         {\n23:             if (component.LifeTimer.IsRunning)\n24:             {\n25:                 component.LifeTimer.UpdateAsFinish(Time.deltaTime, () => OnTimeEnd(entity));\n26:             }\n27:         }\n28: \n29:         public static void OnTimeEnd(Ability ability)\n30:         {\n31:             var config = ability.Config;\n32:             if (config.Type == \"Skill\")\n33:             {\n34:                 SkillSystem.Remove(ability.ParentEntity as CombatEntity, ability);\n35:             }\n36:             if (config.Type == \"Buff\")\n37:             {\n38:                 BuffSystem.Remove(ability.ParentEntity as CombatEntity, ability);\n39:             }"
+    },
+    {
+      "id": "dispatch",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/AbilityEffectSystem.cs:62–74",
+      "excerpt": "62:         public static void TriggerApply(EffectAssignAction effectAssign)\n63:         {\n64:             //ConsoleLog.Debug(\"AbilityEffectSystem OnTriggerApplyEffect\");\n65:             var abilityEffect = effectAssign.AbilityEffect;\n66:             foreach (var item in effectAssign.AbilityEffect.Components.Values)\n67:             {\n68:                 if (item is EffectActionControlComponent) EffectActionControlSystem.TriggerApply(abilityEffect, effectAssign);\n69:                 if (item is EffectAddBuffComponent) EffectAddBuffSystem.TriggerApply(abilityEffect, effectAssign);\n70:                 if (item is EffectAttributeModifyComponent) EffectAttributeSystem.TriggerApply(abilityEffect, effectAssign);\n71:                 if (item is EffectCureComponent) EffectCureSystem.TriggerApply(abilityEffect, effectAssign);\n72:                 if (item is EffectDamageComponent) EffectDamageSystem.TriggerApply(abilityEffect, effectAssign);\n73:                 if (item is EffectShieldDefenseComponent) EffectShieldSystem.TriggerApply(abilityEffect, effectAssign);\n74:             }"
+    },
+    {
+      "id": "formula",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs:19–44",
+      "excerpt": "19:         public static int GetDamageValue(AbilityEffect entity)\n20:         {\n21:             return ParseDamage(entity);\n22:         }\n23: \n24:         private static int ParseDamage(AbilityEffect entity)\n25:         {\n26:             var component = entity.GetComponent<EffectDamageComponent>();\n27:             var expression = ExpressionHelper.ExpressionParser.EvaluateExpression(component.DamageValueFormula);\n28:             if (expression.Parameters.ContainsKey(\"����������\"))\n29:             {\n30:                 expression.Parameters[\"����������\"].Value = entity.OwnerEntity.GetComponent<AttributeComponent>().Attack.Value;\n31:             }\n32:             return (int)System.Math.Ceiling((float)expression.Value);\n33:         }\n34: \n35:         public static void TriggerApply(AbilityEffect entity, EffectAssignAction effectAssign)\n36:         {\n37:             var component = entity.GetComponent<EffectDamageComponent>();\n38:             if (entity.OwnerEntity.DamageAbility.TryMakeAction(out var damageAction))\n39:             {\n40:                 damageAction.SourceAssignAction = effectAssign;\n41:                 damageAction.Target = effectAssign.Target;\n42:                 damageAction.DamageSource = DamageSource.Skill;\n43:                 DamageActionSystem.Execute(damageAction);\n44:             }"
+    },
+    {
+      "id": "damage",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs:28–79",
+      "excerpt": "28:         private static bool ActionCheckProcess(DamageAction entity)\n29:         {\n30:             if (entity.DamageSource == DamageSource.Attack)\n31:             {\n32:                 entity.IsCritical = (GameUtils.RandomHelper.RandomRate() / 100f) < entity.Creator.GetComponent<AttributeComponent>().CriticalProbability.Value;\n33:                 var Atk = entity.Creator.GetComponent<AttributeComponent>().Attack.Value;\n34:                 var Def = entity.Target.GetComponent<AttributeComponent>().Defense.Value;\n35:                 var coeff = Atk / (Atk + Def);\n36:                 var Dam1 = Atk * coeff;\n37: \n38:                 entity.DamageValue = Mathf.CeilToInt(Dam1);\n39:                 if (entity.IsCritical)\n40:                 {\n41:                     entity.DamageValue = Mathf.CeilToInt(entity.DamageValue * 1.5f);\n42:                 }\n43:             }\n44: \n45:             if (entity.DamageSource == DamageSource.Skill)\n46:             {\n47:                 if (entity.DamageEffect.CanCrit)\n48:                 {\n49:                     entity.IsCritical = (GameUtils.RandomHelper.RandomRate() / 100f) < entity.Creator.GetComponent<AttributeComponent>().CriticalProbability.Value;\n50:                 }\n51:                 entity.DamageValue = EffectDamageSystem.GetDamageValue(entity.SourceAssignAction.AbilityEffect);\n52:                 if (entity.IsCritical)\n53:                 {\n54:                     entity.DamageValue = Mathf.CeilToInt(entity.DamageValue * 1.5f);\n55:                 }\n56:             }\n57: \n58:             if (entity.DamageSource == DamageSource.Buff)\n59:             {\n60:                 if (entity.DamageEffect.CanCrit)\n61:                 {\n62:                     entity.IsCritical = (GameUtils.RandomHelper.RandomRate() / 100f) < entity.Creator.GetComponent<AttributeComponent>().CriticalProbability.Value;\n63:                 }\n64:                 entity.DamageValue = EffectDamageSystem.GetDamageValue(entity.SourceAssignAction.AbilityEffect);\n65:             }\n66: \n67:             return true;\n68:         }\n69: \n70:         public static void Execute(DamageAction entity)\n71:         {\n72:             ActionSystem.ExecuteAction(entity, _ =>\n73:             {\n74:                 return ActionCheckProcess(entity);\n75:             }, _ =>\n76:             {\n77:                 //�˺�ʵ��ʩЧ����\n78:                 HealthSystem.ConsumeHealth(entity.Target, entity);\n79:                 return true;"
+    },
+    {
+      "id": "health",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/HealthSystem.cs:34–38",
+      "excerpt": "34:         public static void Minus(EcsEntity entity, int value)\n35:         {\n36:             var component = entity.GetComponent<HealthPointComponent>();\n37:             NumericSystem.MinusBase(component.HealthPointNumeric, value);\n38:         }"
+    },
+    {
+      "id": "consume",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/HealthSystem.cs:75–80",
+      "excerpt": "75:         public static void ConsumeHealth(EcsEntity entity, IActionExecute combatAction)\n76:         {\n77:             var component = entity.GetComponent<HealthPointComponent>();\n78:             var damageAction = combatAction as DamageAction;\n79:             Minus(entity, damageAction.DamageValue);\n80:         }"
+    },
+    {
+      "id": "remove",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/CombatEntity/BuffSystem.cs:34–46",
+      "excerpt": "34:         public static void Remove(CombatEntity entity, Ability buff)\n35:         {\n36:             var component = entity.GetComponent<BuffComponent>();\n37:             //component.Publish(new RemoveStatusEvent() { Entity = entity, Status = buff, StatusId = buff.Id });\n38:             var keyName = buff.Config.KeyName;\n39:             component.TypeIdBuffs[keyName].Remove(buff);\n40:             if (component.TypeIdBuffs[keyName].Count == 0)\n41:             {\n42:                 component.TypeIdBuffs.Remove(keyName);\n43:             }\n44:             component.Buffs.Remove(buff);\n45:             AbilitySystem.Remove(entity, buff);\n46:         }"
+    },
+    {
+      "id": "enums",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/Ability/AbilityTrigger/TimeStateObserveComponent.cs:10–18",
+      "excerpt": "10:     public enum TimeStateEventType\n11:     {\n12:         [LabelText(\"自定义计时状态事件\")]\n13:         CustomCondition = 0,\n14:         [LabelText(\"当x秒内没有受伤\")]\n15:         WhenInTimeNoDamage = 3,\n16:         [LabelText(\"当间隔x秒\")]\n17:         WhenIntervalTime = 4,\n18:     }"
+    },
+    {
+      "id": "owner",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/Ability/Ability.cs:14–24",
+      "excerpt": "14:     public partial class Ability : EcsEntity\n15:     {\n16:         public CombatEntity OwnerEntity { get { return GetParent<CombatEntity>(); } set { } }\n17:         public EcsEntity ParentEntity { get => Parent; }\n18:         public AbilityConfig Config { get; set; }\n19:         public AbilityConfigObject ConfigObject { get; set; }\n20:         public bool Spelling { get; set; }\n21:         public GameTimer CooldownTimer { get; } = new GameTimer(1f);\n22:         public ExecutionObject ExecutionObject { get; set; }\n23:         public bool IsBuff => Config.Type == \"Buff\";\n24:         public bool IsSkill => !IsBuff;"
+    },
+    {
+      "id": "action-hooks",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/CombatEntity/ActionSystem.cs:57–79",
+      "excerpt": "57:         public static void ExecuteAction<T>(T entity, Func<T, bool> actionProcess, Func<T, bool> actionApply) where T : EcsEntity, IActionExecute\n58:         {\n59:             ActionSystem.BeforeExecuteAction(entity.Creator, x => x.BeforeExecuteAction(entity.Creator, entity));\n60:             ActionSystem.BeforeSufferAction(entity.Target, x => x.BeforeSufferAction(entity.Target, entity));\n61: \n62:             var result = actionProcess.Invoke(entity);\n63: \n64:             if (result)\n65:             {\n66:                 ActionSystem.BeforeCauseApply(entity.Creator, x => x.BeforeCauseApply(entity.Creator, entity));\n67:                 ActionSystem.BeforeReceiveApply(entity.Target, x => x.BeforeReceiveApply(entity.Target, entity));\n68: \n69:                 var applyResult = actionApply.Invoke(entity);\n70: \n71:                 if (applyResult)\n72:                 {\n73:                     ActionSystem.AfterCauseApply(entity.Creator, x => x.AfterCauseApply(entity.Creator, entity));\n74:                     ActionSystem.AfterReceiveApply(entity.Target, x => x.AfterReceiveApply(entity.Target, entity));\n75:                 }\n76:             }\n77: \n78:             ActionSystem.AfterExecuteAction(entity.Creator, x => x.AfterExecuteAction(entity.Creator, entity));\n79:             ActionSystem.AfterSufferAction(entity.Target, x => x.AfterSufferAction(entity.Target, entity));"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "apply-burn",
+      "title": "1004 挂上灼烧",
+      "source": "skill-data",
+      "position": {
+        "row": 0,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "entry-burn",
+          "title": "1004 的施加状态效果执行",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "引用 Buff_10041：灼烧",
+          "detail": "原问题：血红激光炮（1004）挂上的灼烧，每跳扣多少血、多久跳一次、持续多久、能暴击吗？\n范围：从该施加状态效果已经执行起，追到参数替换、跳伤、生命值扣除和到期移除；激光碰撞与表现不在这条已核实路径内。Skill_1004 的 AddStatus 指向引用数组第 0 项，GUID c5c27029ce116c7469c7a1246fa5e2ec，与 Buff_10041.asset.meta 一致。\n证据缺口：提供目录没有 Execution_1004 时间轴资源，也没有 ECS 底层更新实现；无法核实碰撞到施效的完整接线和同帧销毁顺序。全程只读核查，未运行游戏。",
+          "sources": [
+            "skill-data",
+            "buff-guid",
+            "table"
+          ]
+        },
+        {
+          "id": "existing-burn",
+          "title": "目标已有同类 Burn？",
+          "row": 1,
+          "col": 0,
+          "kind": "decision",
+          "lines": "CanStack = 否；按 KeyName 查找",
+          "detail": "表中 10041 的 KeyName 为 Burn，CanStack 为否。AddBuffActionSystem 先查已有同类状态，再决定刷新还是创建。结论中的 260 / 0.3 秒针对新建的 1004 灼烧；已有其他来源 Burn 时会沿刷新分支保留原参数。",
+          "sources": [
+            "table",
+            "attach"
+          ]
+        },
+        {
+          "id": "refresh-burn",
+          "title": "只刷新原灼烧寿命",
+          "row": 1,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "MaxTime = 4；寿命计时归零",
+          "detail": "已有 Burn 时，将原寿命上限设为这次传入的 4 秒，并重置寿命计时，然后提前返回。不创建第二层、不替换伤害和间隔参数，也不重置 TimeStateObserveComponent 的跳伤计时。如果原来就是 1004 新建的 Burn，则仍为每跳 260、间隔 0.3 秒；若原来来自其他技能，应读原实例参数。",
+          "sources": [
+            "attach"
+          ]
+        },
+        {
+          "id": "params-burn",
+          "title": "新建并替换灼烧参数",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "伤害取值 = 260；间隔时间 = 0.3",
+          "detail": "Buff_10041 的伤害公式是占位符“伤害取值”，计时条件参数是“间隔时间”。AddBuffActionSystem.ProcessInputKVParams / ProcessReplaceKV 把 1004 传入的字典替换到实例组件，因此真正计算的是常数 260，实际间隔为 0.3 秒。\n施加状态的 Duration 为 4 秒；先添加寿命组件，再激活。配置复制技能等级，但本伤害公式是常数，不引用等级、攻击力或最大生命。OwnerEntity setter 在这份代码中为空；本题常数公式和关闭暴击不受归属属性问题影响。",
+          "sources": [
+            "skill-data",
+            "buff-data",
+            "attach",
+            "owner"
+          ]
+        },
+        {
+          "id": "activate-burn",
+          "title": "激活：开始两个独立计时器",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "lines": "寿命 4 秒；重复间隔 0.3 秒",
+          "detail": "寿命 GameTimer(4)，时间从 0 开始。触发配置 TriggerType=2、AutoTriggerType=3、ConditionType=4，对应自动计时状态、间隔事件。激活时建立 GameTimer(0.3)，注册 OnRepeat；不是激活立即伤害。两条更新路径并行；图中跨段线表示其触发结果，不代表先扣完血才建立寿命。",
+          "sources": [
+            "attach",
+            "trigger",
+            "interval",
+            "timer",
+            "enums"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "entry-burn",
+          "b": "existing-burn",
+          "label": ""
+        },
+        {
+          "a": "existing-burn",
+          "b": "refresh-burn",
+          "label": "是"
+        },
+        {
+          "a": "existing-burn",
+          "b": "params-burn",
+          "label": "否"
+        },
+        {
+          "a": "params-burn",
+          "b": "activate-burn",
+          "label": ""
+        }
+      ]
+    },
+    {
+      "id": "tick-burn",
+      "title": "每次间隔事件 → 实际扣血",
+      "source": "interval",
+      "position": {
+        "row": 5,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "tick-event",
+          "title": "间隔累计达到 0.3 秒",
+          "row": 0,
+          "col": 0,
+          "kind": "process",
+          "lines": "首次约 0.3 秒；之后每隔 0.3 秒",
+          "detail": "TimeStateObserveSystem.Update 每帧传入 Time.deltaTime。GameTimer.UpdateAsRepeat 累加 delta，当累计值 >= 0.3 时减去 0.3 并调用 OnRepeat，保留余数。实际扣血在满足条件的帧发生，所以不保证墙钟时间精确到毫秒。寿命也使用 Time.deltaTime，受游戏时间尺度影响。\n边界：若某帧 delta > 0.3，GameTimer 会先抛异常，不可把此实现描述成任意卡顿都能补跳。",
+          "sources": [
+            "interval",
+            "timer"
+          ]
+        },
+        {
+          "id": "assign-burn",
+          "title": "给挂载对象执行伤害效果",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "空 Target → ParentEntity（灼烧持有者）",
+          "detail": "OnTimeState 传空 TriggerContext，AbilityTriggerSystem.OnTrigger 将空 target 回退到触发器的 ParentEntity，即挂着灼烧的对象。TriggerEffects 的 EffectApplyType=0 表示全部效果；Buff 只有一个 DamageEffect。随后 AssignActionSystem → AbilityEffectSystem.TriggerApply → EffectDamageSystem.TriggerApply。",
+          "sources": [
+            "interval",
+            "target",
+            "buff-data",
+            "dispatch"
+          ]
+        },
+        {
+          "id": "value-burn",
+          "title": "计算这一跳：向上取整",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "D = ceil(float(260)) = 260",
+          "detail": "EffectDamageSystem 使用实例中已替换的 DamageValueFormula 解析表达式，返回 Math.Ceiling 后的 int。260 是常数，因此不依赖攻击力或目标生命。Buff 的 DamageType=0 虽标记为物理，但此 Skill 来源分支没有读取 Defense，也没有按伤害类型再算一次减伤。",
+          "sources": [
+            "formula",
+            "attach",
+            "buff-data",
+            "damage"
+          ]
+        },
+        {
+          "id": "crit-burn",
+          "title": "本灼烧关闭暴击",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "lines": "CanCrit = false；不乘 1.5",
+          "detail": "实际 EffectDamageSystem.TriggerApply 将 DamageSource 写成 Skill，即使效果属于 Buff。DamageActionSystem 应核对 Skill 分支，不能只看名称去读 Buff 分支。Skill 分支仅在 DamageEffect.CanCrit=true 时抽暴击；Buff_10041 明确为 false，新建 DamageAction 的 IsCritical 默认为 false，因此本跳不暴击。1004 的直接伤害是另一个 DamageEffect，10000 不参与灼烧公式。",
+          "sources": [
+            "buff-data",
+            "formula",
+            "damage",
+            "skill-data"
+          ]
+        },
+        {
+          "id": "hp-burn",
+          "title": "扣除目标生命值",
+          "row": 4,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "HP新 = HP旧 − 260",
+          "detail": "DamageActionSystem.Execute → HealthSystem.ConsumeHealth → Minus → NumericSystem.MinusBase。标准路径扣 260；没有将护甲、魔抗或百分比套进这一跳。ActionSystem 在计算后、扣血前存在 BeforeCauseApply / BeforeReceiveApply 扩展点；所给目录未找到改写该值的实现，但不能据此断言完整项目的其他模块永远不修改它。未提供 NumericSystem 之外的 ECS 调度代码，也无实战日志；这是源码路径结论。",
+          "sources": [
+            "damage",
+            "consume",
+            "health",
+            "action-hooks"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "tick-event",
+          "b": "assign-burn",
+          "label": ""
+        },
+        {
+          "a": "assign-burn",
+          "b": "value-burn",
+          "label": ""
+        },
+        {
+          "a": "value-burn",
+          "b": "crit-burn",
+          "label": ""
+        },
+        {
+          "a": "crit-burn",
+          "b": "hp-burn",
+          "label": ""
+        }
+      ]
+    },
+    {
+      "id": "expire-burn",
+      "title": "寿命到期",
+      "source": "life",
+      "position": {
+        "row": 5,
+        "col": 1
+      },
+      "nodes": [
+        {
+          "id": "life-burn",
+          "title": "寿命累计达到 4 秒",
+          "row": 0,
+          "col": 0,
+          "kind": "process",
+          "lines": "LifeTimer += Time.deltaTime",
+          "detail": "AbilitySystem.Update 在存在 AbilityDurationComponent 时调用 AbilityDurationSystem.Update。寿命独立于跳伤计时器；到期触发 OnTimeEnd。如果再次施加同类 Burn，会从刷新时重新计 4 秒。",
+          "sources": [
+            "activate",
+            "life",
+            "timer",
+            "attach"
+          ]
+        },
+        {
+          "id": "end-burn",
+          "title": "移除灼烧，停止后续跳伤",
+          "row": 1,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "BuffSystem.Remove → EndAbility",
+          "detail": "配置 Type=Buff 时，到期调用 BuffSystem.Remove，清理状态索引与列表，再 AbilitySystem.Remove / EndAbility 禁用并销毁。单次新挂、无刷新、无提前移除且正常帧推进的理想演示：0.3、0.6……3.9 秒共 13 跳，总计 3380。不要把它当实测保证：具体帧边界、ECS 更新顺序、销毁对子节点的处理不在此目录中完整提供。",
+          "sources": [
+            "life",
+            "remove",
+            "activate"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "life-burn",
+          "b": "end-burn",
+          "label": ""
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "演示：首次挂载，满 4 秒自然结束",
+      "provenance": "教学演示，非运行记录",
+      "input": "此前没有 Burn；挂载后 HP 为 10000；无再次命中、无提前移除、无额外拦截；正常帧推进。",
+      "trace": [
+        "1004 引用 Buff_10041，传入 260、0.3、4。",
+        "参数替换，激活两个独立计时器；挂上瞬间没有灼烧伤害。",
+        "约 0.3 秒：ceil(260)=260，CanCrit=false；HP=10000−260=9740。",
+        "理想时序 0.3、0.6……3.9 秒共 13 跳；4 秒寿命到期移除。"
+      ],
+      "result": "理想示例灼烧总伤害 13×260=3380，剩余 HP=6620；不含激光直接伤害，也不代表实测跳数。"
+    },
+    {
+      "title": "演示：中途重复命中",
+      "provenance": "教学演示，非运行记录",
+      "input": "t=0 新建 1004 灼烧；t=1.0 秒同类灼烧再次施加；正常帧推进。",
+      "trace": [
+        "已有 Burn，进入刷新分支。",
+        "寿命 MaxTime=4，Reset 后自然到期点延后到约 t=5.0。",
+        "不再创建新层，不执行参数替换，不重建间隔计时器。",
+        "若原跳伤在约 0.9 秒，下一跳仍按原节奏约 1.2 秒发生。"
+      ],
+      "result": "刷新持续时间；每跳仍 260，原跳伤节奏继续。若原 Burn 来自别的来源，保留其原参数。"
+    }
+  ],
+  "connections": [
+    {
+      "a": "activate-burn",
+      "b": "tick-event",
+      "label": "激活间隔监听"
+    },
+    {
+      "a": "activate-burn",
+      "b": "life-burn",
+      "label": "独立寿命更新"
+    }
+  ]
+}

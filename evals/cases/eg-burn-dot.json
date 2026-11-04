@@ -33,7 +33,7 @@
     {"id": "no-crit", "label": "灼烧不能暴击",
      "any": ["CanCrit", "不能暴击", "不可暴击", "无法暴击", "不会暴击"]},
     {"id": "skill-source", "label": "每一跳的伤害来源被标成技能，走技能分支，不走 Buff 分支", "trap": true,
-     "any": ["DamageSource.Skill", "DamageSource = Skill", "来源是 Skill", "来源为 Skill", "来源是技能", "来源为技能", "按技能伤害", "走技能分支", "走 Skill 分支", "走Skill分支", "不走 Buff 分支", "不走Buff分支", "不是 Buff 分支"]}
+     "any": ["DamageSource.Skill", "DamageSource = Skill", "来源是 Skill", "来源为 Skill", "来源是技能", "来源为技能", "按技能伤害", "走技能分支", "走 Skill 分支", "走Skill分支", "不走 Buff 分支", "不走Buff分支", "不是 Buff 分支", "re:(写成|写入|设为|固定为|标记为|硬编码).{0,8}Skill", "re:(走|按|进入|按照).{0,4}Skill\\s*分支"]}
   ],
   "decisions": [],
   "order": [

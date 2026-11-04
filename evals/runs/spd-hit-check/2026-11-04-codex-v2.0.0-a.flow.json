@@ -1,0 +1,660 @@
+{
+  "title": "攻击时，怎样判定命中还是闪避？",
+  "summary": "普通攻击先排除无效目标与无敌，再比较双方独立随机值：攻击掷值 ≥ 闪避掷值即命中。无限闪避优先于无限命中。点击节点查看装备、突袭、状态公式及源码；例子均为教学演示。",
+  "sources": [
+    {
+      "id": "cell-entry",
+      "locator": "scenes/GameScene.java · L1842–1847",
+      "excerpt": "1842: \tprivate static final CellSelector.Listener defaultCellListener = new CellSelector.Listener() {\n1843: \t\t@Override\n1844: \t\tpublic void onSelect( Integer cell ) {\n1845: \t\t\tif (Dungeon.hero.handle( cell )) {\n1846: \t\t\t\tDungeon.hero.next();\n1847: \t\t\t}"
+    },
+    {
+      "id": "hero-entry",
+      "locator": "actors/hero/Hero.java · L919–921、L1458–1498、L1940–1953、L2353–2382",
+      "excerpt": "919: \t\t\t} else if (curAction instanceof HeroAction.Attack) {\n920: \t\t\t\tactResult = actAttack( (HeroAction.Attack)curAction );\n921: \t\t\t\t\n\n1458: \tprivate boolean actAttack( HeroAction.Attack action ) {\n1459: \n1460: \t\tattackTarget = action.target;\n1461: \n1462: \t\tif (isCharmedBy(attackTarget)){\n1463: \t\t\tGLog.w( Messages.get(Charm.class, \"cant_attack\"));\n1464: \t\t\tready();\n1465: \t\t\treturn false;\n1466: \t\t}\n1467: \n1468: \t\tif (attackTarget.isAlive() && canAttack(attackTarget) && attackTarget.invisible == 0) {\n1469: \n1470: \t\t\tif (heroClass != HeroClass.DUELIST\n1471: \t\t\t\t\t&& hasTalent(Talent.AGGRESSIVE_BARRIER)\n1472: \t\t\t\t\t&& buff(Talent.AggressiveBarrierCooldown.class) == null\n1473: \t\t\t\t\t&& (HP / (float)HT) <= 0.5f){\n1474: \t\t\t\tint shieldAmt = 1 + 2*pointsInTalent(Talent.AGGRESSIVE_BARRIER);\n1475: \t\t\t\tBuff.affect(this, Barrier.class).setShield(shieldAmt);\n1476: \t\t\t\tsprite.showStatusWithIcon(CharSprite.POSITIVE, Integer.toString(shieldAmt), FloatingText.SHIELDING);\n1477: \t\t\t\tBuff.affect(this, Talent.AggressiveBarrierCooldown.class, 50f);\n1478: \n1479: \t\t\t}\n1480: \t\t\t//attack target cleared on onAttackComplete\n1481: \t\t\tsprite.attack( attackTarget.pos );\n1482: \n1483: \t\t\treturn false;\n1484: \n1485: \t\t} else {\n1486: \n1487: \t\t\tif (fieldOfView[attackTarget.pos] && getCloser( attackTarget.pos )) {\n1488: \n1489: \t\t\t\tattackTarget = null;\n1490: \t\t\t\treturn true;\n1491: \n1492: \t\t\t} else {\n1493: \t\t\t\tready();\n1494: \t\t\t\tattackTarget = null;\n1495: \t\t\t\treturn false;\n1496: \t\t\t}\n1497: \n1498: \t\t}\n\n1940: \t\tChar ch = Actor.findChar( cell );\n1941: \t\tHeap heap = Dungeon.level.heaps.get( cell );\n1942: \n1943: \t\tif (Dungeon.level.map[cell] == Terrain.ALCHEMY && cell != pos) {\n1944: \t\t\t\n1945: \t\t\tcurAction = new HeroAction.Alchemy( cell );\n1946: \t\t\t\n1947: \t\t} else if (ch instanceof Mob && (fieldOfView[cell] || Char.hasProp(ch, Property.OBJECT))) {\n1948: \n1949: \t\t\tif (((Mob) ch).heroShouldInteract()) {\n1950: \t\t\t\tcurAction = new HeroAction.Interact( ch );\n1951: \t\t\t} else {\n1952: \t\t\t\tcurAction = new HeroAction.Attack( ch );\n1953: \t\t\t}\n\n2353: \t@Override\n2354: \tpublic void onAttackComplete() {\n2355: \n2356: \t\tif (attackTarget == null){\n2357: \t\t\tcurAction = null;\n2358: \t\t\tsuper.onAttackComplete();\n2359: \t\t\treturn;\n2360: \t\t}\n2361: \t\t\n2362: \t\tAttackIndicator.target(attackTarget);\n2363: \t\tboolean wasEnemy = attackTarget.alignment == Alignment.ENEMY\n2364: \t\t\t\t|| (attackTarget instanceof Mimic && attackTarget.alignment == Alignment.NEUTRAL);\n2365: \n2366: \t\tboolean hit = attack(attackTarget);\n2367: \t\t\n2368: \t\tInvisibility.dispel();\n2369: \t\tspend( attackDelay() );\n2370: \n2371: \t\tif (hit && subClass == HeroSubClass.GLADIATOR && wasEnemy){\n2372: \t\t\tBuff.affect( this, Combo.class ).hit(attackTarget);\n2373: \t\t}\n2374: \n2375: \t\tif (hit && heroClass == HeroClass.DUELIST && wasEnemy){\n2376: \t\t\tBuff.affect( this, Sai.ComboStrikeTracker.class).addHit( attackTarget );\n2377: \t\t}\n2378: \n2379: \t\tcurAction = null;\n2380: \t\tattackTarget = null;\n2381: \n2382: \t\tsuper.onAttackComplete();"
+    },
+    {
+      "id": "sprite-callback",
+      "locator": "sprites/CharSprite.java · L842–855",
+      "excerpt": "842: \t@Override\n843: \tpublic synchronized void onComplete( Animation anim ) {\n844: \t\t\n845: \t\tif (animCallback != null) {\n846: \t\t\tCallback executing = animCallback;\n847: \t\t\tanimCallback = null;\n848: \t\t\texecuting.call();\n849: \t\t} else {\n850: \t\t\t\n851: \t\t\tif (anim == attack) {\n852: \t\t\t\t\n853: \t\t\t\tidle();\n854: \t\t\t\tch.onAttackComplete();\n855: \t\t\t\t"
+    },
+    {
+      "id": "throw-entry",
+      "locator": "items/weapon/missiles/MissileWeapon.java · L268–293",
+      "excerpt": "268: \tprotected void onThrow( int cell ) {\n269: \t\tChar enemy = Actor.findChar( cell );\n270: \t\tif (enemy == null || enemy == curUser) {\n271: \t\t\tparent = null;\n272: \n273: \t\t\t//metamorphed seer shot logic\n274: \t\t\tif (curUser.hasTalent(Talent.SEER_SHOT)\n275: \t\t\t\t\t&& curUser.heroClass != HeroClass.HUNTRESS\n276: \t\t\t\t\t&& curUser.buff(Talent.SeerShotCooldown.class) == null){\n277: \t\t\t\tif (Actor.findChar(cell) == null) {\n278: \t\t\t\t\tRevealedArea a = Buff.affect(curUser, RevealedArea.class, 5 * curUser.pointsInTalent(Talent.SEER_SHOT));\n279: \t\t\t\t\ta.depth = Dungeon.depth;\n280: \t\t\t\t\ta.pos = cell;\n281: \t\t\t\t\tBuff.affect(curUser, Talent.SeerShotCooldown.class, 20f);\n282: \t\t\t\t}\n283: \t\t\t}\n284: \n285: \t\t\tif (!spawnedForEffect) super.onThrow( cell );\n286: \t\t} else {\n287: \t\t\tif (!curUser.shoot( enemy, this )) {\n288: \t\t\t\trangedMiss( cell );\n289: \t\t\t} else {\n290: \t\t\t\t\n291: \t\t\t\trangedHit( enemy, cell );\n292: \n293: \t\t\t}"
+    },
+    {
+      "id": "hero-shoot",
+      "locator": "actors/hero/Hero.java · L471–493、L497–507",
+      "excerpt": "471: \tpublic boolean shoot( Char enemy, MissileWeapon wep ) {\n472: \n473: \t\tattackTarget = enemy;\n474: \t\tboolean wasEnemy = enemy.alignment == Alignment.ENEMY\n475: \t\t\t\t|| (enemy instanceof Mimic && enemy.alignment == Alignment.NEUTRAL);\n476: \n477: \t\t//temporarily set the hero's weapon to the missile weapon being used\n478: \t\t//TODO improve this!\n479: \t\tbelongings.thrownWeapon = wep;\n480: \t\tboolean hit = attack( enemy );\n481: \t\tInvisibility.dispel();\n482: \t\tbelongings.thrownWeapon = null;\n483: \n484: \t\tif (hit && subClass == HeroSubClass.GLADIATOR && wasEnemy){\n485: \t\t\tBuff.affect( this, Combo.class ).hit( enemy );\n486: \t\t}\n487: \n488: \t\tif (hit && heroClass == HeroClass.DUELIST && wasEnemy){\n489: \t\t\tBuff.affect( this, Sai.ComboStrikeTracker.class).addHit( attackTarget );\n490: \t\t}\n491: \n492: \t\tattackTarget = null;\n493: \t\treturn hit;\n\n497: \tpublic boolean attack(Char enemy, float dmgMulti, float dmgBonus, float accMulti) {\n498: \t\tboolean result = super.attack(enemy, dmgMulti, dmgBonus, accMulti);\n499: \t\tif (!(belongings.attackingWeapon() instanceof MissileWeapon)){\n500: \t\t\tif (buff(Talent.PreciseAssaultTracker.class) != null){\n501: \t\t\t\tbuff(Talent.PreciseAssaultTracker.class).detach();\n502: \t\t\t} else if (buff(Talent.LiquidAgilACCTracker.class) != null\n503: \t\t\t\t\t\t&& buff(Talent.LiquidAgilACCTracker.class).uses <= 0){\n504: \t\t\t\tbuff(Talent.LiquidAgilACCTracker.class).detach();\n505: \t\t\t}\n506: \t\t}\n507: \t\treturn result;"
+    },
+    {
+      "id": "mob-entry",
+      "locator": "actors/mobs/Mob.java · L789–815",
+      "excerpt": "789: \t\n790: \tpublic float attackDelay() {\n791: \t\tfloat delay = 1f;\n792: \t\tif ( buff(Adrenaline.class) != null) delay /= 1.5f;\n793: \t\treturn delay;\n794: \t}\n795: \t\n796: \tprotected boolean doAttack( Char enemy ) {\n797: \t\t\n798: \t\tif (sprite != null && (sprite.visible || enemy.sprite.visible)) {\n799: \t\t\tsprite.attack( enemy.pos );\n800: \t\t\treturn false;\n801: \t\t\t\n802: \t\t} else {\n803: \t\t\tattack( enemy );\n804: \t\t\tInvisibility.dispel(this);\n805: \t\t\tspend( attackDelay() );\n806: \t\t\treturn true;\n807: \t\t}\n808: \t}\n809: \t\n810: \t@Override\n811: \tpublic void onAttackComplete() {\n812: \t\tattack( enemy );\n813: \t\tInvisibility.dispel(this);\n814: \t\tspend( attackDelay() );\n815: \t\tsuper.onAttackComplete();"
+    },
+    {
+      "id": "attack-gate",
+      "locator": "actors/Char.java · L368–390",
+      "excerpt": "368: \tfinal public boolean attack( Char enemy ){\n369: \t\treturn attack(enemy, 1f, 0f, 1f);\n370: \t}\n371: \t\n372: \tpublic boolean attack( Char enemy, float dmgMulti, float dmgBonus, float accMulti ) {\n373: \n374: \t\tif (enemy == null) return false;\n375: \t\t\n376: \t\tboolean visibleFight = Dungeon.level.heroFOV[pos] || Dungeon.level.heroFOV[enemy.pos];\n377: \n378: \t\tif (enemy.isInvulnerable(getClass())) {\n379: \n380: \t\t\tif (visibleFight) {\n381: \t\t\t\tenemy.sprite.showStatus( CharSprite.POSITIVE, Messages.get(this, \"invulnerable\") );\n382: \n383: \t\t\t\tSample.INSTANCE.play(Assets.Sounds.HIT_PARRY, 1f, Random.Float(0.96f, 1.05f));\n384: \t\t\t}\n385: \n386: \t\t\treturn false;\n387: \n388: \t\t} else if (hit( this, enemy, accMulti, false )) {\n389: \t\t\t\n390: \t\t\tint dr = Math.round(enemy.drRoll() * AscensionChallenge.statModifier(enemy));"
+    },
+    {
+      "id": "hit-core",
+      "locator": "actors/Char.java · L612–685",
+      "excerpt": "612: \tpublic static int INFINITE_ACCURACY = 1_000_000;\n613: \tpublic static int INFINITE_EVASION = 1_000_000;\n614: \n615: \tfinal public static boolean hit( Char attacker, Char defender, boolean magic ) {\n616: \t\treturn hit(attacker, defender, magic ? 2f : 1f, magic);\n617: \t}\n618: \n619: \tpublic static boolean hit( Char attacker, Char defender, float accMulti, boolean magic ) {\n620: \t\tfloat acuStat = attacker.attackSkill( defender );\n621: \t\tfloat defStat = defender.defenseSkill( attacker );\n622: \n623: \t\tif (defender instanceof Hero && ((Hero) defender).damageInterrupt){\n624: \t\t\t((Hero) defender).interrupt();\n625: \t\t}\n626: \n627: \t\t//invisible chars always hit (for the hero this is surprise attacking)\n628: \t\tif (attacker.invisible > 0 && attacker.canSurpriseAttack()){\n629: \t\t\tacuStat = INFINITE_ACCURACY;\n630: \t\t}\n631: \n632: \t\tif (defender.buff(MonkEnergy.MonkAbility.Focus.FocusBuff.class) != null){\n633: \t\t\tdefStat = INFINITE_EVASION;\n634: \t\t}\n635: \n636: \t\t//if accuracy or evasion are large enough, treat them as infinite.\n637: \t\t//note that infinite evasion beats infinite accuracy\n638: \t\tif (defStat >= INFINITE_EVASION){\n639: \t\t\thitMissIcon = FloatingText.getMissReasonIcon(attacker, acuStat, defender, INFINITE_EVASION);\n640: \t\t\treturn false;\n641: \t\t} else if (acuStat >= INFINITE_ACCURACY){\n642: \t\t\thitMissIcon = FloatingText.getHitReasonIcon(attacker, INFINITE_ACCURACY, defender, defStat);\n643: \t\t\treturn true;\n644: \t\t}\n645: \n646: \t\tfloat acuRoll = Random.Float( acuStat );\n647: \t\tif (attacker.buff(Bless.class) != null) acuRoll *= 1.25f;\n648: \t\tif (attacker.buff(  Hex.class) != null) acuRoll *= 0.8f;\n649: \t\tif (attacker.buff( Daze.class) != null) acuRoll *= 0.5f;\n650: \t\tfor (ChampionEnemy buff : attacker.buffs(ChampionEnemy.class)){\n651: \t\t\tacuRoll *= buff.evasionAndAccuracyFactor();\n652: \t\t}\n653: \t\tacuRoll *= AscensionChallenge.statModifier(attacker);\n654: \t\tif (Dungeon.hero.heroClass != HeroClass.CLERIC\n655: \t\t\t\t&& Dungeon.hero.hasTalent(Talent.BLESS)\n656: \t\t\t\t&& attacker.alignment == Alignment.ALLY){\n657: \t\t\t// + 3%/5%\n658: \t\t\tacuRoll *= 1.01f + 0.02f*Dungeon.hero.pointsInTalent(Talent.BLESS);\n659: \t\t}\n660: \t\tacuRoll *= accMulti;\n661: \n662: \t\tfloat defRoll = Random.Float( defStat );\n663: \t\tif (defender.buff(Bless.class) != null) defRoll *= 1.25f;\n664: \t\tif (defender.buff(  Hex.class) != null) defRoll *= 0.8f;\n665: \t\tif (defender.buff( Daze.class) != null) defRoll *= 0.5f;\n666: \t\tfor (ChampionEnemy buff : defender.buffs(ChampionEnemy.class)){\n667: \t\t\tdefRoll *= buff.evasionAndAccuracyFactor();\n668: \t\t}\n669: \t\tdefRoll *= AscensionChallenge.statModifier(defender);\n670: \t\tif (Dungeon.hero.heroClass != HeroClass.CLERIC\n671: \t\t\t\t&& Dungeon.hero.hasTalent(Talent.BLESS)\n672: \t\t\t\t&& defender.alignment == Alignment.ALLY){\n673: \t\t\t// + 3%/5%\n674: \t\t\tdefRoll *= 1.01f + 0.02f*Dungeon.hero.pointsInTalent(Talent.BLESS);\n675: \t\t}\n676: \t\tdefRoll *= FerretTuft.evasionMultiplier();\n677: \n678: \t\tif (acuRoll >= defRoll){\n679: \t\t\thitMissIcon = FloatingText.getHitReasonIcon(attacker, acuRoll, defender, defRoll);\n680: \t\t\treturn true;\n681: \t\t} else {\n682: \t\t\thitMissIcon = FloatingText.getMissReasonIcon(attacker, acuRoll, defender, defRoll);\n683: \t\t\treturn false;\n684: \t\t}\n685: \t}"
+    },
+    {
+      "id": "hero-stats",
+      "locator": "actors/hero/Hero.java · L219–220、L511–611、L744–751、L2072–2078",
+      "excerpt": "219: \tprivate int attackSkill = 10;\n220: \tprivate int defenseSkill = 5;\n\n511: \tpublic int attackSkill( Char target ) {\n512: \t\tKindOfWeapon wep = belongings.attackingWeapon();\n513: \t\t\n514: \t\tfloat accuracy = 1;\n515: \t\taccuracy *= RingOfAccuracy.accuracyMultiplier( this );\n516: \t\t\n517: \t\t//precise assault and liquid agility\n518: \t\tif (!(wep instanceof MissileWeapon)) {\n519: \t\t\tif ((hasTalent(Talent.PRECISE_ASSAULT) || hasTalent(Talent.LIQUID_AGILITY))\n520: \t\t\t\t\t//does not trigger on ability attacks\n521: \t\t\t\t\t&& belongings.abilityWeapon != wep && buff(MonkEnergy.MonkAbility.UnarmedAbilityTracker.class) == null){\n522: \n523: \t\t\t\t//non-duelist benefit for precise assault, can stack with liquid agility\n524: \t\t\t\tif (heroClass != HeroClass.DUELIST) {\n525: \t\t\t\t\t//persistent +10%/20%/30% ACC for other heroes\n526: \t\t\t\t\taccuracy *= 1f + 0.1f * pointsInTalent(Talent.PRECISE_ASSAULT);\n527: \t\t\t\t}\n528: \n529: \t\t\t\tif (wep instanceof Flail && buff(Flail.SpinAbilityTracker.class) != null){\n530: \t\t\t\t\t//do nothing, this is not a regular attack so don't consume talent fx\n531: \t\t\t\t} else if (wep instanceof Crossbow && buff(Crossbow.ChargedShot.class) != null){\n532: \t\t\t\t\t//do nothing, this is not a regular attack so don't consume talent fx\n533: \t\t\t\t} else if (buff(Talent.PreciseAssaultTracker.class) != null) {\n534: \t\t\t\t\t// 2x/5x/inf. ACC for duelist if she just used a weapon ability\n535: \t\t\t\t\tswitch (pointsInTalent(Talent.PRECISE_ASSAULT)){\n536: \t\t\t\t\t\tdefault: case 1:\n537: \t\t\t\t\t\t\taccuracy *= 2; break;\n538: \t\t\t\t\t\tcase 2:\n539: \t\t\t\t\t\t\taccuracy *= 5; break;\n540: \t\t\t\t\t\tcase 3:\n541: \t\t\t\t\t\t\taccuracy *= Float.POSITIVE_INFINITY; break;\n542: \t\t\t\t\t}\n543: \t\t\t\t} else if (buff(Talent.LiquidAgilACCTracker.class) != null){\n544: \t\t\t\t\t// 3x/inf. ACC, depending on talent level\n545: \t\t\t\t\taccuracy *= pointsInTalent(Talent.LIQUID_AGILITY) == 2 ? Float.POSITIVE_INFINITY : 3f;\n546: \t\t\t\t\tTalent.LiquidAgilACCTracker buff = buff(Talent.LiquidAgilACCTracker.class);\n547: \t\t\t\t\tbuff.uses--;\n548: \t\t\t\t}\n549: \t\t\t}\n550: \t\t} else {\n551: \t\t\tif (buff(Momentum.class) != null && buff(Momentum.class).freerunning()){\n552: \t\t\t\taccuracy *= 1f + pointsInTalent(Talent.PROJECTILE_MOMENTUM)/2f;\n553: \t\t\t}\n554: \t\t}\n555: \n556: \t\tif (buff(Scimitar.SwordDance.class) != null){\n557: \t\t\taccuracy *= 1.50f;\n558: \t\t}\n559: \t\t\n560: \t\tif (!RingOfForce.fightingUnarmed(this)) {\n561: \t\t\treturn Math.max(1, Math.round(attackSkill * accuracy * wep.accuracyFactor( this, target )));\n562: \t\t} else {\n563: \t\t\treturn Math.max(1, Math.round(attackSkill * accuracy));\n564: \t\t}\n565: \t}\n566: \t\n567: \t@Override\n568: \tpublic int defenseSkill( Char enemy ) {\n569: \n570: \t\tif (buff(Combo.ParryTracker.class) != null){\n571: \t\t\tif (canAttack(enemy) && !isCharmedBy(enemy)){\n572: \t\t\t\tBuff.affect(this, Combo.RiposteTracker.class).enemy = enemy;\n573: \t\t\t}\n574: \t\t\treturn INFINITE_EVASION;\n575: \t\t}\n576: \n577: \t\tif (buff(RoundShield.GuardTracker.class) != null){\n578: \t\t\treturn INFINITE_EVASION;\n579: \t\t}\n580: \t\t\n581: \t\tfloat evasion = defenseSkill;\n582: \t\t\n583: \t\tevasion *= RingOfEvasion.evasionMultiplier( this );\n584: \n585: \t\tif (buff(Talent.LiquidAgilEVATracker.class) != null){\n586: \t\t\tif (pointsInTalent(Talent.LIQUID_AGILITY) == 1){\n587: \t\t\t\tevasion *= 3f;\n588: \t\t\t} else if (pointsInTalent(Talent.LIQUID_AGILITY) == 2){\n589: \t\t\t\treturn INFINITE_EVASION;\n590: \t\t\t}\n591: \t\t}\n592: \n593: \t\tif (buff(Quarterstaff.DefensiveStance.class) != null){\n594: \t\t\tevasion *= 3;\n595: \t\t}\n596: \t\t\n597: \t\tif (paralysed > 0) {\n598: \t\t\tevasion /= 2;\n599: \t\t}\n600: \n601: \t\tif (belongings.armor() != null) {\n602: \t\t\tevasion = belongings.armor().evasionFactor(this, evasion);\n603: \n604: \t\t\t//stone specifically overrides to 0 always, guaranteed hit\n605: \t\t\tif (belongings.armor().hasGlyph(Stone.class, this) && !Stone.testingEvasion()){\n606: \t\t\t\treturn 0;\n607: \t\t\t}\n608: \t\t}\n609: \n610: \t\treturn Math.max(1, Math.round(evasion));\n611: \t}\n\n744: \tpublic boolean canSurpriseAttack(){\n745: \t\tKindOfWeapon w = belongings.attackingWeapon();\n746: \t\tif (!(w instanceof Weapon))             return true;\n747: \t\tif (RingOfForce.fightingUnarmed(this))  return true;\n748: \t\tif (STR() < ((Weapon)w).STRReq())       return false;\n749: \t\tif (w instanceof Flail)                 return false;\n750: \n751: \t\treturn super.canSurpriseAttack();\n\n2072: \t\t\t\t}\n2073: \t\t\t\t\n2074: \t\t\t\tupdateHT( true );\n2075: \t\t\t\tattackSkill++;\n2076: \t\t\t\tdefenseSkill++;\n2077: \n2078: \t\t\t} else {"
+    },
+    {
+      "id": "mob-stats",
+      "locator": "actors/mobs/Mob.java · L819–840、L906–914",
+      "excerpt": "819: \tpublic int defenseSkill( Char enemy ) {\n820: \t\tif (buff(GuidingLight.Illuminated.class) != null && Dungeon.hero.heroClass == HeroClass.CLERIC){\n821: \t\t\t//if the attacker is the cleric, they must be using a weapon they have the str for\n822: \t\t\tif (enemy instanceof Hero){\n823: \t\t\t\tHero h = (Hero) enemy;\n824: \t\t\t\tif (!(h.belongings.attackingWeapon() instanceof Weapon)\n825: \t\t\t\t\t\t|| ((Weapon) h.belongings.attackingWeapon()).STRReq() <= h.STR()){\n826: \t\t\t\t\treturn 0;\n827: \t\t\t\t}\n828: \t\t\t} else {\n829: \t\t\t\treturn 0;\n830: \t\t\t}\n831: \t\t}\n832: \n833: \t\tif ( !surprisedBy(enemy)\n834: \t\t\t\t&& paralysed == 0\n835: \t\t\t\t&& !(alignment == Alignment.ALLY && enemy == Dungeon.hero)) {\n836: \t\t\treturn this.defenseSkill;\n837: \t\t} else {\n838: \t\t\treturn 0;\n839: \t\t}\n840: \t}\n\n906: \tpublic final boolean surprisedBy( Char enemy ){\n907: \t\treturn surprisedBy( enemy, true);\n908: \t}\n909: \n910: \tpublic boolean surprisedBy( Char enemy, boolean attacking ){\n911: \t\treturn enemy == Dungeon.hero\n912: \t\t\t\t&& (enemy.invisible > 0 || !enemySeen || (fieldOfView != null && fieldOfView.length == Dungeon.level.length() && !fieldOfView[enemy.pos]))\n913: \t\t\t\t&& (!attacking || enemy.canSurpriseAttack());\n914: \t}"
+    },
+    {
+      "id": "weapon-accuracy",
+      "locator": "items/weapon/Weapon.java · L289–304",
+      "excerpt": "289: \tpublic float accuracyFactor(Char owner, Char target) {\n290: \t\t\n291: \t\tint encumbrance = 0;\n292: \t\t\n293: \t\tif( owner instanceof Hero ){\n294: \t\t\tencumbrance = STRReq() - ((Hero)owner).STR();\n295: \t\t}\n296: \n297: \t\tfloat ACC = this.ACC;\n298: \n299: \t\tif (owner.buff(Wayward.WaywardBuff.class) != null && enchantment instanceof Wayward){\n300: \t\t\tACC /= 5;\n301: \t\t}\n302: \n303: \t\treturn encumbrance > 0 ? (float)(ACC / Math.pow( 1.5, encumbrance )) : ACC;\n304: \t}"
+    },
+    {
+      "id": "missile-accuracy",
+      "locator": "items/weapon/missiles/MissileWeapon.java · L215–232",
+      "excerpt": "215: \tpublic float accuracyFactor(Char owner, Char target) {\n216: \t\tfloat accFactor = super.accuracyFactor(owner, target);\n217: \n218: \t\taccFactor *= adjacentAccFactor(owner, target);\n219: \n220: \t\treturn accFactor;\n221: \t}\n222: \n223: \tprotected float adjacentAccFactor(Char owner, Char target){\n224: \t\tif (Dungeon.level.adjacent( owner.pos, target.pos )) {\n225: \t\t\tif (owner instanceof Hero){\n226: \t\t\t\treturn (0.5f + 0.25f*((Hero) owner).pointsInTalent(Talent.POINT_BLANK));\n227: \t\t\t} else {\n228: \t\t\t\treturn 0.5f;\n229: \t\t\t}\n230: \t\t} else {\n231: \t\t\treturn 1.5f;\n232: \t\t}"
+    },
+    {
+      "id": "armor-evasion",
+      "locator": "items/armor/Armor.java · L413–430",
+      "excerpt": "413: \tpublic float evasionFactor( Char owner, float evasion ){\n414: \t\tif (testingNoArmDefSkill) return evasion;\n415: \t\t\n416: \t\tif (hasGlyph(Stone.class, owner) && !Stone.testingEvasion()){\n417: \t\t\treturn 0;\n418: \t\t}\n419: \t\t\n420: \t\tif (owner instanceof Hero){\n421: \t\t\tint aEnc = STRReq() - ((Hero) owner).STR();\n422: \t\t\tif (aEnc > 0) evasion /= Math.pow(1.5, aEnc);\n423: \t\t\t\n424: \t\t\tMomentum momentum = owner.buff(Momentum.class);\n425: \t\t\tif (momentum != null){\n426: \t\t\t\tevasion += momentum.evasionBonus(((Hero) owner).lvl, Math.max(0, -aEnc));\n427: \t\t\t}\n428: \t\t}\n429: \t\t\n430: \t\treturn evasion + augment.evasionFactor(buffedLvl());"
+    },
+    {
+      "id": "acc-ring",
+      "locator": "items/rings/RingOfAccuracy.java · L60–62",
+      "excerpt": "60: \tpublic static float accuracyMultiplier( Char target ){\n61: \t\treturn (float)Math.pow(1.3f, getBuffedBonus(target, Accuracy.class));\n62: \t}"
+    },
+    {
+      "id": "eva-ring",
+      "locator": "items/rings/RingOfEvasion.java · L60–62",
+      "excerpt": "60: \tpublic static float evasionMultiplier( Char target ){\n61: \t\treturn (float) Math.pow( 1.125, getBuffedBonus(target, Evasion.class));\n62: \t}"
+    },
+    {
+      "id": "ferret",
+      "locator": "items/trinkets/FerretTuft.java · L49–58",
+      "excerpt": "49: \tpublic static float evasionMultiplier(){\n50: \t\treturn evasionMultiplier(trinketLevel(FerretTuft.class));\n51: \t}\n52: \n53: \tpublic static float evasionMultiplier(int level ){\n54: \t\tif (level <= -1){\n55: \t\t\treturn 1;\n56: \t\t} else {\n57: \t\t\treturn 1 + 0.125f*(level+1);\n58: \t\t}"
+    },
+    {
+      "id": "ascension",
+      "locator": "actors/buffs/AscensionChallenge.java · L105–125",
+      "excerpt": "105: \tpublic static float statModifier(Char ch){\n106: \t\tif (Dungeon.hero == null || Dungeon.hero.buff(AscensionChallenge.class) == null){\n107: \t\t\treturn 1;\n108: \t\t}\n109: \n110: \t\tif (ch instanceof Ratmogrify.TransmogRat){\n111: \t\t\tch = ((Ratmogrify.TransmogRat) ch).getOriginal();\n112: \t\t}\n113: \n114: \t\tif (ch.buff(AscensionBuffBlocker.class) != null){\n115: \t\t\treturn 1f;\n116: \t\t}\n117: \n118: \t\tfor (Class<?extends Mob> cls : modifiers.keySet()){\n119: \t\t\tif (cls.isAssignableFrom(ch.getClass())){\n120: \t\t\t\treturn modifiers.get(cls);\n121: \t\t\t}\n122: \t\t}\n123: \n124: \t\treturn 1;\n125: \t}"
+    },
+    {
+      "id": "champion",
+      "locator": "actors/buffs/ChampionEnemy.java · L80–88、L245–253、L277–285",
+      "excerpt": "80: \t}\n81: \n82: \tpublic float damageTakenFactor(){\n83: \t\treturn 1f;\n84: \t}\n85: \n86: \tpublic float evasionAndAccuracyFactor(){\n87: \t\treturn 1f;\n88: \t}\n\n245: \t\t\tcolor = 0xFFFF00;\n246: \t\t\trays = 6;\n247: \t\t}\n248: \n249: \t\t@Override\n250: \t\tpublic float evasionAndAccuracyFactor() {\n251: \t\t\treturn 4f;\n252: \t\t}\n253: \t}\n\n277: \t\tpublic float damageTakenFactor() {\n278: \t\t\treturn 1f/multiplier;\n279: \t\t}\n280: \n281: \t\t@Override\n282: \t\tpublic float evasionAndAccuracyFactor() {\n283: \t\t\treturn multiplier;\n284: \t\t}\n285: "
+    },
+    {
+      "id": "hit-result",
+      "locator": "actors/Char.java · L390–416、L479–512、L557–608",
+      "excerpt": "390: \t\t\tint dr = Math.round(enemy.drRoll() * AscensionChallenge.statModifier(enemy));\n391: \t\t\t\n392: \t\t\tif (this instanceof Hero){\n393: \t\t\t\tHero h = (Hero)this;\n394: \t\t\t\tif (h.belongings.attackingWeapon() instanceof MissileWeapon\n395: \t\t\t\t\t\t&& h.subClass == HeroSubClass.SNIPER\n396: \t\t\t\t\t\t&& !Dungeon.level.adjacent(h.pos, enemy.pos)){\n397: \t\t\t\t\tdr = 0;\n398: \t\t\t\t}\n399: \n400: \t\t\t\tif (h.buff(MonkEnergy.MonkAbility.UnarmedAbilityTracker.class) != null){\n401: \t\t\t\t\tdr = 0;\n402: \t\t\t\t}\n403: \t\t\t}\n404: \n405: \t\t\t//we use a float here briefly so that we don't have to constantly round while\n406: \t\t\t// potentially applying various multiplier effects\n407: \t\t\tfloat dmg;\n408: \t\t\tPreparation prep = buff(Preparation.class);\n409: \t\t\tif (prep != null){\n410: \t\t\t\tdmg = prep.damageRoll(this);\n411: \t\t\t\tif (this == Dungeon.hero && Dungeon.hero.hasTalent(Talent.BOUNTY_HUNTER)) {\n412: \t\t\t\t\tBuff.affect(Dungeon.hero, Talent.BountyHunterTracker.class, 0.0f);\n413: \t\t\t\t}\n414: \t\t\t} else {\n415: \t\t\t\tdmg = damageRoll();\n416: \t\t\t}\n\n479: \t\t\tif ( buff(Weakness.class) != null ){\n480: \t\t\t\tdmg *= 0.67f;\n481: \t\t\t}\n482: \n483: \t\t\tint effectiveDamage = enemy.defenseProc( this, Math.round(dmg) );\n484: \t\t\t//do not trigger on-hit logic if defenseProc returned a negative value\n485: \t\t\tif (effectiveDamage >= 0) {\n486: \t\t\t\teffectiveDamage = Math.max(effectiveDamage - dr, 0);\n487: \n488: \t\t\t\tif (enemy.buff(Viscosity.ViscosityTracker.class) != null) {\n489: \t\t\t\t\teffectiveDamage = enemy.buff(Viscosity.ViscosityTracker.class).deferDamage(effectiveDamage);\n490: \t\t\t\t\tenemy.buff(Viscosity.ViscosityTracker.class).detach();\n491: \t\t\t\t}\n492: \n493: \t\t\t\t//vulnerable specifically applies after armor reductions\n494: \t\t\t\tif (enemy.buff(Vulnerable.class) != null) {\n495: \t\t\t\t\teffectiveDamage *= 1.33f;\n496: \t\t\t\t}\n497: \n498: \t\t\t\teffectiveDamage = attackProc(enemy, effectiveDamage);\n499: \t\t\t}\n500: \t\t\tif (visibleFight) {\n501: \t\t\t\tif (effectiveDamage > 0 || !enemy.blockSound(Random.Float(0.96f, 1.05f))) {\n502: \t\t\t\t\thitSound(Random.Float(0.87f, 1.15f));\n503: \t\t\t\t}\n504: \t\t\t}\n505: \n506: \t\t\t// If the enemy is already dead, interrupt the attack.\n507: \t\t\t// This matters as defence procs can sometimes inflict self-damage, such as armor glyphs.\n508: \t\t\tif (!enemy.isAlive()){\n509: \t\t\t\treturn true;\n510: \t\t\t}\n511: \n512: \t\t\tenemy.damage( effectiveDamage, this );\n\n557: \t\t\tif (enemy.sprite != null) {\n558: \t\t\t\tenemy.sprite.bloodBurstA(sprite.center(), effectiveDamage);\n559: \t\t\t\tenemy.sprite.flash();\n560: \t\t\t}\n561: \n562: \t\t\tif (!enemy.isAlive() && visibleFight) {\n563: \t\t\t\tif (enemy == Dungeon.hero) {\n564: \t\t\t\t\t\n565: \t\t\t\t\tif (this == Dungeon.hero) {\n566: \t\t\t\t\t\treturn true;\n567: \t\t\t\t\t}\n568: \n569: \t\t\t\t\tif (this instanceof WandOfLivingEarth.EarthGuardian\n570: \t\t\t\t\t\t\t|| this instanceof MirrorImage || this instanceof PrismaticImage){\n571: \t\t\t\t\t\tBadges.validateDeathFromFriendlyMagic();\n572: \t\t\t\t\t}\n573: \t\t\t\t\tDungeon.fail( this );\n574: \t\t\t\t\tGLog.n( Messages.capitalize(Messages.get(Char.class, \"kill\", name())) );\n575: \t\t\t\t\t\n576: \t\t\t\t} else if (this == Dungeon.hero) {\n577: \t\t\t\t\tGLog.i( Messages.capitalize(Messages.get(Char.class, \"defeat\", enemy.name())) );\n578: \t\t\t\t}\n579: \t\t\t}\n580: \t\t\t\n581: \t\t\treturn true;\n582: \t\t\t\n583: \t\t} else if (!Char.hasProp(enemy, Property.OBJECT)) {\n584: \n585: \t\t\tif (enemy.sprite != null){\n586: \t\t\t\tif (hitMissIcon != -1){\n587: \t\t\t\t\t//dooking is a playful sound Ferrets can make, like low pitched chirping\n588: \t\t\t\t\t// I doubt this will translate, so it's only in English\n589: \t\t\t\t\tif (hitMissIcon == FloatingText.MISS_TUFT && Messages.lang() == Languages.ENGLISH && Random.Int(10) == 0) {\n590: \t\t\t\t\t\tenemy.sprite.showStatusWithIcon(CharSprite.NEUTRAL, \"dooked\", hitMissIcon);\n591: \t\t\t\t\t} else {\n592: \t\t\t\t\t\tenemy.sprite.showStatusWithIcon(CharSprite.NEUTRAL, enemy.defenseVerb(), hitMissIcon);\n593: \t\t\t\t\t}\n594: \t\t\t\t\thitMissIcon = -1;\n595: \t\t\t\t} else {\n596: \t\t\t\t\tenemy.sprite.showStatus(CharSprite.NEUTRAL, enemy.defenseVerb());\n597: \t\t\t\t}\n598: \t\t\t}\n599: \t\t\tif (visibleFight) {\n600: \t\t\t\t//TODO enemy.defenseSound? currently miss plays for monks/crab even when they parry\n601: \t\t\t\tSample.INSTANCE.play(Assets.Sounds.MISS);\n602: \t\t\t}\n603: \t\t\t\n604: \t\t\treturn false;\n605: \t\t\t\n606: \t\t} else {\n607: \t\t\treturn false;\n608: \t\t}"
+    },
+    {
+      "id": "defense-verb",
+      "locator": "actors/hero/Hero.java · L613–641",
+      "excerpt": "613: \t@Override\n614: \tpublic String defenseVerb() {\n615: \t\tCombo.ParryTracker parry = buff(Combo.ParryTracker.class);\n616: \t\tif (parry != null){\n617: \t\t\tparry.parried = true;\n618: \t\t\tif (buff(Combo.class) == null || buff(Combo.class).getComboCount() < 9 || pointsInTalent(Talent.ENHANCED_COMBO) < 2){\n619: \t\t\t\tparry.detach();\n620: \t\t\t}\n621: \t\t\treturn Messages.get(Monk.class, \"parried\");\n622: \t\t}\n623: \n624: \t\tif (buff(RoundShield.GuardTracker.class) != null){\n625: \t\t\tbuff(RoundShield.GuardTracker.class).hasBlocked = true;\n626: \t\t\tBuffIndicator.refreshHero();\n627: \t\t\tSample.INSTANCE.play(Assets.Sounds.HIT_PARRY, 1, Random.Float(0.96f, 1.05f));\n628: \t\t\treturn Messages.get(RoundShield.GuardTracker.class, \"guarded\");\n629: \t\t}\n630: \n631: \t\tif (buff(MonkEnergy.MonkAbility.Focus.FocusBuff.class) != null){\n632: \t\t\tbuff(MonkEnergy.MonkAbility.Focus.FocusBuff.class).detach();\n633: \t\t\tif (sprite != null && sprite.visible) {\n634: \t\t\t\tSample.INSTANCE.play(Assets.Sounds.HIT_PARRY, 1, Random.Float(0.96f, 1.05f));\n635: \t\t\t}\n636: \t\t\treturn Messages.get(Monk.class, \"parried\");\n637: \t\t}\n638: \n639: \t\treturn super.defenseVerb();\n640: \t}\n641: "
+    },
+    {
+      "id": "snake-stats",
+      "locator": "actors/mobs/Snake.java · L36–43、L53–56",
+      "excerpt": "36: \t\tspriteClass = SnakeSprite.class;\n37: \t\t\n38: \t\tHP = HT = 4;\n39: \t\tdefenseSkill = 25;\n40: \t\t\n41: \t\tEXP = 2;\n42: \t\tmaxLvl = 7;\n43: \t\t\n\n53: \t@Override\n54: \tpublic int attackSkill( Char target ) {\n55: \t\treturn 10;\n56: \t}"
+    },
+    {
+      "id": "shaman-zap",
+      "locator": "actors/mobs/Shaman.java · L113–136",
+      "excerpt": "113: \tprivate void zap() {\n114: \t\tspend( 1f );\n115: \n116: \t\tInvisibility.dispel(this);\n117: \t\tChar enemy = this.enemy;\n118: \t\tif (hit( this, enemy, true )) {\n119: \t\t\t\n120: \t\t\tif (Random.Int( 2 ) == 0) {\n121: \t\t\t\tdebuff( enemy );\n122: \t\t\t\tif (enemy == Dungeon.hero) Sample.INSTANCE.play( Assets.Sounds.DEBUFF );\n123: \t\t\t}\n124: \t\t\t\n125: \t\t\tint dmg = Random.NormalIntRange( 6, 15 );\n126: \t\t\tdmg = Math.round(dmg * AscensionChallenge.statModifier(this));\n127: \t\t\tenemy.damage( dmg, new EarthenBolt() );\n128: \t\t\t\n129: \t\t\tif (!enemy.isAlive() && enemy == Dungeon.hero) {\n130: \t\t\t\tBadges.validateDeathFromEnemyMagic();\n131: \t\t\t\tDungeon.fail( this );\n132: \t\t\t\tGLog.n( Messages.get(this, \"bolt_kill\") );\n133: \t\t\t}\n134: \t\t} else {\n135: \t\t\tenemy.sprite.showStatus( CharSprite.NEUTRAL,  enemy.defenseVerb() );\n136: \t\t}"
+    },
+    {
+      "id": "wand-zap",
+      "locator": "items/wands/WandOfMagicMissile.java · L55–65",
+      "excerpt": "55: \t@Override\n56: \tpublic void onZap(Ballistica bolt) {\n57: \t\t\t\t\n58: \t\tChar ch = Actor.findChar( bolt.collisionPos );\n59: \t\tif (ch != null) {\n60: \n61: \t\t\twandProc(ch, chargesPerCast());\n62: \t\t\tch.damage(damageRoll(), this);\n63: \t\t\tSample.INSTANCE.play( Assets.Sounds.HIT_MAGIC, 1, Random.Float(0.87f, 1.15f) );\n64: \n65: \t\t\tch.sprite.burst(0xFFFFFFFF, buffedLvl() / 2 + 2);"
+    },
+    {
+      "id": "random-uniform",
+      "locator": "D:/eval/src/shattered-pixel-dungeon/SPD-classes/src/main/java/com/watabou/utils/Random.java · L76–94",
+      "excerpt": "76: \t//returns a uniformly distributed float in the range [0, 1)\n77: \tpublic static synchronized float Float() {\n78: \t\treturn Float(true);\n79: \t}\n80: \n81: \tpublic static synchronized float Float( boolean useGeneratorStack ) {\n82: \t\tif (useGeneratorStack)  return generators.peekFirst().nextFloat();\n83: \t\telse                    return generators.peekLast().nextFloat();\n84: \t}\n85: \n86: \t//returns a uniformly distributed float in the range [0, max)\n87: \tpublic static float Float( float max ) {\n88: \t\treturn Float() * max;\n89: \t}\n90: \n91: \t//returns a uniformly distributed float in the range [min, max)\n92: \tpublic static float Float( float min, float max ) {\n93: \t\treturn min + Float(max - min);\n94: \t}"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "attack-entry",
+      "title": "一、进入普通攻击",
+      "source": "hero-entry",
+      "nodes": [
+        {
+          "id": "entry-kind",
+          "title": "一次普通攻击从哪里进入？",
+          "row": 0,
+          "col": 0,
+          "kind": "switch",
+          "lines": "近战 / 投掷 / 怪物普通攻击",
+          "detail": "原问题：攻击时是怎么判定命中还是闪避的？本图以普通攻击进入 Char.hit 再返回结果为主线，展开精度与闪避来源、突袭和强制结果。魔法只用已查实的萨满与魔弹法杖说明边界。伤害完整公式、全部怪物/武器子类、移动寻路规则不在本图展开范围。",
+          "sources": [
+            "hero-entry",
+            "hero-shoot",
+            "mob-entry"
+          ]
+        },
+        {
+          "id": "hero-melee",
+          "title": "英雄近战：攻击动画完成",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "选中敌人格 → handle → actAttack\nonAttackComplete → attack(target)",
+          "detail": "GameScene 的默认格子选择回调调用 hero.handle(cell)；可攻击的可见怪物创建 HeroAction.Attack。Hero.act 分派 actAttack；已满足存活、可攻击且目标不隐身时播放 sprite.attack。CharSprite.onComplete 在攻击动画结束时调用角色 onAttackComplete，英雄在其中调用 attack。被魅惑、目标不可攻击等动作前置失败不算闪避。",
+          "sources": [
+            "cell-entry",
+            "hero-entry",
+            "sprite-callback"
+          ]
+        },
+        {
+          "id": "hero-thrown",
+          "title": "英雄投掷：临时切换攻击武器",
+          "row": 1,
+          "col": 1,
+          "kind": "process",
+          "lines": "MissileWeapon.onThrow → Hero.shoot\nshoot → attack(enemy)",
+          "detail": "投掷碰撞格上存在其他角色时调用 curUser.shoot(enemy,this)，用其返回值分派 rangedHit / rangedMiss。shoot 临时把 belongings.thrownWeapon 设为该投掷武器，调用普通 attack 后驱散隐身并清空临时武器。投掷精度因此由当前投掷武器参与计算。",
+          "sources": [
+            "throw-entry",
+            "hero-shoot"
+          ]
+        },
+        {
+          "id": "mob-normal",
+          "title": "怪物普通攻击",
+          "row": 1,
+          "col": 2,
+          "kind": "process",
+          "lines": "可见时动画完成后调用\n不可见时直接 attack(enemy)",
+          "detail": "Mob.doAttack 在双方精灵可见时播放攻击动画；不可见时直接 attack。Mob.onAttackComplete 同样调用 attack，随后驱散自身隐身并消耗攻击时间。这里仅解释走普通攻击入口的分支，怪物独有法术可能另行调用 hit 或直接结算。",
+          "sources": [
+            "mob-entry"
+          ]
+        },
+        {
+          "id": "attack-default",
+          "title": "调用普通攻击公共实现",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "attack(enemy) → attack(enemy, 1, 0, 1)\n普通默认 accMulti = 1",
+          "detail": "四参分别为目标、伤害倍率、伤害加值、精度倍率。Hero 的四参重写先调用 super.attack，然后清理相关天赋追踪状态；命中核心仍在 Char。普通 attack 调用 hit(this, enemy, accMulti, false)，伤害参数不参与本图的随机命中比较。",
+          "sources": [
+            "attack-gate",
+            "hero-shoot"
+          ]
+        },
+        {
+          "id": "null-target",
+          "title": "目标为空？",
+          "row": 3,
+          "col": 0,
+          "kind": "decision",
+          "lines": "enemy == null",
+          "detail": "这是公共攻击入口的第一条早退。为空直接 false，不读取目标属性，不调用 hit。",
+          "sources": [
+            "attack-gate"
+          ]
+        },
+        {
+          "id": "invalid-end",
+          "title": "没有目标：结束",
+          "row": 3,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "返回 false；未做命中判定",
+          "detail": "false 不只表示闪避：无目标和无敌也返回 false，调用者需结合路径理解。",
+          "sources": [
+            "attack-gate"
+          ]
+        },
+        {
+          "id": "invulnerable-check",
+          "title": "目标对本攻击者类别无敌？",
+          "row": 4,
+          "col": 0,
+          "kind": "decision",
+          "lines": "enemy.isInvulnerable(getClass())",
+          "detail": "这里按攻击者实际类判断目标无敌。可见战斗会显示 invulnerable 并播放招架音，随后 false；该优先级在 Char.hit 的强制命中规则之前。",
+          "sources": [
+            "attack-gate"
+          ]
+        },
+        {
+          "id": "invulnerable-end",
+          "title": "无敌阻止攻击：结束",
+          "row": 4,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "返回 false；不掷随机值",
+          "detail": "即使攻击者具备无限命中，普通 attack 也先被此处挡住。这是无敌分支，不应把所有 false 都解释成闪避成功。",
+          "sources": [
+            "attack-gate"
+          ]
+        },
+        {
+          "id": "call-hit",
+          "title": "进入命中检查 Char.hit",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "lines": "hit(attacker, defender, accMulti, false)",
+          "detail": "下面先取得双方属性，再执行特殊覆盖和强制结果优先级。英雄在 onAttackComplete 中于 attack 返回后才驱散隐身，因此本次命中检查仍能看到攻击前的隐身。魔法边界：三参 hit(attacker,defender,true) 会转为 accMulti=2；四参实现中 magic 本身没有其他分支，传四参的调用者必须自行给倍率。萨满 zap 已核实走三参 true；魔弹法杖 onZap 找到碰撞角色后直接 damage，没有调用 hit，不能把这张随机命中图套用于所有魔法。",
+          "sources": [
+            "hit-core",
+            "hero-entry",
+            "shaman-zap",
+            "wand-zap"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "entry-kind",
+          "b": "hero-melee",
+          "label": "英雄近战"
+        },
+        {
+          "a": "entry-kind",
+          "b": "hero-thrown",
+          "label": "英雄投掷"
+        },
+        {
+          "a": "entry-kind",
+          "b": "mob-normal",
+          "label": "怪物普攻"
+        },
+        {
+          "a": "hero-melee",
+          "b": "attack-default",
+          "label": ""
+        },
+        {
+          "a": "hero-thrown",
+          "b": "attack-default",
+          "label": ""
+        },
+        {
+          "a": "mob-normal",
+          "b": "attack-default",
+          "label": ""
+        },
+        {
+          "a": "attack-default",
+          "b": "null-target",
+          "label": ""
+        },
+        {
+          "a": "null-target",
+          "b": "invalid-end",
+          "label": "是"
+        },
+        {
+          "a": "null-target",
+          "b": "invulnerable-check",
+          "label": "否"
+        },
+        {
+          "a": "invulnerable-check",
+          "b": "invulnerable-end",
+          "label": "是"
+        },
+        {
+          "a": "invulnerable-check",
+          "b": "call-hit",
+          "label": "否"
+        }
+      ]
+    },
+    {
+      "id": "accuracy-check",
+      "title": "二、属性、强制结果与随机对抗",
+      "source": "hit-core",
+      "nodes": [
+        {
+          "id": "read-stats",
+          "title": "先取得精度 A₀ 与闪避 D₀",
+          "row": 0,
+          "col": 0,
+          "kind": "process",
+          "lines": "A₀ = attacker.attackSkill(defender)\nD₀ = defender.defenseSkill(attacker)",
+          "detail": "英雄初始基础精度10、闪避5，升级各+1（旧存档还会恢复保存值）。英雄精度：基础精度×精准之戒(1.3^有效加成)×适用天赋/剑舞等倍率×实际武器 accuracyFactor，最后 Math.round，至少1；按 RingOfForce 判定徒手时跳过武器项。武器力量差 k>0 则 ACC÷1.5^k；受 Wayward 状态且为该诅咒时 ACC再÷5。标准投掷武器非相邻×1.5，相邻英雄×(0.5+0.25×POINT_BLANK点数)，具体子类可重写。英雄闪避：先查招架/圆盾守护等无限闪避，再基础×闪避之戒(1.125^有效加成)×适用天赋/架势；麻痹÷2；护甲处理力量不足÷1.5^k、Momentum加值及强化，最后 round且至少1，Stone刻印的非测试态明确返回0。Mob基础实现：牧师照明且满足武器力量条件时返回0；遭合法英雄突袭、麻痹、英雄攻击友方时也返回0，否则用怪物字段。注意英雄麻痹减半而基础Mob麻痹归零；具体怪物重写可改变规则。最后，若防守英雄 damageInterrupt 为真，此处还会 interrupt，不改变比较公式。",
+          "sources": [
+            "hit-core",
+            "hero-stats",
+            "mob-stats",
+            "weapon-accuracy",
+            "missile-accuracy",
+            "armor-evasion",
+            "acc-ring",
+            "eva-ring"
+          ]
+        },
+        {
+          "id": "special-overrides",
+          "title": "再覆盖隐身与专注",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "隐身且 canSurpriseAttack → A₀ = 100万\n防守方 FocusBuff → D₀ = 100万",
+          "detail": "执行顺序：先调用双方 attackSkill/defenseSkill，再检查隐身覆盖精度，之后检查防守方 FocusBuff 覆盖闪避。英雄 canSurpriseAttack：非Weapon或按力量之戒规则徒手可直接通过；普通武器力量不足、连枷不能突袭。普通Mob.surprisedBy 还要求攻击者是英雄，并且英雄隐身、怪物尚未见敌，或有效视野中看不到英雄之一成立；攻击时还必须允许突袭。未隐身的合法突袭通常表现为 D₀=0；隐身且可突袭则额外把 A₀变为100万。特殊怪物 defenseSkill/surprisedBy 的重写仍有自己的规则。",
+          "sources": [
+            "hit-core",
+            "hero-stats",
+            "mob-stats"
+          ]
+        },
+        {
+          "id": "priority-switch",
+          "title": "按顺序选择判定路径",
+          "row": 2,
+          "col": 0,
+          "kind": "switch",
+          "lines": "① D₀ ≥ 100万：未命中\n② 否则 A₀ ≥ 100万：命中\n③ 否则：双方掷随机值",
+          "detail": "INFINITE_ACCURACY 与 INFINITE_EVASION 都定义为1,000,000。代码先检查防守方是否达到无限闪避，再检查攻击者无限命中。因此二者同时存在时未命中。此检查发生在 Bless/Hex/Daze、accMulti 和其他随机倍率之前：把 accMulti 设得很大并不等同于提前取得无限命中；无限命中分支也不会再受低 accMulti 惩罚。",
+          "sources": [
+            "hit-core"
+          ]
+        },
+        {
+          "id": "forced-miss",
+          "title": "无限闪避：判定未命中",
+          "row": 3,
+          "col": 0,
+          "kind": "merge",
+          "lines": "hit 返回 false\n设置未命中原因图标",
+          "detail": "包括防守方技能返回的无限闪避，或 FocusBuff 覆盖；先于攻击方无限命中生效。不掷双方随机值。后续交回普通 attack 走未命中表现分支。",
+          "sources": [
+            "hit-core"
+          ]
+        },
+        {
+          "id": "forced-hit",
+          "title": "无限命中：判定命中",
+          "row": 3,
+          "col": 1,
+          "kind": "merge",
+          "lines": "hit 返回 true\n设置命中原因图标",
+          "detail": "仅在 D₀<100万时检查 A₀≥100万。进入此分支不再掷随机值，交回普通 attack 计算护甲与伤害。",
+          "sources": [
+            "hit-core"
+          ]
+        },
+        {
+          "id": "attack-roll",
+          "title": "掷攻击值，并乘攻击方修正",
+          "row": 3,
+          "col": 2,
+          "kind": "process",
+          "lines": "X = U[0,A₀) × M攻 × accMulti\n祝福×1.25；Hex×0.8；Daze×0.5",
+          "detail": "Random.Float(max) = Random.Float()×max；底层 nextFloat 返回[0,1)均匀伪随机数。按源码顺序：先掷攻击值，Bless×1.25，Hex×0.8，Daze×0.5；遍历攻击方所有 ChampionEnemy 倍率；乘 AscensionChallenge.statModifier；若全局英雄非牧师且有 BLESS天赋、攻击方为ALLY，再乘1.01+0.02×天赋点数；最后乘传入 accMulti。M攻表示以上属于攻击方的状态倍率乘积。本图未枚举每种冠军类的全部数值，也未追完所有技能传入的 accMulti；它们从这里进入计算。",
+          "sources": [
+            "hit-core",
+            "random-uniform",
+            "champion",
+            "ascension"
+          ]
+        },
+        {
+          "id": "defense-roll",
+          "title": "再掷闪避值，并乘防守方修正",
+          "row": 4,
+          "col": 2,
+          "kind": "process",
+          "lines": "Y = U[0,D₀) × M防 × F\nF：FerretTuft 全局闪避倍率",
+          "detail": "防守方依次为 Bless×1.25、Hex×0.8、Daze×0.5、各ChampionEnemy倍率、AscensionChallenge倍率、满足同样条件的ALLY BLESS天赋倍率，最后乘 FerretTuft.evasionMultiplier。这个饰物项不区分防守者阵营，会作用于所有走此段的防守者；无饰物时F=1，等级L≥0时F=1+0.125×(L+1)。麻痹等属性阶段效果已经计入D₀，此处不再加一遍。",
+          "sources": [
+            "hit-core",
+            "random-uniform",
+            "ferret",
+            "ascension"
+          ]
+        },
+        {
+          "id": "compare-rolls",
+          "title": "攻击值 X ≥ 闪避值 Y？",
+          "row": 5,
+          "col": 1,
+          "kind": "decision",
+          "lines": "有限且倍率固定的正数上界 A、D：\nA≥D：P≈1−D/(2A)\n0<A<D：P≈A/(2D)",
+          "detail": "A=A₀×M攻×accMulti，D=D₀×M防×F。它们是修正后的随机值上界，不是最终掷出的值。两次均匀抽样比较，不能用 A/(A+D)代替。连续均匀近似推导：A≥D时，对Y∈[0,D)积分 P(X≥Y)=1−Y/A，得到1−D/(2A)；A<D时只有X以下的Y能命中，对X积分X/D，得A/(2D)。A=D>0约50%；A=2D约75%；A=D/2约25%。实现为有限精度 nextFloat 且用≥，平局算命中，理论连续公式因此标≈。常规有限非负情形：D=0则必命中（X=0也满足≥）；A=0且D>0时只有Y恰为0才命中，连续近似为0；二者0则0≥0命中。强制分支、负数或NaN不适用该概率式。",
+          "sources": [
+            "hit-core",
+            "random-uniform"
+          ]
+        },
+        {
+          "id": "random-hit",
+          "title": "随机比较通过：判定命中",
+          "row": 6,
+          "col": 1,
+          "kind": "merge",
+          "lines": "X ≥ Y → hit 返回 true",
+          "detail": "同时保存用于解释本次命中的原因图标；后续普通 attack 进入伤害分支。命中与最终伤害数值是两件事。",
+          "sources": [
+            "hit-core"
+          ]
+        },
+        {
+          "id": "random-miss",
+          "title": "随机比较失败：判定未命中",
+          "row": 5,
+          "col": 2,
+          "kind": "merge",
+          "lines": "X < Y → hit 返回 false",
+          "detail": "保存未命中原因图标，随后回到普通 attack 的失败表现分支。",
+          "sources": [
+            "hit-core"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "read-stats",
+          "b": "special-overrides",
+          "label": ""
+        },
+        {
+          "a": "special-overrides",
+          "b": "priority-switch",
+          "label": ""
+        },
+        {
+          "a": "priority-switch",
+          "b": "forced-miss",
+          "label": "先：无限闪避"
+        },
+        {
+          "a": "priority-switch",
+          "b": "forced-hit",
+          "label": "否则：无限命中"
+        },
+        {
+          "a": "priority-switch",
+          "b": "attack-roll",
+          "label": "否则：随机对抗"
+        },
+        {
+          "a": "attack-roll",
+          "b": "defense-roll",
+          "label": ""
+        },
+        {
+          "a": "defense-roll",
+          "b": "compare-rolls",
+          "label": ""
+        },
+        {
+          "a": "compare-rolls",
+          "b": "random-miss",
+          "label": "否"
+        },
+        {
+          "a": "compare-rolls",
+          "b": "random-hit",
+          "label": "是"
+        }
+      ]
+    },
+    {
+      "id": "attack-outcome",
+      "title": "三、把命中结果转成战斗表现",
+      "source": "hit-result",
+      "nodes": [
+        {
+          "id": "result-dispatch",
+          "title": "普通 attack 接收 hit 结果",
+          "row": 0,
+          "col": 0,
+          "kind": "switch",
+          "lines": "true 进入伤害分支\nfalse 进入未命中分支",
+          "detail": "来自上方强制判定或随机判定的布尔返回值。只解释普通 attack 的处理；萨满等直接调用 hit 的调用者自行展示和结算结果。",
+          "sources": [
+            "hit-core",
+            "hit-result"
+          ]
+        },
+        {
+          "id": "damage-outcome",
+          "title": "命中：继续计算护甲与伤害",
+          "row": 1,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "drRoll → damageRoll / Preparation\ndefenseProc → 减护甲 → attackProc\n存活目标执行 damage，最终 true",
+          "detail": "确认命中后才掷减伤dr和伤害。伤害先过defenseProc，返回非负时才继续减dr（至少0）、相关状态与attackProc；若防御过程已使目标死亡，则直接true，否则调用enemy.damage。后面还有附加效果与表现，攻击最终返回true。伤害可能为0，也可能被后续防御处理阻止，因此“未掉血”不能直接反推“闪避”。本图未展开damage内护盾/免疫/生命扣减的完整链。",
+          "sources": [
+            "hit-result"
+          ]
+        },
+        {
+          "id": "miss-outcome",
+          "title": "未命中：显示闪避或招架",
+          "row": 1,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "非 OBJECT：defenseVerb + 原因图标\n可见时 MISS 音效；最终 false",
+          "detail": "普通非OBJECT目标：精灵存在时显示enemy.defenseVerb，有原因图标则一起显示并清空缓存；visibleFight为真时播放MISS音效。OBJECT跳过这组表现但仍false。defenseVerb可由角色重写，例如英雄Combo招架会记录parried并按条件移除追踪状态，圆盾守护也有自身表现；所以未命中的文字不一定都叫“闪避”。英雄近战回调无论hit真假都会在attack返回后驱散隐身并消耗攻击时间。",
+          "sources": [
+            "hit-result",
+            "defense-verb",
+            "hero-entry"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "result-dispatch",
+          "b": "damage-outcome",
+          "label": "hit = true"
+        },
+        {
+          "a": "result-dispatch",
+          "b": "miss-outcome",
+          "label": "hit = false"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "普通演示：A₀=10、D₀=5，命中率约75%",
+      "provenance": "教学演示；假设属性与随机数，不是对局实测",
+      "input": "有效目标且不无敌；双方无强制状态，所有倍率1。假设u攻=0.6、u防=0.8。",
+      "trace": [
+        "普通attack默认accMulti=1，目标校验通过，进入hit。",
+        "attackSkill返回10，defenseSkill返回5；无隐身与专注覆盖，两者均未达100万。",
+        "攻击掷值X=10×0.6=6；闪避掷值Y=5×0.8=4。",
+        "6≥4，hit=true，进入护甲/伤害分支。",
+        "固定上界A=10、D=5，概率近似1−5/(2×10)=75%。"
+      ],
+      "result": "这一次命中；75%是由源码随机比较推导的概率，不是命中率统计。"
+    },
+    {
+      "title": "源码参数演示：初始精度10打蛇的闪避25",
+      "provenance": "基础参数已查源码；战斗状态与抽样为教学假设",
+      "input": "英雄初始基础精度10；蛇defenseSkill=25；非突袭、无装备/状态修正，最终A₀=10、D₀=25。",
+      "trace": [
+        "入口校验通过，双方属性分别10、25。",
+        "没有强制覆盖，进入随机分支，固定上界A=10、D=25。",
+        "演示u攻=0.6、u防=0.4，则X=6，Y=10；6<10，未命中。",
+        "非OBJECT目标显示defenseVerb，普通attack返回false。",
+        "整体概率约A/(2D)=10/50=20%。"
+      ],
+      "result": "正面对抗时约20%命中；若合法突袭使基础Mob闪避归零，则进入D₀=0的另一条数值路径。"
+    },
+    {
+      "title": "突袭与优先级演示：隐身也能被无限闪避挡住",
+      "provenance": "教学演示；状态组合示意，不宣称某一实际遭遇",
+      "input": "有效且不无敌的目标；攻击者隐身且canSurpriseAttack=true；防守方FocusBuff生效。",
+      "trace": [
+        "先调用双方属性函数。",
+        "隐身合法突袭把A₀覆盖为1,000,000；FocusBuff把D₀覆盖为1,000,000。",
+        "优先检查D₀≥1,000,000，立即返回false。",
+        "不再执行无限命中检查，也不掷随机值；普通attack进入未命中表现。"
+      ],
+      "result": "无限闪避胜过无限命中。若前置无敌成立，则更早结束，连hit都不调用。"
+    },
+    {
+      "title": "状态演示：进攻方祝福把相等属性推至约60%",
+      "provenance": "教学演示；不是实测",
+      "input": "A₀=D₀=10，仅攻击者有Bless；其他倍率1。",
+      "trace": [
+        "属性未达强制阈值，进入随机对抗。",
+        "攻击上界A=10×1.25=12.5；防守上界D=10。",
+        "若u攻=0.4、u防=0.5，则X=5、Y=5；代码用≥，这一次命中。",
+        "概率近似1−10/(2×12.5)=60%，不是50%+25%=75%。"
+      ],
+      "result": "祝福乘随机攻击值；它不是直接给最终命中率加25个百分点。"
+    },
+    {
+      "title": "边界演示：萨满魔法与魔弹法杖采用不同入口",
+      "provenance": "调用方式已查源码；数值为教学假设",
+      "input": "萨满法术假定A₀=D₀=10、所有其他倍率1；另对照魔弹法杖碰撞角色后的处理。",
+      "trace": [
+        "Shaman.zap调用hit(this,enemy,true)。",
+        "三参hit转成四参accMulti=2，所以A=20、D=10，随机命中率约75%。",
+        "它仍先检查无限闪避/无限命中；不是所有魔法都必中。",
+        "WandOfMagicMissile.onZap找到碰撞格角色后调用wandProc与ch.damage，没有调用Char.hit。"
+      ],
+      "result": "只对走hit的攻击套用随机对抗公式；魔弹法杖的弹道/碰撞与最终伤害处理另论。"
+    }
+  ],
+  "connections": [
+    {
+      "a": "call-hit",
+      "b": "read-stats",
+      "label": "先读取双方属性"
+    },
+    {
+      "a": "forced-miss",
+      "b": "result-dispatch",
+      "label": "未命中返回"
+    },
+    {
+      "a": "forced-hit",
+      "b": "result-dispatch",
+      "label": "命中返回"
+    },
+    {
+      "a": "random-hit",
+      "b": "result-dispatch",
+      "label": "命中返回"
+    },
+    {
+      "a": "random-miss",
+      "b": "result-dispatch",
+      "label": "未命中返回"
+    }
+  ]
+}

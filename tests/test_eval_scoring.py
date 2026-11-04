@@ -164,7 +164,9 @@ class RealRunTests(unittest.TestCase):
     """
 
     def test_first_baseline_keeps_its_traps_and_scores(self):
-        expected = {'spd-hit-check': 100.0, 'spd-loot-drop': 94.5, 'spd-melee-damage': 98.6}
+        # Melee writes "Viscosity → Vulnerable ×1.33 → attackProc" in one node,
+        # which counts as showing the order since in-node order was added.
+        expected = {'spd-hit-check': 100.0, 'spd-loot-drop': 94.5, 'spd-melee-damage': 100.0}
         for case_id, value in expected.items():
             with self.subTest(case=case_id):
                 flow = load(ROOT / 'evals/runs' / case_id / '2026-11-04-codex-v1.5.0.flow.json')
@@ -204,11 +206,22 @@ class ScoringRuleTests(unittest.TestCase):
                 'graphs': [{'id': 'g', 'source': 's', 'nodes': nodes, 'edges': edges}],
                 'examples': [{'input': '', 'trace': ['1', '2'], 'result': ''}]}
 
-    def test_steps_in_one_node_get_half_credit_for_order(self):
-        nodes = [{'id': 'n', 'kind': 'process', 'title': 'alpha then beta ×1.5'},
-                 {'id': 'g', 'kind': 'decision', 'title': 'gate?'}]
-        result = score(self.case, self.flow(nodes, [{'a': 'n', 'b': 'g'}]))
-        self.assertEqual(result['checks']['order'][0]['score'], 0.5)
+    def test_steps_in_one_node_need_the_order_written_in_it(self):
+        for title, expected in (('alpha then beta ×1.5', 1.0), ('beta after alpha ×1.5', 0.5)):
+            with self.subTest(title=title):
+                nodes = [{'id': 'n', 'kind': 'process', 'title': title},
+                         {'id': 'g', 'kind': 'decision', 'title': 'gate?'}]
+                result = score(self.case, self.flow(nodes, [{'a': 'n', 'b': 'g'}]))
+                self.assertEqual(result['checks']['order'][0]['score'], expected)
+
+    def test_regex_keywords_match_statements(self):
+        case = {**self.case, 'concepts': [{'id': 'a', 'label': 'A', 'any': ['re:(未|没有)(被)?调用']},
+                                          {'id': 'b', 'label': 'B', 'any': ['beta']},
+                                          {'id': 'd', 'label': 'D', 'any': ['gate']}]}
+        for text, expected in (('衰减方法没有被调用', 1.0), ('衰减方法被调用了', 0.0)):
+            with self.subTest(text=text):
+                result = score(case, self.flow([{'id': 'n', 'kind': 'process', 'title': text}], []))
+                self.assertEqual(result['checks']['concepts'][0]['score'], expected)
 
     def test_reverse_order_and_missing_decision_fail(self):
         nodes = [{'id': 'b', 'kind': 'process', 'title': 'beta'}, {'id': 'a', 'kind': 'process', 'title': 'alpha'},

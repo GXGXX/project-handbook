@@ -1,0 +1,518 @@
+{
+  "title": "一次伤害是怎么算出来、最后扣到血上的？",
+  "summary": "按代码追踪一次伤害：技能执行段或效果触发先确定目标并创建伤害行动，随后按普攻或效果公式计算，经过行动派发后直接扣生命值。示例取项目内 Skill_1001 的配置；真实结算会受角色属性和触发条件影响。",
+  "sources": [
+    {
+      "id": "entry",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/AbilityExecute/AbilityExecutionSystem.cs:34-45,61-82; ExecuteClipSystem.cs:71-93,128-153; Action/AssignActionSystem.cs:28-48,50-71; Ability/AbilityTriggerSystem.cs:75-124; AbilityItemSystem.cs:110-174",
+      "excerpt": "施法创建 AbilityExecution，装入并启用 ExecuteClip；计时器到点后触发片段。AssignEffect 片段按触发索引调用 AbilityTriggerSystem.OnTrigger。投射物碰撞由 CollisionActionSystem.ApplyCollision 转交 AbilityItemSystem.OnTriggerEvent，同样触发 AbilityTrigger。触发状态检查通过后创建 EffectAssignAction，写入效果和目标，再调用 AssignActionSystem.Execute。该系统最终调用 AbilityEffectSystem.TriggerApply。"
+    },
+    {
+      "id": "damage",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs:28-88; Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/Action/Actions/DamageAction.cs:12-65",
+      "excerpt": "DamageSource 有 Attack、Skill、Buff 三类。Attack 分支读取 Creator.Attack 与 Target.Defense，先算 coeff=Atk/(Atk+Def)、Dam1=Atk*coeff，再 CeilToInt；暴击时对整数伤害乘1.5再 CeilToInt。Skill 分支仅在 DamageEffect.CanCrit 时抽取暴击，再取效果公式伤害并可能乘1.5向上取整。Buff 分支也读取效果公式，但本段没有将暴击后的倍率应用到 DamageValue。Execute 先通过 ActionSystem.ExecuteAction 派发行动和计算，再由 actionApply 调 HealthSystem.ConsumeHealth；随后调用 CheckDead 并销毁 DamageAction。"
+    },
+    {
+      "id": "formula",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs:13-45; Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ThirdParty/Helper/ExpressionHelper.cs:6-23; Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/CombatEntity/AttributeComponent.cs:1-36",
+      "excerpt": "效果创建时将 DamageEffect.DamageValueFormula 复制到 EffectDamageComponent。求值时为公式中的“自身攻击力”参数填入 OwnerEntity.Attack.Value，计算结果用 Math.Ceiling 转成 int。效果应用通过 OwnerEntity.DamageAbility.TryMakeAction 创建 DamageAction，写入来源分配行动和目标，并显式设置 DamageSource=Skill 后执行。因此该 EffectDamageSystem 入口不论由哪种效果触发，都设置成 Skill 来源。"
+    },
+    {
+      "id": "config",
+      "locator": "Excel/AbilityConfig.xlsx · UnitProto · C8:J8、C17:M17; Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1001.asset:25-77,131-159; ConfigObject/AbilityConfig/EffectConfig/DamageEffect.cs:6-19",
+      "excerpt": "工作簿 UnitProto 第8行定义 ID 1001，名称黑火球术，类别 Skill，目标阵营敌方。Skill_1001 中伤害公式为 300+自身攻击力*0.4，CanCrit=false。该资源含两个触发动作和两个效果：第一个效果分配类型为1；第二个为2，状态检查为目标血量不高于90%且随机不高于50%。DamageEffect 字段声明伤害类型、公式和能否暴击。"
+    },
+    {
+      "id": "health",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/CombatEntity/ActionSystem.cs:55-80; Attribute/HealthSystem.cs:20-37,51-55,75-93; Attribute/NumericSystem.cs:24-43,66-73; App.Model/.../CombatEntity/Attribute/HealthPointComponent.cs:7-12; Action/DamageActionSystem.cs:70-88",
+      "excerpt": "ActionSystem.ExecuteAction 顺序为 BeforeExecuteAction、BeforeSufferAction、数值计算、BeforeCauseApply、BeforeReceiveApply、扣血 actionApply、AfterCauseApply、AfterReceiveApply，然后 AfterExecuteAction、AfterSufferAction。ConsumeHealth 将 DamageValue 交给 HealthSystem.Minus；NumericSystem.MinusBase 从生命 FloatNumeric.baseValue 减去伤害并将基础值下限钳到0，再按 (base+add)*(100+pctAdd)/100 与 (value+finalAdd)*(100+finalPctAdd)/100 重算 Value。HealthPointComponent.Value 是 (int)HealthPointNumeric.Value。CheckDead 判断 Value<=0；DamageActionSystem 虽调用它，但调用位置没有后续死亡处理。"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "trigger-flow",
+      "title": "从技能或效果到伤害行动",
+      "source": "entry",
+      "position": {
+        "row": 0,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "skill-start",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "title": "技能创建执行段",
+          "lines": "AbilityExecution 装入并启用 ExecuteClip",
+          "detail": "SpellActionSystem 建立 AbilityExecution 并 BeginExecute；片段被启用后，时间触发器会执行即时片段或等待 StartTime。Skill_1001 是示例资源，具体打击时机来自执行物片段配置。"
+        },
+        {
+          "id": "trigger-kind",
+          "row": 1,
+          "col": 0,
+          "kind": "switch",
+          "title": "效果由什么入口触发？",
+          "lines": "执行片段、投射物碰撞、Buff 自动触发",
+          "detail": "施法片段 AssignEffect 会调用 AbilityTrigger；投射物碰撞会经 CollisionActionSystem 转发给 AbilityItemSystem，再调用 AbilityTrigger。AbilityTrigger 也支持 AutoTriggerType.Instant、Action、Condition。此分支区分入口，不表示它们使用不同扣血公式。",
+          "sources": [
+            "entry"
+          ]
+        },
+        {
+          "id": "clip-trigger",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "title": "执行片段触发",
+          "lines": "按 ExecuteTrigger 选触发器",
+          "detail": "ExecuteClipSystem.Trigger_AssignEffect 将执行段目标写入 TriggerContext，然后调用 AbilityTriggerSystem.OnTrigger。资源配置不同的片段时间与执行类型会改变触发时机。"
+        },
+        {
+          "id": "collision-trigger",
+          "row": 2,
+          "col": 1,
+          "kind": "process",
+          "title": "投射物碰撞触发",
+          "lines": "碰撞动作转交目标给触发器",
+          "detail": "CollisionActionSystem.ApplyCollision 对 CombatEntity 目标调用 AbilityItemSystem.OnTriggerEvent；该入口按 ExecuteTriggerType 找触发器，并将被撞目标放入 TriggerContext。仅实际碰撞分支会走这里。"
+        },
+        {
+          "id": "buff-trigger",
+          "row": 2,
+          "col": 2,
+          "kind": "process",
+          "title": "状态或自动触发",
+          "lines": "AbilityTrigger 按自身触发配置运行",
+          "detail": "AbilityTriggerSystem.Enable 对 AutoTriggerType.Instant 立即触发，对 Action 监听行为点，对 Condition 建立时间监听。查询到的 Buff_10041 炽烧配置使用间隔时间触发且 CanCrit=false；这是具体示例资源，不证明所有 Buff 都是伤害。"
+        },
+        {
+          "id": "state-check",
+          "row": 3,
+          "col": 0,
+          "kind": "decision",
+          "title": "触发状态检查通过？",
+          "lines": "通过后才分配触发效果",
+          "detail": "AbilityTriggerSystem.OnTrigger 默认从 context 解析目标；若配置有 TriggerStateCheckComponent，则先调用 CheckTargetState。失败时不会分配本次触发中的效果。该判断是触发效果门槛，不是通用命中/闪避判定。"
+        },
+        {
+          "id": "trigger-skip",
+          "row": 3,
+          "col": 1,
+          "kind": "terminal",
+          "title": "状态条件未通过",
+          "lines": "本次不创建效果分配行动",
+          "detail": "AbilityTriggerSystem 只在 stateCheckResult 为 true 时遍历 TriggerEffects 并创建 EffectAssignAction。"
+        },
+        {
+          "id": "assign-action",
+          "row": 4,
+          "col": 0,
+          "kind": "process",
+          "title": "创建效果分配行动",
+          "lines": "写入 AbilityEffect 和本次 Target",
+          "detail": "AbilityTriggerSystem 为触发效果建立 EffectAssignAction，填写 AbilityEffect、AssignTarget、SourceAbility 和 TriggerContext，再交给 AssignActionSystem.Execute。AssignActionSystem 先解析最终目标，随后 AbilityEffectSystem.TriggerApply 处理效果组件。"
+        },
+        {
+          "id": "is-damage",
+          "row": 5,
+          "col": 0,
+          "kind": "decision",
+          "title": "这个效果包含伤害组件？",
+          "lines": "配置 DamageEffect 才创建 DamageAction",
+          "detail": "AbilityEffectSystem.Create 会对 DamageEffect 加载 EffectDamageComponent；TriggerApply 依据效果组件逐个分派。治疗、护盾、属性修改等其他组件不会沿此伤害分支进入 DamageAction。"
+        },
+        {
+          "id": "other-effect",
+          "row": 5,
+          "col": 1,
+          "kind": "terminal",
+          "title": "本次不走伤害结算",
+          "lines": "由相应非伤害效果系统处理",
+          "detail": "这里只追踪 DamageEffect 到扣血的路线。 AbilityEffectSystem 还支持治疗、护盾、Buff、控制等效果，须分别追踪。"
+        },
+        {
+          "id": "make-damage",
+          "row": 6,
+          "col": 0,
+          "kind": "process",
+          "title": "生成 DamageAction",
+          "lines": "效果入口将 DamageSource 设为 Skill",
+          "detail": "EffectDamageSystem.TriggerApply 经 DamageAbility.TryMakeAction 创建行动，设置 SourceAssignAction 和目标，并硬编码 DamageSource.Skill。故此效果入口产生的行动按 DamageActionSystem 的 Skill 分支算，即便能力资源本身是 Buff。不同于此入口，Attack 分支的外部调用点在所给代码目录中没有找到完整闭环。",
+          "sources": [
+            "formula",
+            "damage"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "skill-start",
+          "b": "trigger-kind",
+          "label": ""
+        },
+        {
+          "a": "trigger-kind",
+          "b": "clip-trigger",
+          "label": "执行片段"
+        },
+        {
+          "a": "trigger-kind",
+          "b": "collision-trigger",
+          "label": "投射物"
+        },
+        {
+          "a": "trigger-kind",
+          "b": "buff-trigger",
+          "label": "自动/状态"
+        },
+        {
+          "a": "clip-trigger",
+          "b": "state-check",
+          "label": ""
+        },
+        {
+          "a": "collision-trigger",
+          "b": "state-check",
+          "label": ""
+        },
+        {
+          "a": "buff-trigger",
+          "b": "state-check",
+          "label": ""
+        },
+        {
+          "a": "state-check",
+          "b": "trigger-skip",
+          "label": "否"
+        },
+        {
+          "a": "state-check",
+          "b": "assign-action",
+          "label": "是"
+        },
+        {
+          "a": "assign-action",
+          "b": "is-damage",
+          "label": ""
+        },
+        {
+          "a": "is-damage",
+          "b": "other-effect",
+          "label": "否"
+        },
+        {
+          "a": "is-damage",
+          "b": "make-damage",
+          "label": "是"
+        }
+      ]
+    },
+    {
+      "id": "calculation-flow",
+      "title": "计算伤害并实际扣血",
+      "source": "damage",
+      "position": {
+        "row": 8,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "source-switch",
+          "row": 0,
+          "col": 0,
+          "kind": "switch",
+          "title": "DamageSource 是哪一类？",
+          "lines": "Attack / Skill / Buff",
+          "detail": "枚举定义包含普攻 Attack、技能 Skill 和 Buff。三类分支在 ActionCheckProcess 中并不完全相同。EffectDamageSystem 当前固定写入 Skill，因此由效果组件走过来的行动按 Skill 分支计算。",
+          "sources": [
+            "damage",
+            "formula"
+          ]
+        },
+        {
+          "id": "attack-formula",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "title": "普攻：攻防公式",
+          "lines": "coeff = Atk/(Atk+Def)\nD = ceil(Atk×coeff)",
+          "detail": "代码实际先取攻击者 Attack 和目标 Defense，再算 coeff=Atk/(Atk+Def)、Dam1=Atk×coeff，向上取整存入 DamageValue。等价于在分母非零时 Atk²/(Atk+Def)，并非 Atk−Def。该代码中未把目标减伤属性乘入普攻公式。若 IsCritical=true，再 ceil(D×1.5)。执行 Attack 的完整业务调用点在当前目录中未闭合。",
+          "sources": [
+            "damage"
+          ]
+        },
+        {
+          "id": "effect-formula",
+          "row": 1,
+          "col": 1,
+          "kind": "process",
+          "title": "效果：求值配置表达式",
+          "lines": "D = ceil(公式(自身攻击力))",
+          "detail": "EvaluateExpression 解析 DamageValueFormula；若出现“自身攻击力”参数，就注入能力拥有者的当前 Attack.Value；结果向上取整为 int。Skill_1001 配置为 300+自身攻击力×0.4。AddBuffActionSystem 施加状态时还可能先用 Params 替换公式中的键值。",
+          "sources": [
+            "formula",
+            "config"
+          ]
+        },
+        {
+          "id": "crit-check",
+          "row": 2,
+          "col": 1,
+          "kind": "decision",
+          "title": "效果允许暴击？",
+          "lines": "仅 CanCrit 为 true 时掷暴击概率",
+          "detail": "技能效果分支只有 CanCrit=true 才抽随机数，并用 RandomRate()/100 < Creator.CriticalProbability 判断。RandomRate 为 1 到 100 的整数。CanCrit=false 时不抽暴击。",
+          "sources": [
+            "damage"
+          ]
+        },
+        {
+          "id": "crit-value",
+          "row": 3,
+          "col": 1,
+          "kind": "decision",
+          "title": "此次命中暴击？",
+          "lines": "暴击时 D = ceil(D×1.5)",
+          "detail": "效果 Skill 分支对暴击后的结果再向上取整。暴击概率是攻击者的 CriticalProbability 属性；示例角色初始化值是0.5，表示与代码对照时应特别检查随机数单位：RandomRate/100 的取值为0.01至1.00，而这里直接与0.5比较。",
+          "sources": [
+            "damage",
+            "config"
+          ]
+        },
+        {
+          "id": "crit-success",
+          "row": 4,
+          "col": 1,
+          "kind": "process",
+          "title": "暴击倍率",
+          "lines": "D = ceil(D×1.5)",
+          "detail": "仅此次效果分支的 IsCritical 为 true 时执行，之后进入行动派发。"
+        },
+        {
+          "id": "buff-branch",
+          "row": 1,
+          "col": 2,
+          "kind": "process",
+          "title": "Buff：效果公式",
+          "lines": "D = ceil(公式(自身攻击力))",
+          "detail": "Buff 分支也调用 EffectDamageSystem.GetDamageValue；若 CanCrit=true 会先检查暴击概率，但此分支没有像 Skill 分支那样将 DamageValue 乘以1.5。因此在当前代码中，Buff 分支标记 IsCritical 不等于已经放大伤害值。实际效果入口将 DamageSource 设为 Skill，故该 Buff 分支是否被外部调用尚无证据闭合。",
+          "sources": [
+            "damage",
+            "formula"
+          ]
+        },
+        {
+          "id": "pre-hooks",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "title": "计算前后派发行动事件",
+          "lines": "BeforeExecute / BeforeSuffer\nBeforeCauseApply / BeforeReceiveApply",
+          "detail": "ActionSystem.ExecuteAction 先派发执行者与受击者的前置事件，运行 actionProcess 计算伤害，成功后再派发施加/承受前置事件，然后才调用 actionApply 扣血。当前检索到这些 IBefore/IAfter 接口声明和 Dispatch，未在目录中找到具体伤害修正实现。",
+          "sources": [
+            "health"
+          ]
+        },
+        {
+          "id": "apply-damage",
+          "row": 6,
+          "col": 0,
+          "kind": "process",
+          "title": "将 DamageValue 交给生命系统",
+          "lines": "HealthSystem.ConsumeHealth(target, action)",
+          "detail": "DamageActionSystem.Execute 的 actionApply 回调调用 ConsumeHealth。ActionSystem.ApplyResult 为 true 时再派发 AfterCauseApply 与 AfterReceiveApply，末尾派发 AfterExecuteAction 与 AfterSufferAction。行动没有返回值来取消前置计算；此处代码也未展示护盾抵扣或HP上限预扣伤害。",
+          "sources": [
+            "damage",
+            "health"
+          ]
+        },
+        {
+          "id": "minus-base",
+          "row": 7,
+          "col": 0,
+          "kind": "process",
+          "title": "从生命基础值扣减",
+          "lines": "baseHP = max(baseHP − D, 0)",
+          "detail": "HealthSystem.Minus 调用 NumericSystem.MinusBase，直接从 HealthPointNumeric.baseValue 减去 DamageValue，baseValue 小于0时钳到0。这里没有用 min(D,当前HP) 计算一个另存的实际伤害值；FloatNumeric.Value 则按加成和百分比修正重算。",
+          "sources": [
+            "health"
+          ]
+        },
+        {
+          "id": "recalc-hp",
+          "row": 8,
+          "col": 0,
+          "kind": "process",
+          "title": "重算最终生命数值",
+          "lines": "(base+add)×(100+pctAdd)/100\n再加 finalAdd 与 finalPctAdd",
+          "detail": "NumericSystem.Update 先算 value2=(baseValue+add)×(100+pctAdd)/100，再算 Value=(value2+finalAdd)×(100+finalPctAdd)/100，并派发属性更新。HealthPointComponent.Value 把该 float 截断为 int；因此存在属性修正时，显示整数生命变化不必简单等于 DamageValue。",
+          "sources": [
+            "health"
+          ]
+        },
+        {
+          "id": "dead-check",
+          "row": 9,
+          "col": 0,
+          "kind": "decision",
+          "title": "最终生命值是否 ≤ 0？",
+          "lines": "CheckDead(target)",
+          "detail": "DamageActionSystem 在执行后调用 HealthSystem.CheckDead，后者按 HealthPointComponent.Value<=0 判断；紧邻处的 if 块为空。死亡之后如何播放、移除单位或结算战斗，本目录现有这条调用链没有展示。随后 DamageAction 被销毁。",
+          "sources": [
+            "damage",
+            "health"
+          ]
+        },
+        {
+          "id": "alive-result",
+          "row": 10,
+          "col": 0,
+          "kind": "terminal",
+          "title": "目标仍有生命",
+          "lines": "行动结束并销毁 DamageAction",
+          "detail": "当重算后的整数 HP 大于0，CheckDead 为 false；DamageActionSystem 最后调用 FinishAction 销毁本次行动。",
+          "sources": [
+            "health",
+            "damage"
+          ]
+        },
+        {
+          "id": "dead-result",
+          "row": 10,
+          "col": 1,
+          "kind": "terminal",
+          "title": "生命为零；死亡处理未闭合",
+          "lines": "已检测到死亡条件",
+          "detail": "CheckDead 返回 true 时当前 DamageActionSystem 留下空的 if 块，之后照常 FinishAction。这个目录里未在该位置追踪到后续死亡处理。",
+          "sources": [
+            "health",
+            "damage"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "source-switch",
+          "b": "attack-formula",
+          "label": "Attack"
+        },
+        {
+          "a": "source-switch",
+          "b": "effect-formula",
+          "label": "Skill"
+        },
+        {
+          "a": "source-switch",
+          "b": "buff-branch",
+          "label": "Buff"
+        },
+        {
+          "a": "effect-formula",
+          "b": "crit-check",
+          "label": ""
+        },
+        {
+          "a": "crit-check",
+          "b": "pre-hooks",
+          "label": "否"
+        },
+        {
+          "a": "crit-check",
+          "b": "crit-value",
+          "label": "是"
+        },
+        {
+          "a": "crit-value",
+          "b": "pre-hooks",
+          "label": "否"
+        },
+        {
+          "a": "crit-value",
+          "b": "crit-success",
+          "label": "是"
+        },
+        {
+          "a": "crit-success",
+          "b": "pre-hooks",
+          "label": "修正后继续"
+        },
+        {
+          "a": "attack-formula",
+          "b": "pre-hooks",
+          "label": "公式结果"
+        },
+        {
+          "a": "buff-branch",
+          "b": "pre-hooks",
+          "label": "公式结果"
+        },
+        {
+          "a": "pre-hooks",
+          "b": "apply-damage",
+          "label": ""
+        },
+        {
+          "a": "apply-damage",
+          "b": "minus-base",
+          "label": ""
+        },
+        {
+          "a": "minus-base",
+          "b": "recalc-hp",
+          "label": ""
+        },
+        {
+          "a": "recalc-hp",
+          "b": "dead-check",
+          "label": ""
+        },
+        {
+          "a": "dead-check",
+          "b": "alive-result",
+          "label": "否"
+        },
+        {
+          "a": "dead-check",
+          "b": "dead-result",
+          "label": "是"
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "a": "make-damage",
+      "b": "source-switch",
+      "label": "效果入口创建的行动：DamageSource=Skill"
+    }
+  ],
+  "examples": [
+    {
+      "title": "Skill_1001：黑火球术的配置示例",
+      "provenance": "按已核对的项目示例资源演算；属性值与初始HP是教学输入，不是运行日志",
+      "input": "假设本次效果触发且检查通过；施法者 Attack=1000，目标当前HP=900、Defense=300；Skill_1001 的 DamageValueFormula=300+自身攻击力×0.4，CanCrit=false；生命数值没有额外修正。",
+      "trace": [
+        "Skill_1001 的执行片段或目标碰撞按触发索引分配效果；条件检查通过后创建 EffectAssignAction。",
+        "命中 DamageEffect 后，EffectDamageSystem 创建 DamageAction 并将 DamageSource 固定设为 Skill。",
+        "求公式：300+1000×0.4=700，向上取整仍为700；该资源 CanCrit=false，不进行暴击抽取。",
+        "ActionSystem 派发 BeforeExecuteAction、BeforeSufferAction，完成计算后再派发 BeforeCauseApply、BeforeReceiveApply。当前代码未找到额外伤害修改监听实现。",
+        "ConsumeHealth 将 700 交给 MinusBase：baseHP 从900降到200，重算后的 HP Value 为200。",
+        "CheckDead 判断 200<=0 为 false；销毁 DamageAction。"
+      ],
+      "result": "本次 DamageValue=700；在此教学属性条件下实际HP由900降至200。若生命数值有额外修正，界面整数值变化可能不同于此演算。"
+    },
+    {
+      "title": "普攻公式：Attack=1000，Defense=300",
+      "provenance": "按 DamageActionSystem 源码计算的分支示例；不是实测日志，是否进入普攻分支取决于外部调用者",
+      "input": "假定 DamageSource=Attack，角色无可影响伤害流程的监听。",
+      "trace": [
+        "coeff=1000/(1000+300)=0.769230...。",
+        "Dam1=1000×coeff=769.230...，CeilToInt 后 DamageValue=770。",
+        "若未暴击，保留770；若 IsCritical 为 true，ceil(770×1.5)=1155。",
+        "交给 HealthSystem 后从目标生命基础值减去该 DamageValue，基础值最低为0，再重算最终生命值。"
+      ],
+      "result": "普攻公式不是攻击减防御；例如这一输入下未暴击为770。"
+    }
+  ]
+}
