@@ -13,8 +13,8 @@ import tempfile
 _SOURCE = ({'id': 'id', 'locator': str, 'excerpt': str}, {'id', 'locator'})
 _POSITION = ({'row': int, 'col': int}, {'row', 'col'})
 _NODE_FIELDS = {'id': 'id', 'title': str, 'row': int, 'col': int, 'kind': str,
-                'lines': str, 'detail': str, 'source': 'id'}
-_NODE = (_NODE_FIELDS, set(_NODE_FIELDS) - {'source'})
+                'lines': str, 'detail': str, 'source': 'id', 'sources': ['id']}
+_NODE = (_NODE_FIELDS, set(_NODE_FIELDS) - {'source', 'sources'})
 _EDGE_FIELDS = {'a': 'id', 'b': 'id', 'label': str, 'route': str}
 _EDGE = (_EDGE_FIELDS, {'a', 'b'})
 _CONNECTION = (_EDGE_FIELDS, {'a', 'b', 'label'})
@@ -122,7 +122,8 @@ def _attach_qa(data, entries):
         raise ValueError('Duplicate source ID')
     for graph in data['graphs']:
         for node in graph['nodes']:
-            if 'source' in node and node['source'] not in source_ids:
+            if any(source not in source_ids for source in [node.get('source')] * ('source' in node)
+                   + node.get('sources', [])):
                 raise ValueError('Missing node source')
     node_ids = {node['id'] for graph in data['graphs'] for node in graph['nodes']}
     data['qa'] = _selected_qa(entries, node_ids)

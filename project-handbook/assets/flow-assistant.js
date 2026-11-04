@@ -589,7 +589,8 @@
     }
     function shareData() {
       const value = pick(book, ['title', 'summary', 'common']);
-      const cleanNode = node => pick(node, ['id', 'row', 'col', 'title', 'lines', 'detail', 'kind', 'source']);
+      const cleanNode = node => ({...pick(node, ['id', 'row', 'col', 'title', 'lines', 'detail', 'kind', 'source']),
+        ...(Array.isArray(node.sources) ? {sources: node.sources.filter(id => typeof id === 'string')} : {})});
       const cleanEdge = edge => pick(edge, ['a', 'b', 'label', 'route']);
       value.sources = (book.sources || []).map(item => ({...pick(item, ['id', 'locator']), excerpt: ''}));
       value.graphs = (book.graphs || []).map(graph => ({...pick(graph, ['id', 'title', 'source', 'summary', 'note']), ...(graph.position ? {position: pick(graph.position, ['row', 'col'])} : {}), nodes: (graph.nodes || []).map(cleanNode), edges: (graph.edges || []).map(cleanEdge)}));

@@ -70,7 +70,8 @@ def make_context(data, node_id, question, history):
     sources = []
     if selected:
         graph = next(g for g in data['graphs'] if selected in g['nodes'])
-        sources = [s for s in data.get('sources', []) if s['id'] == graph['source']]
+        cited = selected.get('sources') or [graph['source']]
+        sources = [s for s in data.get('sources', []) if s['id'] in cited]
     payload = {'title': data['title'], 'summary': data.get('summary', ''),
                'selected_node': selected, 'overview': overview[:120],
                'sources': sources, 'examples': data.get('examples', [])[:8],
