@@ -2,7 +2,7 @@
 name: project-handbook
 description: Use when someone supplies client, server or docs directories and asks how a process or calculation in that project works (伤害流程是怎样的、奖励怎么发、这个数值怎么算、帮我梳理登录流程), including vague newcomer questions. Traces the directories read-only and delivers one interactive offline HTML flowchart with branches, formulas, worked examples, node evidence and in-page follow-up questions. Not for README edits, API reference generation or changing project code.
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   source-inspiration: "https://github.com/lili-luo/aicoding-cookbook"
 ---
 
@@ -44,14 +44,19 @@ for example when "奖励" could mean the grant pipeline or the whole economy.
    node for three or more outcomes, per-node `sources` where a step's evidence
    lives elsewhere (a formula file, a config table), explicit cross-section
    `connections`, formulas in `lines`, explanation in `detail`,
-   and at least one worked example whose trace walks the real steps. Label
+   and at least one worked example whose trace walks the real steps and whose
+   `path` lists the node ids it passes, in order, along drawn edges. Label
    teaching examples as demonstrations, not measurements. Do not add
    production notes or review summaries; keep uncertainty in the node it
    concerns.
 4. **Build** with `python scripts/build_flow.py flow.json NEW_OUTPUT`. The output
-   directory must not exist; earlier outputs are never replaced.
+   directory must not exist; earlier outputs are never replaced. When the user
+   names an output directory, keep `flow.json` outside it (beside it or in a
+   temporary folder) and build straight into the named directory; to rebuild
+   after a fix, use a sibling such as `NAME-v2`, never a folder nested inside.
 5. **Verify** in a real browser: whole canvas visible without switching, pan,
-   zoom and fit, search, node details with the right evidence, examples,
+   zoom and fit, search, node details with the right evidence and matching
+   previous/next steps, section titles, each example route, examples,
    cross-section arrows, edges clear of nodes, narrow layout, no network
    requests. Then compare each path, condition, order and number with the
    evidence. Structural checks do not prove the explanation is right.

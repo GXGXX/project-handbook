@@ -168,7 +168,17 @@
         "通知通过校验，此前未处理。",
         "记录已支付与履约事件，确认通知。"
       ],
-      "result": "金额100；不是运行记录。"
+      "result": "金额100；不是运行记录。",
+      "path": [
+        "submit",
+        "stock",
+        "created",
+        "pay",
+        "callback",
+        "duplicate",
+        "paid",
+        "done"
+      ]
     },
     {
       "title": "异常：库存不足",
@@ -178,7 +188,12 @@
         "库存充足？否。",
         "提示缺货并结束。"
       ],
-      "result": "不进入支付流程。"
+      "result": "不进入支付流程。",
+      "path": [
+        "submit",
+        "stock",
+        "soldout"
+      ]
     },
     {
       "title": "边界：重复通知",
@@ -188,7 +203,12 @@
         "该通知已处理？是。",
         "直接确认，不再次记录履约事件。"
       ],
-      "result": "不重复推进流程。"
+      "result": "不重复推进流程。",
+      "path": [
+        "callback",
+        "duplicate",
+        "ack"
+      ]
     }
   ],
   "connections": [

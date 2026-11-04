@@ -595,8 +595,11 @@
       value.sources = (book.sources || []).map(item => ({...pick(item, ['id', 'locator']), excerpt: ''}));
       value.graphs = (book.graphs || []).map(graph => ({...pick(graph, ['id', 'title', 'source', 'summary', 'note']), ...(graph.position ? {position: pick(graph.position, ['row', 'col'])} : {}), nodes: (graph.nodes || []).map(cleanNode), edges: (graph.edges || []).map(cleanEdge)}));
       value.connections = (book.connections || []).map(cleanEdge);
-      value.examples = (book.examples || []).map(example => ({...pick(example, ['title', 'provenance', 'input', 'result']), trace: (example.trace || []).map(redactText)}));
-      value.canvas = {nodes: authoredNodes.map(cleanNode), edges: (book.canvas?.edges || []).map(cleanEdge)};
+      const ids = list => Array.isArray(list) ? list.filter(id => typeof id === 'string') : [];
+      value.examples = (book.examples || []).map(example => ({...pick(example, ['title', 'provenance', 'input', 'result']), trace: (example.trace || []).map(redactText),
+        ...(Array.isArray(example.path) ? {path: ids(example.path)} : {})}));
+      value.canvas = {nodes: authoredNodes.map(cleanNode), edges: (book.canvas?.edges || []).map(cleanEdge),
+        sections: (book.canvas?.sections || []).map(section => ({...pick(section, ['id', 'title']), nodes: ids(section.nodes)}))};
       value.qa = entries.filter(entry => entry.status === 'complete' && selected.has(entry.id)).map(entry => ({...pick(entry, ['id', 'question', 'answer']), node_id: entry.node_id || null}));
       return value;
     }

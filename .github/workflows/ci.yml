@@ -36,8 +36,9 @@ jobs:
       - run: node tests/test_flow_browser.cjs flow-smoke/handbook.html
       - run: python project-handbook/scripts/build_flow.py project-handbook/assets/damage.example.json damage-smoke
       - run: node tests/test_damage_example_browser.cjs damage-smoke/handbook.html
-      - name: In-page Q&A, interactions and search
+      - name: In-page Q&A, interactions, search and reading aids
         run: |
           node tests/test_flow_assistant_browser.cjs
           node tests/test_flow_interactions.cjs
           node tests/test_flow_search.cjs
+          node tests/test_flow_reader.cjs

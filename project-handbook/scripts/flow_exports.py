@@ -21,8 +21,9 @@ _CONNECTION = (_EDGE_FIELDS, {'a', 'b', 'label'})
 _GRAPH = ({'id': 'id', 'title': str, 'source': 'id', 'nodes': [_NODE],
            'edges': [_EDGE], 'position': _POSITION},
           {'id', 'title', 'source', 'nodes', 'edges'})
-_EXAMPLE_FIELDS = {'title': str, 'provenance': str, 'input': str, 'trace': [str], 'result': str}
-_EXAMPLE = (_EXAMPLE_FIELDS, set(_EXAMPLE_FIELDS))
+_EXAMPLE_FIELDS = {'title': str, 'provenance': str, 'input': str, 'trace': [str], 'result': str,
+                   'path': ['id']}
+_EXAMPLE = (_EXAMPLE_FIELDS, set(_EXAMPLE_FIELDS) - {'path'})
 _FIELDS = {'title': str, 'summary': str, 'common': 'id', 'sources': [_SOURCE],
            'graphs': [_GRAPH], 'connections': [_CONNECTION], 'examples': [_EXAMPLE]}
 _MANIFEST = (_FIELDS, {'title', 'sources', 'graphs'})
