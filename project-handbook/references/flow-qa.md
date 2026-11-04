@@ -52,6 +52,9 @@ This is a dedicated ephemeral Codex context, not the active desktop task.
   The panel resizes from its left edge/corner, or its top edge on narrow screens.
   Keep user questions distinct from AI answers and retain formatted Markdown in
   offline exports without executing answer HTML or loading external content.
+- Every model call starts a new ephemeral thread on the verified Codex process.
+  The prompt already carries the flow and the recent completed answers, so old
+  turns never pile up in the model context.
 - The model answers from authored details and recent completed answers first.
   Missing evidence can trigger one bounded host-side keyword lookup within
   authorized text/code directories, followed by an answer with relative source
@@ -71,7 +74,10 @@ This is a dedicated ephemeral Codex context, not the active desktop task.
   on README text for first-time use. Offline copies must say they cannot ask.
 - **整理新版本** asks the model to update affected node details, flow and examples.
   Validate the generated manifest before writing `versions/ID/handbook.html`.
-  Do not replace the original. Structural validation does not independently
+  Do not replace the original. A version is a local working copy like the
+  original: it keeps source excerpts and locators, the helper serves it live,
+  and follow-ups or further revisions from that page use that version's flow.
+  Redaction applies only to exports. Structural validation does not independently
   prove the new explanation: inspect changed high-risk claims before sharing.
 - **离线 HTML** exports the current authored flow plus selected completed answers
   without a model call. PNG exports the diagram, not hidden detail content or

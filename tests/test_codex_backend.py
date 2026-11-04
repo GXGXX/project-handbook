@@ -79,6 +79,7 @@ def fake_codex():
     turns = 0
     pending = None
     history = []
+    threads = {}
     for line in sys.stdin:
         request = json.loads(line)
         with open(os.environ['FAKE_CODEX_LOG'], 'a', encoding='utf-8') as log:
@@ -120,7 +121,11 @@ def fake_codex():
                 send({'id': request['id'], 'error': {'code': -32000,
                       'message': 'PRIVATE_CREDENTIAL sk-private C:\\private\\auth.json'}})
                 continue
-            reply(request, {'thread': {'id': 'dedicated-thread'}, 'model': 'fake-model',
+            thread = 'dedicated-thread'
+            if scenario == 'memory-threads':
+                thread = 'thread-' + str(len(threads) + 1)
+                threads[thread] = []
+            reply(request, {'thread': {'id': thread}, 'model': 'fake-model',
                             'approvalPolicy': 'never', 'sandbox': {'type': 'readOnly'}})
         elif method == 'turn/start':
             turns += 1
@@ -130,12 +135,16 @@ def fake_codex():
             if scenario == 'early-events':
                 event('item/agentMessage/delta', {**params, 'delta': 'early '})
             reply(request, {'turn': {'id': turn, 'status': 'inProgress', 'items': [], 'error': None}})
-            if scenario == 'memory':
-                answer = '|'.join(history) or 'FRESH'
-                history.append(request['params']['input'][0]['text'])
+            if scenario in ('memory', 'memory-threads'):
+                memory = history
+                if scenario == 'memory-threads':
+                    params['threadId'] = request['params']['threadId']
+                    memory = threads[params['threadId']]
+                answer = '|'.join(memory) or 'FRESH'
+                memory.append(request['params']['input'][0]['text'])
                 item = {'type': 'agentMessage', 'id': 'answer', 'text': answer, 'phase': 'final_answer'}
                 event('item/agentMessage/delta', {**params, 'delta': answer})
-                event('turn/completed', {'threadId': 'dedicated-thread',
+                event('turn/completed', {'threadId': params['threadId'],
                       'turn': {'id': turn, 'status': 'completed', 'items': [item], 'error': None}})
                 continue
             if scenario in ('commentary-only', 'late-commentary', 'mixed-phases', 'commentary-legacy'):
@@ -568,6 +577,37 @@ class CodexBackendTests(unittest.TestCase):
         self.assertTrue(all(command[0] == str(Path(sys.executable).resolve()) for command, _ in self.commands))
         methods = [row.get('method', '') for row in self.requests()]
         self.assertFalse(any('resume' in method or 'fork' in method or 'login' in method for method in methods))
+
+    def test_fresh_thread_isolates_questions_without_restarting_codex(self):
+        backend = self.backend('memory-threads', model='test-model')
+        cancel = threading.Event()
+        self.assertEqual(backend.ask('FIRST_PRIVATE', lambda _: None, cancel), 'FRESH')
+        process = backend._process
+        backend.fresh_thread()
+        self.assertTrue(backend.status()['connected'])
+        self.assertEqual(backend.ask('Second question', lambda _: None, cancel), 'FRESH')
+        self.assertIs(backend._process, process)
+        self.assertEqual(len(self.requests('account/read')), 1)
+        starts = self.requests('thread/start')
+        self.assertEqual(len(starts), 2)
+        self.assertTrue(all(row['params']['sandbox'] == 'read-only' and row['params']['ephemeral']
+                            for row in starts))
+        self.assertEqual([row['params']['threadId'] for row in self.requests('turn/start')],
+                         ['thread-1', 'thread-2'])
+        # Without a fresh thread the same thread would remember the first prompt.
+        self.assertEqual(backend.ask('Third question', lambda _: None, cancel), 'Second question')
+
+    def test_fresh_thread_rejects_overlap_and_closed_backend(self):
+        backend = self.backend()
+        backend._operation.acquire()
+        try:
+            with self.assertRaises(RuntimeError):
+                backend.fresh_thread()
+        finally:
+            backend._operation.release()
+        backend.close()
+        with self.assertRaises(RuntimeError):
+            backend.fresh_thread()
 
     def test_reset_unused_context_is_idempotent_and_never_reopens_closed_backend(self):
         backend = self.backend()
