@@ -4,7 +4,22 @@
     "tag": "v4.0.2",
     "commit": "57a4e06a4caf162446d1c28caa7983f0493fecf0",
     "license": "GPL-3.0",
-    "roots": ["core/src/main/java/com/shatteredpixel/shatteredpixeldungeon"],
+    "roots": [
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon"
+    ],
     "why": "Java roguelike with about 1,300 source files: combat, hit and loot rules are real code with buffs, early exits and order-sensitive formulas, but small enough to check by hand."
+  },
+  "egameplay": {
+    "url": "https://github.com/m969/EGamePlay",
+    "commit": "e0fccfe836d5d6cec47af5894c679e171aa6d4f8",
+    "license": "MIT",
+    "roots": [
+      "Excel",
+      "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay",
+      "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay",
+      "Assets/GameResources.RpgExample/Resources/AbilityObjects"
+    ],
+    "ask": ".",
+    "why": "Unity C# combat framework from a Chinese developer: Excel config tables, Unity .asset skill configs with formula strings, mixed UTF-8 and GBK source. Formulas live in code, values in config, and some config is not wired into the code."
   }
 }

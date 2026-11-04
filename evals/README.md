@@ -4,13 +4,19 @@
 
 ## 题目
 
-源码固定在 [Shattered Pixel Dungeon](https://github.com/00-Evan/shattered-pixel-dungeon) v4.0.2（commit `57a4e06`，约 1300 个 Java 文件），见 `sources.json`。
+两个项目，版本都固定在 `sources.json`：
+
+- [Shattered Pixel Dungeon](https://github.com/00-Evan/shattered-pixel-dungeon) v4.0.2（commit `57a4e06`，约 1300 个 Java 文件）：逻辑和数值都在代码里。
+- [EGamePlay](https://github.com/m969/EGamePlay)（commit `e0fccfe`，MIT）：Unity C# 战斗框架，公式在代码，数值在 Excel 表和 Unity `.asset` 技能配置里，代码有 UTF-8 也有 GBK。更接近「客户端 + 配置表」的真实项目，而且有配置写了、代码没接上的地方。
 
 | 题目 | 问题 | 陷阱（容易写错的地方） |
 |---|---|---|
 | `spd-melee-damage` | 近战攻击一次，最后打到怪身上的伤害是怎么算出来的？ | 护甲值一开始就掷出，但要等倍率和 defenseProc 之后才减；易伤 ×1.33 在减护甲之后 |
 | `spd-hit-check` | 攻击时是怎么判定命中还是闪避的？ | 先判无限闪避，所以必闪压过必中；必闪时不掷骰 |
 | `spd-loot-drop` | 怪物死了以后，掉不掉东西、掉什么是怎么决定的？ | 等级超限时连财富戒指额外掉落也没有；被偷、没掷中都不影响财富戒指判定 |
+| `eg-damage-pipeline` | 这个项目里，一次伤害是怎么算出来、最后扣到血上的？ | 代码按普攻 / 技能 / Buff 分三支，但只有技能来源会被赋值，另两支走不到；Buff 分支掷了暴击却不乘 1.5 |
+| `eg-fireball-falloff` | 火弹（1005）打中多个目标时，每个目标会受到多少伤害？ | Excel 描述和技能配置都写了「每个目标减 20%，最低 40%」，但算衰减的函数没有任何调用，每个目标都是 500 |
+| `eg-burn-dot` | 血红激光炮（1004）挂上的灼烧，每跳扣多少血、多久跳一次、持续多久、能暴击吗？ | 灼烧配置里只有「伤害取值」这个名字，260 是挂 Buff 时字符串替换进去的；每一跳按技能伤害处理，不走 Buff 分支 |
 
 每道题的 `cases/<id>.json` 里写着答案键和源码出处（文件和行号），`gold/<id>.flow.json` 是满分的参考答案，也可以当作好答案的样子来看。
 
@@ -22,12 +28,13 @@
    python evals/fetch_sources.py
    ```
 
-2. 在 Codex 里装好要测的 skill 版本，开一个**新会话**，原样发：
+2. 在 Codex 里装好要测的 skill 版本，开一个**新会话**，原样发（目录用上一步打印的「give the skill this directory」，问题用题目表里的原话）：
 
    ```text
    使用 $project-handbook。
 
-   这是代码目录：<上一步打印的 source root>
+   这是代码目录：<目录>
+   输出目录用：<任意空目录>\<题目 id>
 
    近战攻击一次，最后打到怪身上的伤害是怎么算出来的？
    ```
@@ -65,13 +72,16 @@
 追问时如果流程图里的说明不够，模型会请求一次关键词检索，由本地服务在授权目录里查找。`retrieval/spd.json` 有 17 道检索题，每题写的是模型会发出的检索词，以及结果里必须出现的文件和行号。
 
 ```text
-python evals/score_retrieval.py <fetch_sources.py 打印的 source root>
+python evals/score_retrieval.py <破碎地牢的目录>
+python evals/score_retrieval.py <EGamePlay 的目录> evals/retrieval/egameplay.json
 ```
 
-| 版本 | 找到 | 排第 1 |
+| 版本 | 破碎地牢（17 题） | EGamePlay（8 题） |
 |---|---|---|
-| 旧版（只按文件名挑 400 个文件读、每个文件取命中最多的一行） | 9/17 | 5 |
-| 2.0（读全部文件、忽略 import、罕见词加权、定义加分、读 Excel） | 17/17 | 13 |
+| 旧版（只按文件名挑 400 个文件读、每个文件取命中最多的一行） | 9 | 4 |
+| 2.0（读全部文件、忽略 import、罕见词加权、定义加分、读 Excel 和 `.asset`） | 17，其中 13 题排第 1 | 8，其中 6 题排第 1 |
+
+EGamePlay 的检索题专门覆盖：GBK 编码的代码、`.asset` 里 `\u` 转义的中文、Excel 的行。
 
 旧版漏掉的大多是两种情况：真正的代码文件根本没被读到，或者被读到了却只截出 import 行。基线里「dropBonus 由哪几项组成」答不出来，就是这个原因。
 
@@ -92,7 +102,7 @@ python evals/score_retrieval.py <fetch_sources.py 打印的 source root>
 - 匹配靠关键词。答案键里同时列了代码名和常见中文说法，但换一种说法还是可能漏判；"不扣血"这种否定句也会被当成提到了"扣血"。分数异常时，打开报告看具体是哪一项，再对照流程图人工确认。
 - 打分只看内容，不看排版。连线是否遮挡、能不能缩放，由 `tests/` 里的浏览器测试负责。
 - 一道题跑一次的分数会有波动。比较两个版本时，每道题至少各跑 2 次，看平均分和陷阱通过数。
-- 三道题都是 Java 单机游戏。要覆盖 Lua/C# 客户端加服务端、配置表在 Excel 里的情况，需要再找合适的公开项目补题。
+- 还没有「客户端 + 服务端」两份代码一起读的题，也没有 Lua 项目。
 
 ## 加一道题
 

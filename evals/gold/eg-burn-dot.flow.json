@@ -1,0 +1,50 @@
+{
+  "title": "血红激光炮挂上的灼烧怎么扣血",
+  "summary": "血红激光炮先造成 10000 伤害，再给目标挂灼烧 4 秒，并传入参数 伤害取值=260、间隔时间=0.3。挂 Buff 时这两个名字被字符串替换进灼烧的伤害公式和触发条件，所以每 0.3 秒跳一次、每跳 260。每一跳都按技能伤害处理（来源固定为 Skill），灼烧配置不能暴击。",
+  "sources": [
+    {"id": "burn", "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1004.asset:40-130；AbilityObjects/Buff/Buff_10041.asset:55-90；com.system.egameplay/Action/AddBuffActionSystem.cs:66-123；Ability/AbilityEffect/EffectDamageSystem.cs:24-43",
+     "excerpt": "Skill_1004：伤害 10000；AddStatusEffect Duration 4，Params 伤害取值=260、间隔时间=0.3。Buff_10041：DamageValueFormula「伤害取值」，CanCrit false，ConditionParam「间隔时间」。ProcessInputKVParams 用 Replace 替换。"}
+  ],
+  "graphs": [
+    {
+      "id": "burn",
+      "title": "灼烧",
+      "source": "burn",
+      "nodes": [
+        {"id": "cast", "row": 0, "col": 0, "kind": "terminal", "title": "血红激光炮命中目标",
+         "lines": "Skill_1004 生效", "detail": ""},
+        {"id": "hit", "row": 1, "col": 0, "kind": "process", "title": "技能本身的伤害",
+         "lines": "DamageValueFormula = 10000，不可暴击 → 扣 10000", "detail": ""},
+        {"id": "addbuff", "row": 2, "col": 0, "kind": "process", "title": "给目标挂上灼烧",
+         "lines": "AddStatusEffect：Buff 10041，Duration 4，参数 伤害取值=260、间隔时间=0.3", "detail": ""},
+        {"id": "replace", "row": 3, "col": 0, "kind": "process", "title": "把参数替换进灼烧配置",
+         "lines": "ProcessInputKVParams：公式「伤害取值」→「260」；触发条件「间隔时间」→「0.3」",
+         "detail": "直接打开 Buff_10041 只能看到「伤害取值」这个名字，数值是挂 Buff 时用字符串替换写进去的。"},
+        {"id": "tick", "row": 4, "col": 0, "kind": "process", "title": "每 0.3 秒触发一跳，持续 4 秒",
+         "lines": "触发条件 间隔时间 = 0.3；Duration 4 秒后移除", "detail": ""},
+        {"id": "damage", "row": 5, "col": 0, "kind": "process", "title": "每一跳计算伤害",
+         "lines": "TriggerApply：DamageSource 固定为 Skill；公式 260 → 向上取整 260；CanCrit false",
+         "detail": "按技能伤害处理，走技能分支，不走 Buff 分支；配置不能暴击，所以不掷暴击。"},
+        {"id": "consume", "row": 6, "col": 0, "kind": "process", "title": "扣血 260",
+         "lines": "ConsumeHealth", "detail": ""},
+        {"id": "end", "row": 7, "col": 0, "kind": "terminal", "title": "持续时间到，灼烧移除",
+         "lines": "", "detail": ""}
+      ],
+      "edges": [
+        {"a": "cast", "b": "hit"},
+        {"a": "hit", "b": "addbuff"},
+        {"a": "addbuff", "b": "replace"},
+        {"a": "replace", "b": "tick"},
+        {"a": "tick", "b": "damage"},
+        {"a": "damage", "b": "consume"},
+        {"a": "consume", "b": "end"}
+      ]
+    }
+  ],
+  "examples": [
+    {"title": "灼烧完整持续 4 秒", "provenance": "演示推演，非实测",
+     "input": "目标被血红激光炮命中，灼烧持续 4 秒，间隔 0.3 秒。",
+     "trace": ["技能伤害 10000。", "挂灼烧，参数替换后公式为 260。", "每 0.3 秒扣 260，不暴击。"],
+     "result": "每跳 260；4 秒内跳几次取决于计时器实现，这里不推算。"}
+  ]
+}
