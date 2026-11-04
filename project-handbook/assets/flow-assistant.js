@@ -575,7 +575,7 @@
         .replace(/(?<![\w-])["']?(?:[a-z0-9]+[_-])*(?:(?:api|secret|private)[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|session[_-]?(?:id|key)|cookie|password|passwd|pwd|secret|token|authorization|credential)["']?(?:\s*[:=]\s*|\s+is\s+)(?:(?:bearer|basic)\s+)?(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;<>]+)/gi, '[已隐藏]')
         .replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, '[已隐藏]')
         .replace(/\b(?:sk-[A-Za-z0-9_-]{8,}|(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|AKIA[A-Z0-9]{16}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b/g, '[已隐藏]')
-        .replace(/(?:\b[a-z][a-z0-9+.-]*:\/\/|(?<![\p{L}\p{N}_:/])\/\/)[^\s<>"']+/giu, '[链接已隐藏]')
+        .replace(/(?:\b[a-z][a-z0-9+.-]*:\/\/|(?<![\p{L}\p{N}_:/])\/\/(?=(?:[a-z0-9-]+\.)+[a-z]{2,}[/:]))[^\s<>"']+/giu, '[链接已隐藏]')
         // Same rule as _PATH in flow_exports.py: absolute paths only, never division in formulas.
         .replace(/(?<![\p{L}\p{N}_/<)\]}）])(?:[A-Za-z]:[\\/]|\\\\|~[/\\]|\/(?=[^\s/<>"'|,;，。；）)\]}]+(?:[\\/]|\.[A-Za-z][A-Za-z0-9]{0,7}(?![A-Za-z0-9]))))(?:[^\s<>"'|,;，。；）)\]}]|[ \t]+(?=[A-Za-z0-9 ._()\-]*[\\/])|[)）](?=[\\/]))*/gu, '[路径已隐藏]');
     }

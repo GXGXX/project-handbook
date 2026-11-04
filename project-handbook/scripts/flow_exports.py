@@ -46,7 +46,9 @@ _TOKEN = re.compile(
     r'xox[baprs]-[A-Za-z0-9-]{8,}|AKIA[A-Z0-9]{16}|'
     r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b')
 # No network/DNS lookup can reliably decide whether a URL names a private service.
-_URL = re.compile(r'''(?i)(?:\b[a-z][a-z0-9+.-]*://|(?<![\w:/])//)[^\s<>"']+''')
+# A bare "//" only starts a URL when a dotted host and a path or port follow
+# ("//cdn.example.com/x"); otherwise it is a code comment ("//vulnerable applies").
+_URL = re.compile(r'''(?i)(?:\b[a-z][a-z0-9+.-]*://|(?<![\w:/])//(?=(?:[a-z0-9-]+\.)+[a-z]{2,}[/:]))[^\s<>"']+''')
 # Absolute paths only. A slash right after a word, digit or closing bracket is
 # division ("(攻击-防御)/2"), and a root slash needs a second segment or a file
 # extension. A space stays inside a path only when ASCII words lead to another
