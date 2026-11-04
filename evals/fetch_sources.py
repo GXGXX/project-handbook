@@ -2,9 +2,11 @@
 
     python evals/fetch_sources.py [TARGET_DIR]
 
-Each project is cloned shallowly at the pinned tag into TARGET_DIR/<name>
-(default: evals/.sources, ignored by Git) and its commit is checked against
-sources.json, so answer keys always describe the same code.
+Each project is cloned at the pinned tag into TARGET_DIR/<name> (default:
+evals/.sources, ignored by Git) and its commit is checked against sources.json,
+so answer keys always describe the same code. Only the source roots the
+questions use are downloaded (a sparse, blob-filtered clone): about 10 MB
+instead of 150 MB for Shattered Pixel Dungeon. Git prints its progress.
 """
 import json
 import subprocess
@@ -20,8 +22,10 @@ def main():
     for name, source in json.loads((HERE / 'sources.json').read_text(encoding='utf-8')).items():
         folder = target / name
         if not folder.exists():
-            subprocess.run(['git', 'clone', '--depth', '1', '--branch', source['tag'],
-                            source['url'], str(folder)], check=True)
+            subprocess.run(['git', 'clone', '--progress', '--depth', '1', '--branch', source['tag'],
+                            '--filter=blob:none', '--sparse', source['url'], str(folder)], check=True)
+            subprocess.run(['git', '-C', str(folder), 'sparse-checkout', 'set', '--no-cone',
+                            *('/' + root.strip('/') + '/' for root in source['roots'])], check=True)
         commit = subprocess.run(['git', '-C', str(folder), 'rev-parse', 'HEAD'],
                                 check=True, capture_output=True, text=True).stdout.strip()
         if commit != source['commit']:
