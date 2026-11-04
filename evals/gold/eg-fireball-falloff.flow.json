@@ -1,0 +1,47 @@
+{
+  "title": "火弹打中多个目标，每个目标受多少伤害",
+  "summary": "每个目标都受到 500。Excel 描述和 Skill_1005 配置都写了「每命中一个目标减 20%，最低 40%」，命中计数也在增加，但计算衰减比例的 GetDamagePercent 没有任何调用，伤害行动只取公式结果 500，火弹又不能暴击。",
+  "sources": [
+    {"id": "fireball", "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1005.asset:40-79；Excel/AbilityConfig.xlsx UnitProto!12；com.system.egameplay/Ability/AbilityEffect/EffectDamageReduceSystem.cs:26-30；AbilityItem/AbilityItemSystem.cs:165-168；Action/DamageActionSystem.cs:45-56",
+     "excerpt": "ReducePercent 20，MinPercent 40，DamageValueFormula 500，CanCrit false。GetDamagePercent = Max(MinPercent, 1 - ReducePercent * TargetCounter)，全仓库无调用；乘衰减的旧代码在 Game.CompileShare~ 中已注释。"}
+  ],
+  "graphs": [
+    {
+      "id": "fireball",
+      "title": "火弹命中",
+      "source": "fireball",
+      "nodes": [
+        {"id": "hit", "row": 0, "col": 0, "kind": "terminal", "title": "火弹命中一个目标",
+         "lines": "碰撞检测命中 → 触发伤害效果", "detail": ""},
+        {"id": "config", "row": 1, "col": 0, "kind": "process", "title": "读取伤害配置",
+         "lines": "Skill_1005：DamageValueFormula = 500，CanCrit = false", "detail": "火弹不能暴击。"},
+        {"id": "falloff", "row": 1, "col": 1, "kind": "terminal", "title": "配置的多目标衰减（未生效）",
+         "lines": "ReducePercent 20%，MinPercent 40%；GetDamagePercent = max(40%, 1 - 20% × 命中数)",
+         "detail": "Excel 技能描述和 Skill_1005 都声明了衰减，但 GetDamagePercent 没有被调用；乘衰减的旧代码只在 Game.CompileShare~ 里，已注释。"},
+        {"id": "formula", "row": 2, "col": 0, "kind": "process", "title": "按公式算伤害",
+         "lines": "ParseDamage：500 → 向上取整仍是 500", "detail": "不乘任何衰减比例。"},
+        {"id": "consume", "row": 3, "col": 0, "kind": "process", "title": "扣血",
+         "lines": "ConsumeHealth：目标扣 500", "detail": ""},
+        {"id": "counter", "row": 4, "col": 0, "kind": "process", "title": "命中计数 +1",
+         "lines": "AbilityItemSystem：TargetCounter++", "detail": "计数在增加，但没有代码读它来算伤害。"},
+        {"id": "next-target", "row": 5, "col": 0, "kind": "terminal", "title": "下一个目标",
+         "lines": "同样走一遍，每个目标都是 500", "detail": ""}
+      ],
+      "edges": [
+        {"a": "hit", "b": "config"},
+        {"a": "config", "b": "falloff", "label": "配置还声明了"},
+        {"a": "config", "b": "formula"},
+        {"a": "formula", "b": "consume"},
+        {"a": "consume", "b": "counter"},
+        {"a": "counter", "b": "next-target"}
+      ]
+    }
+  ],
+  "examples": [
+    {"title": "一发火弹先后打中三个目标", "provenance": "演示推演，非实测",
+     "input": "三个目标依次被命中，TargetCounter 从 0 开始。",
+     "trace": ["第 1 个目标：500，计数变 1。", "第 2 个目标：仍是 500（若衰减生效应为 400），计数变 2。",
+               "第 3 个目标：仍是 500（若衰减生效应为 300）。"],
+     "result": "三个目标都是 500，共 1500。"}
+  ]
+}

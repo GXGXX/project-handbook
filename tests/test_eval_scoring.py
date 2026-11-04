@@ -52,7 +52,7 @@ class AnswerKeyTests(unittest.TestCase):
                     self.assertTrue(set(refs) <= set(ids), rule)
                     if kind != 'order':
                         self.assertIn(rule['decision'], case['decisions'])
-                self.assertTrue(any(rule.get('trap') for rule in case['order']))
+                self.assertTrue(any(item.get('trap') for item in case['order'] + case['concepts']))
                 self.assertTrue(case['evidence'] and case['evidence_files'])
 
     def test_gold_answers_build_and_score_full_marks(self):
@@ -118,6 +118,40 @@ class TrapTests(unittest.TestCase):
                               for edge in edges] + [('too-high', 'end')])
         result = score(case, wrong)
         self.assertIn('level-cap one_branch_skips wealth-bonus', failed(result))
+
+
+class ConfigTrapTests(unittest.TestCase):
+    """EGamePlay questions: config says one thing, code does another."""
+
+    def edit(self, case_id, changes):
+        flow = gold(ROOT / 'evals/cases' / (case_id + '.json'))
+        for node in flow['graphs'][0]['nodes']:
+            node.update(changes.get(node['id'], {}))
+        validate(flow)
+        return score(load(ROOT / 'evals/cases' / (case_id + '.json')), flow)
+
+    def test_fireball_that_trusts_the_config_loses_both_traps(self):
+        result = self.edit('eg-fireball-falloff', {
+            'falloff': {'title': '多目标衰减', 'detail': '每命中一个目标衰减 20%，最低 40%。'},
+            'formula': {'detail': '再乘衰减比例。'},
+            'counter': {'detail': '计数用于下一次衰减。'},
+            'next-target': {'lines': '第二个目标 400，第三个 300'}})
+        self.assertEqual(result['traps_passed'], 0, failed(result))
+
+    def test_burn_on_the_buff_branch_loses_its_trap(self):
+        result = self.edit('eg-burn-dot', {
+            'damage': {'lines': 'TriggerApply：DamageSource 为 Buff；公式 260；CanCrit false',
+                       'detail': '按 Buff 伤害处理。'}})
+        self.assertIn('skill-source', failed(result))
+        self.assertEqual(result['traps_passed'], 1)
+
+    def test_pipeline_that_trusts_all_three_branches_loses_its_traps(self):
+        result = self.edit('eg-damage-pipeline', {
+            'source-branch': {'detail': '按来源分三支。'},
+            'other': {'title': '普攻 / Buff 分支', 'lines': '普攻：Atk × Atk/(Atk+Def)，暴击 ×1.5；Buff：同技能',
+                      'detail': '普通攻击走普攻分支，Buff 跳伤走 Buff 分支。'}})
+        self.assertIn('only-skill', failed(result))
+        self.assertIn('buff-no-mult', failed(result))
 
 
 class RealRunTests(unittest.TestCase):

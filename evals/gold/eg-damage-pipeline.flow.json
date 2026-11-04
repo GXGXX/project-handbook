@@ -1,0 +1,64 @@
+{
+  "title": "一次伤害怎么算出来并扣到血上",
+  "summary": "伤害只从技能效果触发：TriggerApply 创建伤害行动并把来源固定为 Skill。行动前触发点之后，能暴击就按暴击率掷暴击，再解析配置的伤害公式（代入自身攻击力）并向上取整，暴击时 ×1.5 再向上取整；生效前触发点之后扣血，最后检查死亡。代码里还有普攻和 Buff 两个分支，但当前没有任何代码创建这两种来源的伤害，走不到。",
+  "sources": [
+    {"id": "eg-damage", "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs:24-43；Action/DamageActionSystem.cs:28-82；CombatEntity/ActionSystem.cs:57-80；Attribute/HealthSystem.cs:34-38",
+     "excerpt": "TriggerApply：TryMakeAction → DamageSource = DamageSource.Skill → DamageActionSystem.Execute。ExecuteAction：BeforeExecuteAction/BeforeSufferAction → ActionCheckProcess → BeforeCauseApply/BeforeReceiveApply → ConsumeHealth → AfterCauseApply/AfterReceiveApply → AfterExecuteAction/AfterSufferAction。"}
+  ],
+  "graphs": [
+    {
+      "id": "damage",
+      "title": "伤害行动",
+      "source": "eg-damage",
+      "nodes": [
+        {"id": "trigger", "row": 0, "col": 0, "kind": "terminal", "title": "伤害效果触发",
+         "lines": "EffectDamageSystem.TriggerApply → TryMakeAction 创建伤害行动", "detail": "这是全仓库唯一创建伤害行动的地方，并且固定写 DamageSource = Skill。"},
+        {"id": "before", "row": 1, "col": 0, "kind": "process", "title": "行动前触发点",
+         "lines": "BeforeExecuteAction（攻击方）/ BeforeSufferAction（目标）", "detail": "被动、Buff 可以在这里介入。"},
+        {"id": "source-branch", "row": 2, "col": 0, "kind": "decision", "title": "伤害来源是 Skill？",
+         "lines": "DamageSource == Skill", "detail": "DamageActionSystem 按来源分三支，但全仓库只有 TriggerApply 给来源赋值，且只赋 Skill，所以当前总是走技能分支。"},
+        {"id": "other", "row": 2, "col": 1, "kind": "terminal", "title": "普攻 / Buff 分支（当前走不到）",
+         "lines": "普攻：Atk × Atk/(Atk+Def)，暴击 ×1.5；Buff：掷暴击但不乘 1.5", "detail": "Attack 只是枚举默认值，没有代码创建这种伤害；Buff 从未被赋值。Buff 分支即使走到，暴击也不放大。"},
+        {"id": "cancrit", "row": 3, "col": 0, "kind": "decision", "title": "能暴击？",
+         "lines": "DamageEffect.CanCrit", "detail": "每个伤害效果在配置里单独决定能否暴击。"},
+        {"id": "nocrit", "row": 3, "col": 1, "kind": "process", "title": "不掷暴击",
+         "lines": "IsCritical 保持 false", "detail": "直接按公式算伤害。"},
+        {"id": "critroll", "row": 4, "col": 0, "kind": "process", "title": "按暴击率掷暴击",
+         "lines": "RandomRate()/100 < CriticalProbability", "detail": "暴击率取攻击方属性。"},
+        {"id": "formula", "row": 5, "col": 0, "kind": "process", "title": "解析伤害公式",
+         "lines": "ParseDamage：DamageValueFormula 代入自身攻击力 → 向上取整", "detail": "公式是配置里的字符串，可以是常数（如 500）或表达式（如 自身攻击力*1.2）。"},
+        {"id": "crit", "row": 6, "col": 0, "kind": "process", "title": "暴击加成",
+         "lines": "暴击时 CeilToInt(伤害 × 1.5)", "detail": "先取整再乘 1.5，乘完再向上取整一次。"},
+        {"id": "applyhooks", "row": 7, "col": 0, "kind": "process", "title": "生效前触发点",
+         "lines": "BeforeCauseApply / BeforeReceiveApply", "detail": "在扣血之前。"},
+        {"id": "consume", "row": 8, "col": 0, "kind": "process", "title": "扣血",
+         "lines": "ConsumeHealth → HealthSystem.Minus → MinusBase", "detail": "直接减生命值，没有防御减免。"},
+        {"id": "after", "row": 9, "col": 0, "kind": "process", "title": "生效后与行动后触发点",
+         "lines": "AfterCauseApply / AfterReceiveApply / AfterExecuteAction", "detail": ""},
+        {"id": "dead", "row": 10, "col": 0, "kind": "terminal", "title": "检查死亡",
+         "lines": "CheckDead：HP ≤ 0", "detail": ""}
+      ],
+      "edges": [
+        {"a": "trigger", "b": "before"},
+        {"a": "before", "b": "source-branch"},
+        {"a": "source-branch", "b": "cancrit", "label": "是"},
+        {"a": "source-branch", "b": "other", "label": "否"},
+        {"a": "cancrit", "b": "critroll", "label": "是"},
+        {"a": "cancrit", "b": "nocrit", "label": "否"},
+        {"a": "critroll", "b": "formula"},
+        {"a": "nocrit", "b": "formula"},
+        {"a": "formula", "b": "crit"},
+        {"a": "crit", "b": "applyhooks"},
+        {"a": "applyhooks", "b": "consume"},
+        {"a": "consume", "b": "after"},
+        {"a": "after", "b": "dead"}
+      ]
+    }
+  ],
+  "examples": [
+    {"title": "自身攻击力 100、公式「自身攻击力*1.2」、暴击", "provenance": "演示推演，非实测",
+     "input": "CanCrit=true，暴击率 0.3，掷出 0.1；自身攻击力 100；公式 自身攻击力*1.2；目标 HP 500。",
+     "trace": ["能暴击，0.1 < 0.3，本次暴击。", "公式 100×1.2=120，向上取整 120。", "暴击：120×1.5=180，向上取整 180。", "扣血：HP 500 → 320。"],
+     "result": "扣 180，目标未死亡。"}
+  ]
+}
