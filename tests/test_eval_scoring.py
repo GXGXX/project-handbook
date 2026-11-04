@@ -148,8 +148,8 @@ class ConfigTrapTests(unittest.TestCase):
     def test_pipeline_that_trusts_all_three_branches_loses_its_traps(self):
         result = self.edit('eg-damage-pipeline', {
             'source-branch': {'detail': '按来源分三支。'},
-            'other': {'title': '普攻 / Buff 分支', 'lines': '普攻：Atk × Atk/(Atk+Def)，暴击 ×1.5；Buff：同技能',
-                      'detail': '普通攻击走普攻分支，Buff 跳伤走 Buff 分支。'}})
+            'attack-branch': {'title': '普攻分支', 'detail': '普通攻击走这里。'},
+            'buff-branch': {'title': 'Buff 分支', 'lines': '按公式取值；暴击 ×1.5', 'detail': 'Buff 跳伤走这里。'}})
         self.assertIn('only-skill', failed(result))
         self.assertIn('buff-no-mult', failed(result))
 

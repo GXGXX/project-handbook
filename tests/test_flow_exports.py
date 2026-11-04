@@ -161,6 +161,19 @@ class FlowExportTests(unittest.TestCase):
         self.assertEqual(shared['graphs'][0]['nodes'][0]['source'], 'rules')
         self.assertEqual((data, entry), before)
 
+    def test_node_sources_survive_share_and_revision(self):
+        self.data['sources'].append({'id': 'formula', 'locator': 'Formula.cs:10', 'excerpt': 'x * 1.5'})
+        self.data['graphs'][0]['nodes'][0]['sources'] = ['formula']
+        shared = exports.share_data(self.data, [])
+        self.assertEqual(shared['graphs'][0]['nodes'][0]['sources'], ['formula'])
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / exports.write_revision(temp, self.data, {}, [])
+            saved = json.loads(path.with_name('flow.json').read_text(encoding='utf-8'))
+        self.assertEqual(saved['graphs'][0]['nodes'][0]['sources'], ['formula'])
+        self.data['graphs'][0]['nodes'][0]['sources'] = ['missing']
+        with self.assertRaises(ValueError):
+            exports.share_data(self.data, [])
+
     def test_default_redaction_removes_excerpts_but_retains_labeled_source_ids(self):
         self.data['sources'][0].update(locator=r'C:\SyntheticPrivate\rules.py:12',
                                        excerpt='RAW-EXCERPT-MUST-NOT-TRAVEL')

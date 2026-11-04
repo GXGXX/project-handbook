@@ -40,8 +40,10 @@ for example when "奖励" could mean the grant pipeline or the whole economy.
    gap, not proof that something does not exist. When docs and code disagree,
    put both in the affected node.
 3. **Author** `flow.json` following [references/flow.md](references/flow.md),
-   starting from `assets/flow.example.json`. Exact 是/否 branches, explicit
-   cross-section `connections`, formulas in `lines`, explanation in `detail`,
+   starting from `assets/flow.example.json`. Exact 是/否 branches, a `switch`
+   node for three or more outcomes, per-node `sources` where a step's evidence
+   lives elsewhere (a formula file, a config table), explicit cross-section
+   `connections`, formulas in `lines`, explanation in `detail`,
    and at least one worked example whose trace walks the real steps. Label
    teaching examples as demonstrations, not measurements. Do not add
    production notes or review summaries; keep uncertainty in the node it

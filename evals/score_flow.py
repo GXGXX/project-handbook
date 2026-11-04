@@ -148,7 +148,7 @@ def score(case, flow):
     # A step the key calls a decision is located by its decision node when one
     # exists, so a note such as "偷袭时命中值设为无限" cannot stand in for it.
     for cid in case.get('decisions', []):
-        deciding = [nid for nid in placed[cid] if kinds[nid] == 'decision']
+        deciding = [nid for nid in placed[cid] if kinds[nid] in ('decision', 'switch')]
         if deciding:
             placed[cid] = deciding
     for rule in case.get('order', []):
@@ -157,7 +157,7 @@ def score(case, flow):
             value, note = _order(edges, placed[rule['before']], placed[rule['after']])
             rule_id = rule['before'] + ' -> ' + rule['after']
         else:
-            deciders = [nid for nid in covering[rule['decision']] if kinds[nid] == 'decision']
+            deciders = [nid for nid in covering[rule['decision']] if kinds[nid] in ('decision', 'switch')]
             targets = placed[rule['target']]
             # A terminal that only says "继续走财富戒分支" is a hand-off, not the
             # step itself; use the step's real node when the flow has one.
@@ -168,7 +168,7 @@ def score(case, flow):
                                  'score': value, 'note': note})
 
     for cid in case.get('decisions', []):
-        found = [nid for nid in covering[cid] if kinds[nid] == 'decision']
+        found = [nid for nid in covering[cid] if kinds[nid] in ('decision', 'switch')]
         results['decisions'].append({'id': cid, 'label': concepts[cid]['label'],
                                      'score': 1.0 if found else 0.0, 'nodes': found})
 

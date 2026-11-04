@@ -87,6 +87,59 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(nodes['created']['source'], 'demo')
         self.assertEqual(nodes['callback']['source'], 'second')
 
+    def switch_flow(self, labels):
+        nodes = [{'id': 'start', 'row': 0, 'col': 0, 'kind': 'switch', 'title': '伤害来源？', 'lines': '', 'detail': ''}]
+        edges = []
+        for index, label in enumerate(labels):
+            nodes.append({'id': f'way{index}', 'row': 1, 'col': index, 'kind': 'terminal',
+                          'title': label or 'x', 'lines': '', 'detail': ''})
+            edges.append({'a': 'start', 'b': f'way{index}', 'label': label})
+        return {'title': 'Switch', 'sources': [{'id': 'code', 'locator': 'Damage.cs'}],
+                'graphs': [{'id': 'damage', 'title': 'Damage', 'source': 'code', 'nodes': nodes, 'edges': edges}]}
+
+    def test_switch_takes_two_to_six_named_outcomes_in_up_to_four_columns(self):
+        flow.validate(self.switch_flow(['普攻', '技能', 'Buff']))
+        page = flow.render(self.switch_flow(['普攻', '技能', 'Buff', '反伤']))
+        self.assertIn('"kind": "switch"', page)
+        for labels in (['普攻'], ['普攻', '普攻', 'Buff'], ['普攻', '', 'Buff'], ['a', 'b', 'c', 'd', 'e']):
+            with self.subTest(labels=labels), self.assertRaises(ValueError):
+                flow.validate(self.switch_flow(labels))
+
+    def test_errors_name_the_place_and_the_fix(self):
+        cases = [
+            (lambda d: d['graphs'][0]['nodes'][1].pop('kind'), 'graphs[0].nodes[1]', 'missing "kind"'),
+            (lambda d: d['graphs'][0]['nodes'][0].update(id='source'), 'graphs[0].nodes[0]', 'used by the page'),
+            (lambda d: d['graphs'][0]['nodes'][0].update(id='next'), 'graphs[0].nodes[0]', '"next-step"'),
+            (lambda d: d['graphs'][0]['nodes'][1].update(col=4), 'graphs[0].nodes[1]', 'col 0 to 3'),
+            (lambda d: d['graphs'][0]['nodes'][0].update(sources=['missing']), '.sources', 'not listed in sources'),
+            (lambda d: d['examples'][0].pop('result'), 'examples[0]', 'missing "result"'),
+        ]
+        for change, where, hint in cases:
+            d = copy.deepcopy(self.data)
+            change(d)
+            with self.subTest(hint=hint), self.assertRaises(ValueError) as caught:
+                flow.validate(d)
+            self.assertIn(where, str(caught.exception))
+            self.assertIn(hint, str(caught.exception))
+        d = copy.deepcopy(self.data)
+        decision = next(n for n in d['graphs'][0]['nodes'] if n['kind'] == 'decision')
+        next(e for e in d['graphs'][0]['edges'] if e['a'] == decision['id'] and e['label'].startswith('否'))['label'] = '其他'
+        with self.assertRaises(ValueError) as caught:
+            flow.validate(d)
+        self.assertIn('use kind "switch"', str(caught.exception))
+
+    def test_nodes_can_cite_their_own_sources(self):
+        self.data['sources'].append({'id': 'formula', 'locator': 'Formula.cs:10', 'excerpt': 'damage * 1.5'})
+        first = self.data['graphs'][0]['nodes'][0]
+        first['sources'] = ['formula', 'demo']
+        flow.validate(self.data)
+        nodes = {n['id']: n for n in flow.canvas_data(self.data)['canvas']['nodes']}
+        self.assertEqual(nodes[first['id']]['sources'], ['formula', 'demo'])
+        self.assertEqual(nodes[first['id']]['source'], 'formula')
+        other = self.data['graphs'][0]['nodes'][1]['id']
+        self.assertEqual(nodes[other]['sources'], [self.data['graphs'][0]['source']])
+        self.assertNotIn('sources', self.data['graphs'][0]['nodes'][1])
+
     def test_canvas_rejects_overlapping_sections(self):
         self.data['graphs'][1]['position'] = {'row':0, 'col':0}
         with self.assertRaises(ValueError):
