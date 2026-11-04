@@ -1,0 +1,49 @@
+{
+  "id": "eg-fireball-falloff",
+  "source": "egameplay",
+  "question": "火弹（1005）打中多个目标时，每个目标会受到多少伤害？",
+  "scope": "火弹从命中到扣血：配置的伤害值与能否暴击、多目标衰减的配置与实现、命中计数，以及最终每个目标的伤害。",
+  "evidence": [
+    {"file": "Excel/AbilityConfig.xlsx", "lines": "UnitProto!12",
+     "note": "技能描述：每命中一个目标后下一次伤害会减少20%，最低减到40%"},
+    {"file": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1005.asset", "lines": "40-79",
+     "note": "DamageReduceWithTargetCountDecorator：ReducePercent 20、MinPercent 40；DamageValueFormula 500；CanCrit false"},
+    {"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageReduceSystem.cs", "lines": "26-30",
+     "note": "GetDamagePercent = max(MinPercent, 1 - ReducePercent × TargetCounter)，但全仓库没有任何调用"},
+    {"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/AbilityItem/AbilityItemSystem.cs", "lines": "165-168",
+     "note": "每次命中后 TargetCounter++"},
+    {"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs", "lines": "45-56",
+     "note": "技能伤害只取公式结果和暴击，不乘衰减比例。乘衰减的旧代码只在 Game.CompileShare~ 里且已注释"}
+  ],
+  "concepts": [
+    {"id": "base-value", "label": "配置的伤害值 500",
+     "any": ["500"]},
+    {"id": "no-crit", "label": "火弹不能暴击",
+     "any": ["CanCrit", "不能暴击", "不可暴击", "无法暴击", "不会暴击"]},
+    {"id": "config-falloff", "label": "配置声明了衰减：每个目标减 20%，最低 40%",
+     "any": ["ReducePercent", "MinPercent", "DamageReduceWithTargetCount", "减少20%", "减少 20%", "减 20%", "20%"]},
+    {"id": "falloff-formula", "label": "衰减公式 max(40%, 1 - 20% × 命中数)",
+     "any": ["GetDamagePercent", "1 - ReducePercent", "1-ReducePercent", "Math.Max", "max("]},
+    {"id": "counter", "label": "每次命中后命中计数加一",
+     "any": ["TargetCounter", "命中计数", "命中数"]},
+    {"id": "formula", "label": "按公式算伤害并向上取整",
+     "any": ["DamageValueFormula", "伤害公式", "ParseDamage", "向上取整", "Ceiling"]},
+    {"id": "consume", "label": "扣血",
+     "any": ["ConsumeHealth", "扣血", "扣除生命", "扣减生命"]},
+    {"id": "not-applied", "label": "衰减在当前代码里没有被调用，每个目标都是 500", "trap": true,
+     "any": ["没有调用", "没有被调用", "未被调用", "未调用", "没人调用", "无调用", "从未调用", "没有生效", "未生效", "不生效", "没有被使用", "未被使用", "注释掉", "已注释", "死代码", "never called", "not called", "unused"]},
+    {"id": "every-target-500", "label": "结论：每个目标都受到 500", "trap": true,
+     "any": ["都是 500", "都是500", "均为 500", "均为500", "都受到 500", "都受到500", "都扣 500", "都扣500", "每个目标 500", "每个目标500", "都为 500", "都为500"]}
+  ],
+  "decisions": [],
+  "order": [
+    {"before": "formula", "after": "consume", "why": "算出伤害值后扣血"}
+  ],
+  "constants": [
+    {"label": "伤害 500", "any": ["500"]},
+    {"label": "每个目标减 20%", "any": ["20%", "0.2"]},
+    {"label": "最低 40%", "any": ["40%", "0.4"]}
+  ],
+  "evidence_files": ["Skill_1005.asset", "EffectDamageReduceSystem.cs", "DamageActionSystem.cs"],
+  "min_example_steps": 3
+}

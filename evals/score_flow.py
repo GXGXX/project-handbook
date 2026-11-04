@@ -12,7 +12,7 @@ checks its position is every node whose title or formula line names it (detail
 only as a fallback), and branch targets skip pass-through terminal notes.
 
 Checks and weights:
-  concepts   40  each required step appears in some node
+  concepts   40  each required step or statement appears in some node
   order      30  steps connect in the right direction; branch rules check where
                  each exit of a decision leads (one_branch_skips,
                  both_branches_reach), whatever its 是/否 wording
@@ -141,7 +141,7 @@ def score(case, flow):
     for cid, concept in concepts.items():
         found = covering[cid]
         results['concepts'].append({'id': cid, 'label': concept['label'], 'score': 1.0 if found else 0.0,
-                                    'nodes': found})
+                                    'nodes': found, 'trap': bool(concept.get('trap'))})
 
     kinds = {node['id']: node.get('kind') for node in nodes}
     placed = {cid: _place(nodes, concept['any']) for cid, concept in concepts.items()}
@@ -194,7 +194,9 @@ def score(case, flow):
         rows = results[key]
         part = sum(row['score'] for row in rows) / len(rows) if rows else 1.0
         total += weight * part
-    traps = [row for row in results['order'] if row['trap']]
+    # A trap is either an order rule or a statement the flow must make, such as
+    # "this falloff is configured but never called".
+    traps = [row for key in ('concepts', 'order') for row in results[key] if row.get('trap')]
     return {'case': case['id'], 'score': round(total, 1),
             'traps_passed': sum(row['score'] == 1.0 for row in traps), 'traps': len(traps),
             'checks': results}

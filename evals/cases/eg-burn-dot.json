@@ -1,0 +1,53 @@
+{
+  "id": "eg-burn-dot",
+  "source": "egameplay",
+  "question": "血红激光炮（1004）挂上的灼烧，每跳扣多少血、多久跳一次、持续多久、能暴击吗？",
+  "scope": "从技能 1004 生效到灼烧每一跳扣血：技能本身的伤害、挂 Buff 时传入的参数、参数如何替换进 Buff 的公式、按间隔触发、每一跳的伤害计算和扣血。",
+  "evidence": [
+    {"file": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1004.asset", "lines": "40-130",
+     "note": "伤害效果 10000、不可暴击；添加状态效果：灼烧，Duration 4，参数 伤害取值=260、间隔时间=0.3"},
+    {"file": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Buff/Buff_10041.asset", "lines": "55-90",
+     "note": "伤害公式为字符串「伤害取值」（文件里是 \\u 转义），CanCrit false；触发器条件参数「间隔时间」"},
+    {"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/AddBuffActionSystem.cs", "lines": "66-123",
+     "note": "挂 Buff 时 ProcessInputKVParams 用字符串替换把参数名换成数值，写进伤害公式和触发条件；Duration>0 时加持续时间组件"},
+    {"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs", "lines": "24-43",
+     "note": "每一跳都走 TriggerApply，DamageSource 固定为 Skill，不是 Buff；公式结果向上取整"}
+  ],
+  "concepts": [
+    {"id": "skill-hit", "label": "技能本身先造成 10000 伤害",
+     "any": ["10000"]},
+    {"id": "add-buff", "label": "技能给目标挂灼烧 Buff",
+     "any": ["AddStatusEffect", "AddBuffAction", "挂上灼烧", "添加状态", "添加 Buff", "添加Buff", "挂 Buff", "挂Buff", "10041"]},
+    {"id": "params", "label": "挂 Buff 时传入参数：伤害取值 260、间隔时间 0.3",
+     "any": ["260"]},
+    {"id": "replace", "label": "把参数名替换成数值写进 Buff 公式",
+     "any": ["ProcessInputKVParams", "ProcessReplaceKV", "Replace", "替换"]},
+    {"id": "duration", "label": "持续 4 秒",
+     "any": ["Duration", "持续"]},
+    {"id": "interval", "label": "每 0.3 秒触发一次",
+     "any": ["0.3", "间隔时间", "间隔"]},
+    {"id": "tick-damage", "label": "每一跳经伤害效果触发，按公式算出 260",
+     "any": ["TriggerApply", "DamageValueFormula", "伤害公式", "伤害取值"]},
+    {"id": "consume", "label": "扣血",
+     "any": ["ConsumeHealth", "扣血", "扣除生命", "扣减生命"]},
+    {"id": "no-crit", "label": "灼烧不能暴击",
+     "any": ["CanCrit", "不能暴击", "不可暴击", "无法暴击", "不会暴击"]},
+    {"id": "skill-source", "label": "每一跳的伤害来源被标成技能，走技能分支，不走 Buff 分支", "trap": true,
+     "any": ["DamageSource.Skill", "DamageSource = Skill", "来源是 Skill", "来源为 Skill", "来源是技能", "来源为技能", "按技能伤害", "走技能分支", "走 Skill 分支", "走Skill分支", "不走 Buff 分支", "不走Buff分支", "不是 Buff 分支"]}
+  ],
+  "decisions": [],
+  "order": [
+    {"before": "add-buff", "after": "replace", "why": "挂 Buff 时才替换参数"},
+    {"before": "replace", "after": "tick-damage", "trap": true,
+     "why": "参数先替换进公式，每一跳才能算出 260；直接读 Buff 配置只会看到「伤害取值」这个名字"},
+    {"before": "interval", "after": "tick-damage", "why": "间隔到了才触发一跳"},
+    {"before": "tick-damage", "after": "consume", "why": "算出伤害后扣血"}
+  ],
+  "constants": [
+    {"label": "每跳 260", "any": ["260"]},
+    {"label": "间隔 0.3 秒", "any": ["0.3"]},
+    {"label": "持续 4 秒", "any": ["4 秒", "4秒", "4s", "Duration 4", "Duration=4", "Duration: 4", "持续 4", "持续4"]}
+  ],
+  "evidence_files": ["Skill_1004.asset", "Buff_10041.asset", "AddBuffActionSystem.cs"],
+  "min_example_steps": 3
+}
