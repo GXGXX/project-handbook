@@ -32,7 +32,7 @@
         {"id": "negative", "row": 7, "col": 0, "kind": "decision", "title": "defenseProc 返回值 ≥ 0？",
          "lines": "effectiveDamage >= 0", "detail": "返回负数表示防守方要求跳过后续的命中效果。"},
         {"id": "skip", "row": 7, "col": 1, "kind": "process", "title": "跳过后续调整",
-         "lines": "不减护甲、不乘易伤、不触发 attackProc", "detail": "直接拿 defenseProc 的返回值进入扣血。"},
+         "lines": "不减护甲、不乘易伤、不触发 attackProc", "detail": "负数照样传给 enemy.damage，但 Char.damage 遇到 dmg < 0 直接返回，所以 HP 不变。"},
         {"id": "armor-subtract", "row": 8, "col": 0, "kind": "process", "title": "减去护甲",
          "lines": "effective = max(effective - dr, 0)", "detail": "最低为 0。用的是第一步就掷好的 dr。"},
         {"id": "vulnerable", "row": 9, "col": 0, "kind": "process", "title": "易伤 ×1.33",

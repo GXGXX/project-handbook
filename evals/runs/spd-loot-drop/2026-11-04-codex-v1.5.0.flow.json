@@ -1,0 +1,373 @@
+{
+  "title": "《破碎的像素地牢》怪物死亡后如何掉落物品？",
+  "summary": "在此源码版本中，普通怪物战利品由敌对阵营、等级上限、偷窃状态和一次随机概率共同决定；随后按怪物定义生成物品，财富之戒与幸运附魔还可各自追加掉落。点击节点查看实现与源码依据。",
+  "sources": [
+    {
+      "id": "death",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:1069-1075；actors/mobs/Mob.java:1022-1059",
+      "excerpt": "Char.damage 将HP压到0后检查 isAlive()；若不存活就调用 die(src)。Mob.die 对 alignment == ENEMY 的怪物调用 rollToDropLoot()。死亡原因不改变该调用；远程攻击、陷阱等在这里汇合。"
+    },
+    {
+      "id": "roll",
+      "locator": "actors/Char.java:1069-1075；actors/mobs/Mob.java:1022-1133；actors/mobs/Bat.java:47-48,86-94；actors/mobs/Skeleton.java:58-59,143-154；items/Generator.java:342-378,613-619,698-819；items/weapon/Weapon.java:422-449；items/rings/RingOfWealth.java:107-164；items/weapon/enchantments/Lucky.java:39-94；levels/Level.java:1004-1048；Challenges.java:71-78；actors/mobs/Mimic.java:271-281；actors/mobs/Thief.java:99-112；actors/mobs/Tengu.java:212-220；actors/mobs/CausticSlime.java:52-62",
+      "excerpt": "Char.damage 在 HP <= 0 且 isAlive() 为 false 时调用 die。Mob.die 只对 alignment == ENEMY 调用 rollToDropLoot。通用函数若 hero.lvl > maxLvl+2 立即返回；否则，在StolenTracker不存在或物品没有被偷走时，以 Random.Float() < lootChance() 判定普通掉落，命中后createLoot，结果非null就交给Level.drop。概率基础值由怪物lootChance字段定义，子类可覆写并用 Dungeon.LimitedDrops 等计数递减。Mob.lootChance = 基础概率 × [财富戒倍率 + 悬赏猎人Preparation加成（若有效） + 遗忘碎片倍率 − 1]；财富戒倍率=1.20^财富戒强化加成。生成内容来自怪物的loot（类别、物品类、实例）及子类createLoot覆写。Weapon.random：+0/+1/+2概率75%/20%/5%，诅咒和附魔另行随机。普通判定之后财富戒独立额外尝试（普通1、mini-boss5、boss15），Lucky.LuckProc存在时再额外生成1件。Level.drop会拒绝null/挑战禁用物品，合并堆叠，并处理宝箱格、坑洞和深渊。Mimic、Thief、Tengu、CausticSlime另有子类特定掉落。"
+    },
+    {
+      "id": "monster",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Bat.java:47-48,86-94；actors/mobs/Skeleton.java:58-59,143-154；actors/mobs/Mob.java:1135-1165",
+      "excerpt": "掉落内容是各个怪物子类在 loot 和 lootChance 中分别指定的，子类还可重写概率、生成和限制计数。蝙蝠示例：PotionOfHealing.class、基础概率 0.1667，概率乘(7-BAT_HP.count)/7；生成时 BAT_HP.count 增加。骷髅示例：武器类别、基础概率 0.1667，概率乘(1/3)^SKELE_WEP.count，成功生成后次数加一。"
+    },
+    {
+      "id": "generator",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java:1139-1165；items/Generator.java:342-378,613-619,746-768,776-819；items/weapon/Weapon.java:422-449",
+      "excerpt": "Mob.createLoot 对 Generator.Category 调用 Generator.randomUsingDefaults；对 Item 类调用 Generator.random(类)，对实例直接使用该实例。随机药水/卷轴按默认权重表抽取；Category.WEAPON 按当前地牢深度选择武器阶级。武器随机强化等级+0/+1/+2的概率为75%/20%/5%，效果另有随机。"
+    },
+    {
+      "id": "place",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/levels/Level.java:1004-1048；Challenges.java:71-78；items/Heap.java:153-180",
+      "excerpt": "Level.drop 会拒绝null或挑战禁止的物品；否则在格子上新建或加入堆叠。锁定宝箱/水晶宝箱格会把物品改放相邻可通行格。CHASM或坑洞会转入坠落处理。相同可堆叠物品会合并。"
+    },
+    {
+      "id": "wealth",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java:1109-1119；items/rings/RingOfWealth.java:107-164",
+      "excerpt": "普通掉落判定之后，财富戒仍独立尝试额外奖励。尝试次数：普通怪1、迷你Boss 5、Boss 15。计数器累积尝试和装备奖励进度；可生成消耗品，间隔生成装备。财富戒概率倍率为1.20^加成，另有对应的物品等级与类别逻辑。"
+    },
+    {
+      "id": "luck",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java:1121-1125；items/weapon/enchantments/Lucky.java:39-68,79-94",
+      "excerpt": "Lucky附魔命中时在被击杀者身上设置LuckProc；如果怪物死亡时buff仍存在，就调用genLoot并将一件消耗品掉在怪物格。附魔效果失败会清除本次此前设置的proc。"
+    },
+    {
+      "id": "special",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mimic.java:271-281；actors/mobs/Thief.java:99-112；actors/mobs/Tengu.java:212-220；actors/mobs/CausticSlime.java:52-62",
+      "excerpt": "部分怪物在继承通用战利品前后额外处理：宝箱怪先掉出携带的items；窃贼先掉出被偷走的item；天狗在指定条件下掉 TengusMask；CausticSlime 在通用掉落流程之后额外掉 GooBlob。这些物品不等同于通用概率抽出的那一件。"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "deathflow",
+      "title": "死亡入口、普通战利品和额外掉落",
+      "source": "roll",
+      "nodes": [
+        {
+          "id": "damage",
+          "title": "怪物生命值归零",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "HP≤0 且 isAlive() 为 false 时调用 die(cause)",
+          "detail": "常见路径是 Char.damage：把HP限制到至少0后，调用 !isAlive() 判断。如果死亡标记等条件仍使 isAlive() 为true，就不会在这个位置调用 die。死亡原因传给 die，但 Mob 的普通掉落入口不依据 cause 筛选。",
+          "source": "death"
+        },
+        {
+          "id": "enemy",
+          "title": "是敌对阵营吗？",
+          "row": 1,
+          "col": 0,
+          "kind": "decision",
+          "lines": "Mob.die 只对 alignment == ENEMY 执行普通掉落流程",
+          "detail": "敌对阵营走向 rollToDropLoot；非敌对阵营跳过本流程的普通怪物掉落与财富/幸运附加流程。个别子类可以另行实现自己的死亡掉落。",
+          "source": "death"
+        },
+        {
+          "id": "notenemy",
+          "title": "不是敌对怪物",
+          "row": 1,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "不调用 Mob.rollToDropLoot()",
+          "detail": "这是通用 Mob.die 的分支结论；特定非敌对单位自己的 die 覆写仍可能另外掉东西。",
+          "source": "death"
+        },
+        {
+          "id": "level",
+          "title": "英雄等级超过怪物上限2级以上？",
+          "row": 2,
+          "col": 0,
+          "kind": "decision",
+          "lines": "若 hero.lvl > maxLvl + 2，整个 rollToDropLoot 立即结束",
+          "detail": "这是 rollToDropLoot 开头的早退，既挡住普通 lootChance 抽取，也挡住后面的财富戒和Lucky额外掉落。条件是严格大于；恰好 maxLvl+2 仍继续。",
+          "source": "roll"
+        },
+        {
+          "id": "levelexit",
+          "title": "等级惩罚早退",
+          "row": 2,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "本次通用流程没有普通掉落或其后的附加掉落",
+          "detail": "early return 发生在财富戒与 Lucky 分支之前。子类在调用 super.rollToDropLoot() 前后执行的自定义逻辑，要单独看其实现。",
+          "source": "roll"
+        },
+        {
+          "id": "stolen",
+          "title": "普通战利品被偷走了吗？",
+          "row": 3,
+          "col": 0,
+          "kind": "decision",
+          "lines": "StolenTracker缺失，或 itemWasStolen() == false，才参加普通抽奖",
+          "detail": "这个判断只保护普通 lootChance/createLoot 分支。被偷走会跳过普通那一件；财富戒和Lucky的判定仍在后面执行。",
+          "source": "roll"
+        },
+        {
+          "id": "nobase",
+          "title": "跳过普通怪物战利品",
+          "row": 3,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "继续走财富戒和Lucky分支",
+          "detail": "该分支不代表这只怪最终一定什么都不掉：子类独立执行的携带物品或任务掉落仍可能存在。注意，子类可以在调用 super.rollToDropLoot() 之前掉物品，因此即使通用代码早退，专属掉落也不一定被取消。",
+          "source": "roll"
+        },
+        {
+          "id": "chance",
+          "title": "随机数小于本怪当前概率吗？",
+          "row": 4,
+          "col": 0,
+          "kind": "decision",
+          "lines": "Random.Float() < lootChance()；成功才调用 createLoot()",
+          "detail": "基础lootChance由怪物子类设置。Mob.lootChance 会把财富戒倍率、满足条件的悬赏猎人/Preparation加成和遗忘碎片倍率合成为概率。核心式：p = p怪物 × [1.20^wealthBonus + bountyBonus + oblivionMultiplier − 1]。方法本身未 clamp 到1；超过1时，Random.Float() < p 对正常[0,1)随机数恒为真。",
+          "source": "roll"
+        },
+        {
+          "id": "miss",
+          "title": "普通概率未命中",
+          "row": 4,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "没有普通 createLoot 产物；继续后续奖励",
+          "detail": "这是一次 Bernoulli 随机比较，不是保底累积概率。已掉次数只在部分怪物的 lootChance/createLoot 覆写中按各自公式影响后续。",
+          "source": "roll"
+        },
+        {
+          "id": "create",
+          "title": "createLoot() 按本怪规则生成",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "lines": "loot=类别：按该类别生成；loot=物品类：随机生成该类；loot=实例：使用该实例",
+          "detail": "常见类别由 Generator.randomUsingDefaults 抽取。比如武器类别根据地牢深度选择阶级；药水/卷轴类别按默认权重抽取。怪物可以覆写 createLoot 更改具体种类或数量。",
+          "source": "generator"
+        },
+        {
+          "id": "nullitem",
+          "title": "生成结果为 null 吗？",
+          "row": 6,
+          "col": 0,
+          "kind": "decision",
+          "lines": "只有非null物品才调用 Dungeon.level.drop(loot, pos)",
+          "detail": "通用 Mob 的 loot 默认是null且 lootChance 默认0，但具体物种配置会改变这两个值。即使随机判定命中，createLoot 返回null也不会从此分支掉落。",
+          "source": "roll"
+        },
+        {
+          "id": "nullend",
+          "title": "本次没有可落地的普通物品",
+          "row": 6,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "转入后续财富戒与Lucky检查",
+          "detail": "子类可能还有独立自定义掉落。",
+          "source": "roll"
+        },
+        {
+          "id": "drop",
+          "title": "把普通物品交给关卡处理",
+          "row": 7,
+          "col": 0,
+          "kind": "process",
+          "lines": "Dungeon.level.drop(loot, 怪物格)",
+          "detail": "关卡层可能拒绝特定挑战禁用物品；空地建立地面物品堆，既有堆可合并。坑洞/深渊转入特殊坠落处理，宝箱格可能移至相邻格。",
+          "source": "place"
+        },
+        {
+          "id": "wealthcheck",
+          "title": "财富之戒有强化加成吗？",
+          "row": 8,
+          "col": 0,
+          "kind": "decision",
+          "lines": "有：独立尝试额外奖励；无：跳过",
+          "detail": "它不是普通抽奖命中后的替代物，而是在普通分支之后单独运行。普通怪1次、迷你Boss 5次、Boss 15次尝试会更新连续计数；计数器到期才生成奖励。",
+          "source": "wealth"
+        },
+        {
+          "id": "wealthdrop",
+          "title": "按财富戒计数生成额外战利品",
+          "row": 8,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "可能额外掉消耗品或装备",
+          "detail": "财富戒加成提高普通lootChance，并且另有一套累积次数、消费品/装备层级生成逻辑。因此同一死亡可能同时有普通loot和财富戒额外奖励。挑战禁用的候选物会重新抽。",
+          "source": "wealth"
+        },
+        {
+          "id": "luckcheck",
+          "title": "死亡时身上有 Lucky.LuckProc 吗？",
+          "row": 9,
+          "col": 0,
+          "kind": "decision",
+          "lines": "Lucky附魔命中会暂存在被攻击目标身上的buff",
+          "detail": "死亡时buff仍存在则生成1件额外消耗品并显示幸运特效。Lucky的攻击命中概率由武器等级和 procChanceMultiplier 决定；它跟普通掉落概率是不同判定。",
+          "source": "luck"
+        },
+        {
+          "id": "luckdrop",
+          "title": "Lucky额外掉1件消耗品",
+          "row": 9,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "生成后放在怪物格，必要时与其他掉落共堆",
+          "detail": "LuckProc.genLoot 清除该proc并调用财富戒消费品生成器。",
+          "source": "luck"
+        },
+        {
+          "id": "end",
+          "title": "通用死亡掉落处理结束",
+          "row": 10,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "最终物品堆可能包含多来源物品",
+          "detail": "子类另有不由这条通用概率支配的掉落：宝箱怪携带物品、窃贼被偷装备、天狗面具、CausticSlime的GooBlob等。它们的实现可能在调用Mob公共方法之前或之后运行，甚至完全独立于通用分支；这张主流程图不表示这些特殊物品必须在此时触发。",
+          "source": "roll"
+        }
+      ],
+      "edges": [
+        {
+          "a": "damage",
+          "b": "enemy",
+          "label": "HP耗尽"
+        },
+        {
+          "a": "enemy",
+          "b": "notenemy",
+          "label": "否"
+        },
+        {
+          "a": "enemy",
+          "b": "level",
+          "label": "是"
+        },
+        {
+          "a": "level",
+          "b": "levelexit",
+          "label": "是"
+        },
+        {
+          "a": "level",
+          "b": "stolen",
+          "label": "否"
+        },
+        {
+          "a": "stolen",
+          "b": "nobase",
+          "label": "是"
+        },
+        {
+          "a": "stolen",
+          "b": "chance",
+          "label": "否"
+        },
+        {
+          "a": "chance",
+          "b": "miss",
+          "label": "否"
+        },
+        {
+          "a": "chance",
+          "b": "create",
+          "label": "是"
+        },
+        {
+          "a": "create",
+          "b": "nullitem",
+          "label": "createLoot 返回"
+        },
+        {
+          "a": "nullitem",
+          "b": "nullend",
+          "label": "是"
+        },
+        {
+          "a": "nullitem",
+          "b": "drop",
+          "label": "否"
+        },
+        {
+          "a": "drop",
+          "b": "wealthcheck",
+          "label": "放置后"
+        },
+        {
+          "a": "nobase",
+          "b": "wealthcheck",
+          "label": "继续"
+        },
+        {
+          "a": "miss",
+          "b": "wealthcheck",
+          "label": "继续"
+        },
+        {
+          "a": "nullend",
+          "b": "wealthcheck",
+          "label": "继续"
+        },
+        {
+          "a": "wealthcheck",
+          "b": "wealthdrop",
+          "label": "是"
+        },
+        {
+          "a": "wealthcheck",
+          "b": "luckcheck",
+          "label": "否"
+        },
+        {
+          "a": "wealthdrop",
+          "b": "luckcheck",
+          "label": "然后"
+        },
+        {
+          "a": "luckcheck",
+          "b": "luckdrop",
+          "label": "是"
+        },
+        {
+          "a": "luckcheck",
+          "b": "end",
+          "label": "否"
+        },
+        {
+          "a": "luckdrop",
+          "b": "end",
+          "label": "然后"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "演示：骷髅第1到第3次触发普通掉落",
+      "provenance": "演示运算，不是游戏实测；假设英雄等级合格、没有财富戒/遗忘碎片加成，忽略悬赏猎人加成，且未被偷走",
+      "input": "Skeleton 的基础lootChance=0.1667；SKELE_WEP.count依次是0、1、2。",
+      "trace": [
+        "基础概率 × (1/3)^已记录成功次数。",
+        "count=0：p=0.1667≈16.67%；count=1：p≈0.05557≈5.56%。",
+        "count=2：p≈0.01852≈1.85%。每次仍是独立随机比较，概率下降不表示之后必掉。",
+        "成功后生成武器类别物品，并把 SKELE_WEP.count 加1；没中则该覆写计数不增加。"
+      ],
+      "result": "每次成功生成的武器按当前地牢深度抽取阶级；普通武器实例再独立随机+0/+1/+2强化（75%/20%/5%）。"
+    },
+    {
+      "title": "演示：蝙蝠血瓶上限的递减概率",
+      "provenance": "演示运算，不是游戏实测；假设基础概率0.1667、英雄等级合格且没有其他概率加成",
+      "input": "BAT_HP.count为0时计算蝙蝠PotionOfHealing的普通掉落率。",
+      "trace": [
+        "Bat.lootChance = 0.1667 × (7−BAT_HP.count)/7。",
+        "count=0 时 p=0.1667（约16.67%）；成功createLoot后 count增加。",
+        "count=6 时 p≈0.02381（约2.38%）；count=7 时该来源概率降为0。",
+        "独立的财富戒额外奖励和Lucky处理仍由通用死亡流程另行检查。"
+      ],
+      "result": "BAT_HP 的限制只修正蝙蝠治疗药水分支，不等于阻止怪物其他来源的掉落。"
+    }
+  ]
+}
