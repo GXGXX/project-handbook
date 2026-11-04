@@ -1,0 +1,62 @@
+{
+  "id": "spd-melee-damage",
+  "source": "shattered-pixel-dungeon",
+  "question": "近战攻击一次，最后打到怪身上的伤害是怎么算出来的？",
+  "scope": "Char.attack 的通用路径：从发起攻击到 enemy.damage 扣血。英雄和怪物各自的 damageRoll、drRoll 只需说明由子类决定，不要求展开。",
+  "evidence": [
+    {"file": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java", "lines": "372-512",
+     "note": "attack()：无敌检查、hit()、drRoll、damageRoll、倍率、Math.round 后进 defenseProc、减护甲、易伤、attackProc、enemy.damage"},
+    {"file": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java", "lines": "479-499",
+     "note": "Weakness ×0.67；effectiveDamage = max(effectiveDamage - dr, 0)；Vulnerable 在护甲之后 ×1.33，int 乘 float 后截断"}
+  ],
+  "concepts": [
+    {"id": "invulnerable", "label": "目标无敌时直接结束",
+     "any": ["isInvulnerable", "无敌"]},
+    {"id": "hit", "label": "命中判定",
+     "any": ["hit(", "命中", "acuRoll"]},
+    {"id": "armor-roll", "label": "掷出目标的护甲减伤值 dr",
+     "any": ["drRoll", "掷护甲", "护甲减伤值", "护甲值", "掷减伤"]},
+    {"id": "damage-roll", "label": "掷基础伤害",
+     "any": ["damageRoll", "基础伤害", "掷伤害"]},
+    {"id": "multipliers", "label": "乘以攻击方和防守方的各种倍率",
+     "any": ["dmgMulti", "倍率", "Fury", "狂怒", "Weakness", "虚弱"]},
+    {"id": "round", "label": "四舍五入成整数",
+     "any": ["Math.round", "四舍五入"]},
+    {"id": "defense-proc", "label": "交给防守方的 defenseProc（护甲刻印等）",
+     "any": ["defenseProc", "防守方触发", "防御方触发", "防御触发", "刻印"]},
+    {"id": "armor-subtract", "label": "减去护甲值，最低为 0",
+     "any": ["- dr", "-dr", "−dr", "− dr", "减去护甲", "扣除护甲", "扣减护甲", "减掉护甲", "max("]},
+    {"id": "vulnerable", "label": "易伤 ×1.33",
+     "any": ["Vulnerable", "易伤"]},
+    {"id": "attack-proc", "label": "攻击方的 attackProc（武器附魔等）",
+     "any": ["attackProc", "攻击方触发", "攻击触发", "附魔"]},
+    {"id": "apply-damage", "label": "对目标扣血",
+     "any": ["enemy.damage", "damage(", "扣血", "扣除生命"]}
+  ],
+  "decisions": ["invulnerable", "hit"],
+  "order": [
+    {"before": "invulnerable", "after": "hit", "why": "先看目标是否无敌，再判命中"},
+    {"before": "hit", "after": "damage-roll", "why": "命中之后才掷伤害"},
+    {"before": "damage-roll", "after": "multipliers", "why": "倍率乘在掷出的伤害上"},
+    {"before": "multipliers", "after": "defense-proc", "why": "乘完倍率、取整后才交给 defenseProc"},
+    {"before": "multipliers", "after": "armor-subtract", "trap": true,
+     "why": "先乘倍率再减护甲；护甲值虽然一开始就掷出，但要到后面才减"},
+    {"before": "defense-proc", "after": "armor-subtract", "trap": true,
+     "why": "护甲在 defenseProc 之后才减"},
+    {"before": "armor-subtract", "after": "vulnerable", "trap": true,
+     "why": "易伤作用在减护甲之后"},
+    {"before": "vulnerable", "after": "attack-proc", "why": "易伤之后才轮到攻击方的 attackProc"},
+    {"before": "attack-proc", "after": "apply-damage", "why": "attackProc 返回的值才是扣血量"},
+    {"type": "one_branch_skips", "decision": "hit", "target": "apply-damage",
+     "why": "没命中就不扣血"},
+    {"type": "one_branch_skips", "decision": "invulnerable", "target": "apply-damage",
+     "why": "目标无敌就不扣血"}
+  ],
+  "constants": [
+    {"label": "狂怒 ×1.5", "any": ["1.5"]},
+    {"label": "虚弱 ×0.67", "any": ["0.67", "67%"]},
+    {"label": "易伤 ×1.33", "any": ["1.33", "133%"]}
+  ],
+  "evidence_files": ["Char.java"],
+  "min_example_steps": 4
+}

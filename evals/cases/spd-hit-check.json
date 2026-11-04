@@ -1,0 +1,56 @@
+{
+  "id": "spd-hit-check",
+  "source": "shattered-pixel-dungeon",
+  "question": "攻击时是怎么判定命中还是闪避的？",
+  "scope": "Char.hit 的完整判定：命中值与闪避值、必中和必闪、两边掷骰与修正、比较规则。attackSkill、defenseSkill 的具体数值由子类决定，不要求展开。",
+  "evidence": [
+    {"file": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java", "lines": "612-685",
+     "note": "hit()：隐身偷袭必中、武僧专注必闪；无限闪避先判、压过无限命中；两边 Random.Float 掷骰后乘 Bless 1.25、Hex 0.8、Daze 0.5 等；acuRoll ≥ defRoll 为命中"},
+    {"file": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java", "lines": "615-617",
+     "note": "魔法攻击的三参数重载把 accMulti 设为 2"}
+  ],
+  "concepts": [
+    {"id": "skills", "label": "取攻击方命中值和防守方闪避值",
+     "any": ["attackSkill", "defenseSkill", "命中值", "闪避值"]},
+    {"id": "surprise", "label": "隐身偷袭时命中值视为无限",
+     "any": ["invisible", "canSurpriseAttack", "隐身", "偷袭"]},
+    {"id": "focus", "label": "武僧专注时闪避值视为无限",
+     "any": ["Focus", "专注"]},
+    {"id": "infinite-evasion", "label": "闪避值达到无限则必闪",
+     "any": ["INFINITE_EVASION", "无限闪避", "必闪", "必定闪避"]},
+    {"id": "infinite-accuracy", "label": "命中值达到无限则必中",
+     "any": ["INFINITE_ACCURACY", "无限命中", "必中", "必定命中"]},
+    {"id": "acc-roll", "label": "在 0 到命中值之间掷命中骰",
+     "any": ["acuRoll", "命中骰", "掷命中"]},
+    {"id": "def-roll", "label": "在 0 到闪避值之间掷闪避骰",
+     "any": ["defRoll", "闪避骰", "掷闪避"]},
+    {"id": "roll-buffs", "label": "祝福、妖术、眩晕等修正两边的骰子",
+     "any": ["Bless", "祝福", "Hex", "妖术", "Daze", "眩晕"]},
+    {"id": "acc-multi", "label": "技能或魔法的命中倍率 accMulti",
+     "any": ["accMulti", "魔法"]},
+    {"id": "compare", "label": "命中骰 ≥ 闪避骰即命中，相等也算命中",
+     "any": [">=", "≥", "大于等于", "不小于", "不低于"]}
+  ],
+  "decisions": ["infinite-evasion", "infinite-accuracy", "compare"],
+  "order": [
+    {"before": "skills", "after": "infinite-evasion", "why": "先取两边数值，再看是否无限"},
+    {"before": "surprise", "after": "infinite-accuracy", "why": "偷袭把命中值改成无限，之后才判必中"},
+    {"before": "focus", "after": "infinite-evasion", "why": "专注把闪避值改成无限，之后才判必闪"},
+    {"before": "infinite-evasion", "after": "infinite-accuracy", "trap": true,
+     "why": "先判无限闪避：两边都无限时算闪避"},
+    {"before": "infinite-accuracy", "after": "acc-roll", "why": "都不是无限时才掷骰"},
+    {"before": "acc-roll", "after": "compare", "why": "命中骰参与比较"},
+    {"before": "def-roll", "after": "compare", "why": "闪避骰参与比较"},
+    {"before": "roll-buffs", "after": "compare", "why": "修正乘在骰子上，再比较"},
+    {"type": "one_branch_skips", "decision": "infinite-evasion", "target": "acc-roll", "trap": true,
+     "why": "必闪时不掷骰直接闪避，即使攻击方必中"}
+  ],
+  "constants": [
+    {"label": "祝福 ×1.25", "any": ["1.25"]},
+    {"label": "妖术 ×0.8", "any": ["0.8"]},
+    {"label": "眩晕 ×0.5", "any": ["0.5"]},
+    {"label": "魔法攻击命中 ×2", "any": ["×2", "x2", "*2", "2 倍", "2倍", "= 2", "=2"]}
+  ],
+  "evidence_files": ["Char.java"],
+  "min_example_steps": 3
+}

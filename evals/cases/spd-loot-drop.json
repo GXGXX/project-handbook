@@ -1,0 +1,61 @@
+{
+  "id": "spd-loot-drop",
+  "source": "shattered-pixel-dungeon",
+  "question": "怪物死了以后，掉不掉东西、掉什么是怎么决定的？",
+  "scope": "Mob.die 到 rollToDropLoot 结束：阵营、等级上限、被偷、掉落率、生成物品、财富戒指额外掉落、幸运附魔。各怪物的 loot 与 lootChance 取值由子类决定，不要求展开。",
+  "evidence": [
+    {"file": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java", "lines": "1022-1036",
+     "note": "die()：只有 Alignment.ENEMY 才调用 rollToDropLoot"},
+    {"file": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java", "lines": "1075-1133",
+     "note": "lootChance() = lootChance × dropBonus；rollToDropLoot：等级 > maxLvl+2 直接 return；被偷只跳过普通掉落；财富戒指普通 1 次、小 Boss 5 次、Boss 15 次；幸运附魔"},
+    {"file": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java", "lines": "1139-1165",
+     "note": "createLoot()：类别走 Generator；药水和卷轴按 ExoticCrystals 概率换成异种版本"}
+  ],
+  "concepts": [
+    {"id": "die", "label": "怪物死亡",
+     "any": ["die(", "死亡", "被击杀"]},
+    {"id": "enemy-only", "label": "只有敌对阵营才判定掉落",
+     "any": ["Alignment.ENEMY", "ENEMY", "敌对", "敌方"]},
+    {"id": "level-cap", "label": "英雄等级超过 maxLvl+2 时什么都不掉",
+     "any": ["maxLvl", "等级上限", "等级过高", "等级太高"]},
+    {"id": "stolen", "label": "被盗贼护腕偷过就跳过普通掉落",
+     "any": ["StolenTracker", "itemWasStolen", "被偷", "偷走", "偷窃", "Thieves"]},
+    {"id": "chance-calc", "label": "掉落率 = 怪物基础掉落率 × 加成",
+     "any": ["dropBonus", "dropChanceMultiplier", "掉落率加成", "赏金", "Bounty", "ShardOfOblivion"]},
+    {"id": "chance-roll", "label": "按掉落率掷骰",
+     "any": ["lootChance", "掉落率", "掉落概率"]},
+    {"id": "create-loot", "label": "生成掉落物",
+     "any": ["createLoot", "Generator", "生成掉落", "生成物品"]},
+    {"id": "exotic", "label": "药水和卷轴有机会换成异种版本",
+     "any": ["Exotic", "异种"]},
+    {"id": "wealth-bonus", "label": "财富戒指额外掉落",
+     "any": ["tryForBonusDrop", "额外掉落"]},
+    {"id": "lucky", "label": "幸运附魔额外掉落",
+     "any": ["Lucky", "幸运"]}
+  ],
+  "decisions": ["enemy-only", "level-cap", "stolen", "chance-roll"],
+  "order": [
+    {"before": "die", "after": "enemy-only", "why": "死亡时先看阵营"},
+    {"before": "enemy-only", "after": "level-cap", "why": "敌对才进入掉落判定"},
+    {"before": "level-cap", "after": "stolen", "why": "等级检查在最前面"},
+    {"before": "stolen", "after": "chance-roll", "why": "没被偷才掷普通掉落"},
+    {"before": "chance-calc", "after": "chance-roll", "why": "先算出加成后的掉落率再掷"},
+    {"before": "chance-roll", "after": "create-loot", "why": "掷中才生成物品"},
+    {"type": "one_branch_skips", "decision": "enemy-only", "target": "create-loot",
+     "why": "随从、被腐化的怪死了不掉落"},
+    {"type": "one_branch_skips", "decision": "level-cap", "target": "wealth-bonus", "trap": true,
+     "why": "等级超限时直接结束，连财富戒指的额外掉落也没有"},
+    {"type": "both_branches_reach", "decision": "stolen", "target": "wealth-bonus", "trap": true,
+     "why": "被偷只跳过普通掉落，财富戒指照样判定"},
+    {"type": "both_branches_reach", "decision": "chance-roll", "target": "wealth-bonus", "trap": true,
+     "why": "普通掉落没掷中，财富戒指照样判定"}
+  ],
+  "constants": [
+    {"label": "等级上限 maxLvl + 2", "any": ["+ 2", "+2"]},
+    {"label": "Boss 额外掷 15 次", "any": ["15 次", "15次"]},
+    {"label": "小 Boss 额外掷 5 次", "any": ["掷 5 次", "掷5次", "rolls = 5", "5 rolls"]},
+    {"label": "赏金猎人每级备战 2% 起", "any": ["0.02", "2%"]}
+  ],
+  "evidence_files": ["Mob.java"],
+  "min_example_steps": 4
+}
