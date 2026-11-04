@@ -19,7 +19,11 @@ from flow_exports import _redact_text
 
 EXTENSIONS = {'.md', '.txt', '.rst', '.lua', '.py', '.js', '.ts', '.tsx', '.jsx',
               '.cs', '.cpp', '.cc', '.c', '.h', '.hpp', '.java', '.go', '.rs',
-              '.json', '.yaml', '.yml', '.toml', '.xml', '.html', '.csv', '.sql'}
+              '.json', '.yaml', '.yml', '.toml', '.xml', '.html', '.csv', '.sql',
+              '.tsv', '.ini', '.cfg', '.asset'}
+# Unity serializes config objects as YAML .asset files with Chinese text written
+# as \uXXXX escapes; decode them so "伤害取值" can be found.
+UNICODE_ESCAPE = re.compile(r'\\u([0-9a-fA-F]{4})')
 SKIP = {'node_modules', 'vendor', 'dist', 'build', 'target', '__pycache__',
         'library', 'temp', 'obj', 'bin', 'logs', 'packages'}
 SENSITIVE = re.compile(r'(?i)(?:^|[._-])(?:auth|credentials?|secrets?|tokens?|passwords?|cookies?)(?:[._-]|$)')
@@ -128,6 +132,14 @@ def _sheet_lines(raw):
         return lines
 
 
+def _sheet_start(lines, number):
+    """Position of the first listed row of the sheet that holds this row."""
+    sheet = lines[number].split('!', 1)[0] + '!'
+    while number - 1 in lines and lines[number - 1].startswith(sheet):
+        number -= 1
+    return number
+
+
 def _candidates(roots, words, cancel, deadline):
     """Every readable source file, files whose path names a term first."""
     found, seen, scanned = [], set(), 0
@@ -195,6 +207,8 @@ def lookup_sources(roots, query, cancel):
                     content = raw.decode('utf-8-sig')
                 except UnicodeDecodeError:
                     content = raw.decode('gb18030', errors='replace')
+                if suffix == '.asset':
+                    content = UNICODE_ESCAPE.sub(lambda m: chr(int(m[1], 16)), content)
                 lowered_all = content.lower()
         except Exception:
             continue
@@ -236,8 +250,11 @@ def lookup_sources(roots, query, cancel):
     for index, relative, root, suffix, named, lines, hits in files:
         numbers = sorted(hits)
         scored = []
+        # A spreadsheet row is one record and its header rows are always shown,
+        # so score rows alone; a long column name must not outrank the data.
+        reach = 0 if suffix == '.xlsx' else WINDOW
         for anchor in numbers:
-            inside = [n for n in numbers if abs(n - anchor) <= WINDOW]
+            inside = [n for n in numbers if abs(n - anchor) <= reach]
             distinct = frozenset().union(*(hits[n] for n in inside))
             score = sum(weight[word] for word in distinct)
             line = lines[anchor]
@@ -246,13 +263,15 @@ def lookup_sources(roots, query, cancel):
             score += 0.25 * sum(weight[word] for word in hits[anchor])
             if named:
                 score += 0.5 * max(weight[word] for word in words if word in relative.lower())
+            if suffix == '.xlsx' and anchor - _sheet_start(lines, anchor) < 4:
+                score *= 0.5  # header rows are shown with every hit anyway
             scored.append((score, anchor))
         scored.sort(key=lambda item: (-item[0], item[1]))
         kept = []
         for score, anchor in scored:
             if len(kept) == 2:
                 break
-            if all(abs(anchor - other) > 2 * WINDOW for _, other in kept):
+            if all(abs(anchor - other) > (8 if suffix == '.xlsx' else 2 * WINDOW) for _, other in kept):
                 kept.append((score, anchor))
         for score, anchor in kept:
             windows.append((score, index, relative, suffix, anchor, lines))
@@ -261,14 +280,13 @@ def lookup_sources(roots, query, cancel):
     snippets = []
     for score, index, relative, suffix, anchor, lines in windows[:RESULTS]:
         if suffix == '.xlsx':
-            # The rows under a matched column name hold the values; keep the
-            # sheet's first row too so every value has its column name.
+            # Config sheets often have several header rows (name, field, type);
+            # show the sheet's first four rows so every value keeps its column
+            # names, then the matched row and the rows below it.
             sheet = lines[anchor].split('!', 1)[0] + '!'
-            first = anchor
-            while first - 1 in lines and lines[first - 1].startswith(sheet):
-                first -= 1
-            shown = sorted({first} | {n for n in range(anchor - 2, anchor + 9)
-                                      if n in lines and lines[n].startswith(sheet)})
+            first = _sheet_start(lines, anchor)
+            shown = sorted({n for n in range(first, first + 4) if n in lines and lines[n].startswith(sheet)} |
+                           {n for n in range(anchor - 2, anchor + 9) if n in lines and lines[n].startswith(sheet)})
         else:
             shown = list(range(max(1, anchor - 4), min(max(lines), anchor + 11) + 1))
         excerpt = '\n'.join(f'{n}: {lines[n][:600]}' for n in shown if n in lines)[:4000]

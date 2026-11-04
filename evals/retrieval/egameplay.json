@@ -1,0 +1,26 @@
+{
+  "source": "egameplay",
+  "about": "Lookups against the EGamePlay checkout root. Covers GBK-encoded C#, Unity .asset files with \\u-escaped Chinese, and Excel rows (an .xlsx line number is the row's position in the sheet listing, as shown by the lookup).",
+  "cases": [
+    {"id": "damage-source", "query": "DamageSource Attack Skill Buff 伤害来源",
+     "expect": [{"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs", "lines": [28, 64]},
+                {"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs", "lines": [42, 42]}]},
+    {"id": "falloff", "query": "GetDamagePercent TargetCounter 衰减",
+     "expect": [{"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageReduceSystem.cs", "lines": [26, 29]}]},
+    {"id": "burn-params", "query": "伤害取值 间隔时间 灼烧",
+     "expect": [{"file": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1004.asset", "lines": [99, 111]},
+                {"file": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Buff/Buff_10041.asset", "lines": [59, 61]}]},
+    {"id": "fireball-desc", "query": "火弹 技能描述 减少",
+     "expect": [{"file": "Excel/AbilityConfig.xlsx", "lines": [11, 11]},
+                {"file": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ThirdParty/Config/Texts/AbilityConfig.txt", "lines": [8, 8]}]},
+    {"id": "param-replace", "query": "ProcessInputKVParams Replace 参数替换",
+     "expect": [{"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/AddBuffActionSystem.cs", "lines": [82, 123]}]},
+    {"id": "crit", "query": "CriticalProbability IsCritical 暴击 1.5",
+     "expect": [{"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs", "lines": [32, 55]}]},
+    {"id": "self-attack", "query": "自身攻击力 DamageValueFormula ParseDamage",
+     "expect": [{"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs", "lines": [24, 32]}]},
+    {"id": "hp-minus", "query": "ConsumeHealth MinusBase 扣血",
+     "expect": [{"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/HealthSystem.cs", "lines": [34, 38]},
+                {"file": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/HealthSystem.cs", "lines": [75, 80]}]}
+  ]
+}

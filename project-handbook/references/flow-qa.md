@@ -58,10 +58,11 @@ This is a dedicated ephemeral Codex context, not the active desktop task.
 - The model answers from authored details and recent completed answers first.
   Missing evidence can trigger one bounded host-side keyword lookup within
   authorized directories, followed by an answer with relative source
-  citations. The lookup reads text, code and `.xlsx` sheets (up to 60,000
-  files, 96 MB and 15 seconds), ignores import lines, and ranks excerpts by
-  rare terms and definitions; a spreadsheet hit shows the sheet's first row and
-  the rows below it. The result says how many files it read and whether a
+  citations. The lookup reads text, code, Unity `.asset` files (with `\uXXXX`
+  escapes decoded) and `.xlsx` sheets (up to 60,000 files, 96 MB and 15
+  seconds), decodes UTF-8 or GBK, ignores import lines, and ranks excerpts by
+  rare terms and definitions; a spreadsheet hit shows the sheet's first four
+  rows (column names, fields, types) and the rows around the match. The result says how many files it read and whether a
   limit stopped it. No project code runs, no source files change, and the model has no
   external-action tools. This is not exhaustive semantic code search; missing
   results are an evidence gap, not proof that a behavior does not exist.
