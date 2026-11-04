@@ -1,5 +1,7 @@
 # Authoring guide
 
+> Not the default: applies only to the multi-page documentation site (book.json). See [other-formats.md](other-formats.md); flowcharts follow SKILL.md.
+
 Write content as HTML fragments. The builder supplies the document shell,
 navigation, metadata, and search index.
 

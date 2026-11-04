@@ -1,5 +1,7 @@
 # Validation guide
 
+> Not the default: applies only to the multi-page documentation site (book.json). See [other-formats.md](other-formats.md); flowcharts follow SKILL.md.
+
 Run both checks from the skill directory or call them with absolute paths:
 
 ```text

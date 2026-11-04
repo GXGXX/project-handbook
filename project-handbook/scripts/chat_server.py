@@ -16,11 +16,19 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
+try:
+    from search_terms import terms
+except ImportError:  # Loaded by file path without the scripts directory on sys.path.
+    import importlib.util
+    _spec = importlib.util.spec_from_file_location(
+        "_handbook_search_terms", Path(__file__).with_name("search_terms.py"))
+    _module = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_module)
+    terms = _module.terms
+
 
 MAX_BODY = 256 * 1024
 MAX_QUERY = 4000
-WORD_RE = re.compile(r"[a-z0-9_\-]+", re.I)
-CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 PROVIDER_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -36,16 +44,6 @@ def read_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ChatError(f"无法读取 {path}: {exc}") from exc
-
-
-def terms(value: str) -> list[str]:
-    normalized = str(value or "").lower()
-    output = WORD_RE.findall(normalized)
-    cjk = "".join(CJK_RE.findall(normalized))
-    output.extend(cjk[index:index + 2] for index in range(max(0, len(cjk) - 1)))
-    if len(cjk) == 1:
-        output.append(cjk)
-    return [item for item in output if item]
 
 
 def retrieve(index: list[dict[str, Any]], query: str, limit: int = 6) -> list[dict[str, Any]]:

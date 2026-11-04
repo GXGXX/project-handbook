@@ -1,6 +1,8 @@
 # Visual knowledge handbooks
 
-Legacy diagram mode: one reader question, one diagram. For newcomer or vague-question tasks, use the default layered learning mode in [learning.md](learning.md). Use this mode when the reader asks how a flow or rule works and needs a checkable HTML walkthrough. A whole-project atlas is optional after that question is answered.
+> Legacy manifest, not the default. Process and calculation questions, vague or not, use the flowchart in SKILL.md. This file documents the older `knowledge.json` fields that the concept handbook in [learning.md](learning.md) still builds on. See [other-formats.md](other-formats.md).
+
+Legacy diagram mode: one reader question, one diagram, rendered as a multi-page site. A whole-project atlas is optional after that question is answered.
 
 ## Authoring contract
 
