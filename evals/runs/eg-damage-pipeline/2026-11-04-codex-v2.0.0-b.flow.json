@@ -1,0 +1,261 @@
+{
+  "title": "一次伤害如何算出并扣到血上？",
+  "summary": "已追到：技能时间轴/触发器把伤害效果指派给目标，普攻/技能/Buff各自算出DamageValue，统一经过动作钩子后从目标生命数值扣除；生命最低为0。普通攻击与技能的公式不同。代码未给出Buff伤害的实际触发调用，且死亡检查后没有处理逻辑。",
+  "sources": [
+    {
+      "id": "damage_action",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/Action/Actions/DamageAction.cs:12-65",
+      "excerpt": "DamageAbility.TryMakeAction 建立 DamageAction 并设置 Creator；DamageAction 保存 DamageSource、DamageValue、IsCritical、SourceAssignAction、Creator、Target。DamageSource 有 Attack、Skill、Buff。"
+    },
+    {
+      "id": "damage_system",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs:28-88",
+      "excerpt": "Attack: crit roll; Atk=creator.Attack, Def=target.Defense; coeff=Atk/(Atk+Def); Dam1=Atk*coeff; ceil; crit x1.5 and ceil. Skill: optional crit by CanCrit; formula via EffectDamageSystem; crit x1.5 and ceil. Buff: optional crit, formula, but unlike Skill code has no crit multiplier. Execute calls ActionSystem.ExecuteAction; apply calls HealthSystem.ConsumeHealth; then CheckDead with empty body and destroy action."
+    },
+    {
+      "id": "effect_damage",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs:13-45",
+      "excerpt": "Damage effect initializes its formula from config. ParseDamage evaluates it, replaces the attack-power parameter with owner Attack.Value when present, and returns ceiling(expression.Value). TriggerApply creates a damage action, sets assign source, target and DamageSource.Skill, then executes."
+    },
+    {
+      "id": "action_hooks",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/CombatEntity/ActionSystem.cs:55-80",
+      "excerpt": "ExecuteAction dispatches BeforeExecuteAction and BeforeSufferAction, runs damage calculation, then BeforeCauseApply and BeforeReceiveApply, applies damage, then AfterCauseApply/AfterReceiveApply. Finally dispatches AfterExecuteAction/AfterSufferAction. It does not inspect a cancellation result from dispatch."
+    },
+    {
+      "id": "health",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/HealthSystem.cs:34-93",
+      "excerpt": "ConsumeHealth calls Minus(Target, DamageValue). MinusBase subtracts from baseValue and clamps it to 0. CheckDead returns integer-truncated component.Value <= 0."
+    },
+    {
+      "id": "numeric",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/NumericSystem.cs:24-73",
+      "excerpt": "MinusBase decreases baseValue, floors at zero, then Update recomputes Value=(base+add)*(100+pctAdd)/100, then (value+finalAdd)*(100+finalPctAdd)/100."
+    },
+    {
+      "id": "skill_trigger",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/AbilityExecute/ExecuteClipSystem.cs:71-92,128-152; AbilityTriggerSystem.cs:75-124",
+      "excerpt": "When an execution clip triggers, AssignEffect selects matching trigger(s); AbilityTriggerSystem checks target state and trigger-effect selection, then creates EffectAssignAction and calls AssignActionSystem.Execute. AbilityEffectSystem.TriggerApply dispatches DamageEffect to EffectDamageSystem.TriggerApply."
+    },
+    {
+      "id": "skill_config",
+      "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1002.asset: DamageValueFormula / CanCrit",
+      "excerpt": "Repository example Skill_1002 has DamageValueFormula=800 and CanCrit=true. Demonstration input can use this exact configured formula, but the computed example is hand-calculated, not a runtime measurement."
+    },
+    {
+      "id": "attack_gap",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/CombatEntity/CombatEntitySystem.cs:46-68; DamageActionSystem.cs:30-43",
+      "excerpt": "CombatEntity.Create attaches DamageAbility and AttackAbility. DamageActionSystem contains the Attack calculation branch. A repository-wide search found no call site that constructs and executes DamageSource.Attack; the attack branch’s caller/trigger is therefore not verified in this supplied source tree."
+    },
+    {
+      "id": "buff_gap",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs:58-65; AddBuffActionSystem.cs:95-110",
+      "excerpt": "DamageActionSystem contains a Buff branch. AddBuffActionSystem substitutes parameters into a buff DamageEffect formula. A repository-wide search found no caller that creates DamageSource.Buff or routes a periodic buff damage tick into DamageActionSystem; the runtime buff-damage trigger is not verified."
+    }
+  ],
+  "graphs": [
+    {
+      "id": "damage",
+      "title": "從伤害动作到目标生命值",
+      "source": "damage_system",
+      "position": {
+        "row": 0,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "incoming",
+          "title": "进入一次伤害动作",
+          "row": 0,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "已有来源、施加者、目标",
+          "detail": "DamageAction持有 DamageSource、Creator、Target、SourceAssignAction。技能路径可从执行片段触发器一路到 EffectDamageSystem.TriggerApply，再创建 DamageAction 并设为 Skill。普攻的实际创建调用和 Buff 定时/触发调用在这份仓库中没有搜到；这里从动作已经建立开始说明。",
+          "sources": [
+            "damage_action",
+            "skill_trigger",
+            "attack_gap",
+            "buff_gap"
+          ]
+        },
+        {
+          "id": "source_kind",
+          "title": "伤害来源是哪类？",
+          "row": 1,
+          "col": 1,
+          "kind": "switch",
+          "lines": "DamageSource",
+          "detail": "这三类枚举决定 DamageActionSystem.ActionCheckProcess 采用哪套取值和暴击处理。",
+          "sources": [
+            "damage_action",
+            "damage_system"
+          ]
+        },
+        {
+          "id": "attack_calc",
+          "title": "普攻：攻击对防御",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "伤害=ceil(Atk×Atk/(Atk+Def))",
+          "detail": "Atk=施加者 Attack.Value，Def=目标 Defense.Value。随后若 IsCritical，则再 ceil(伤害×1.5)。源码未对 Atk+Def=0 做特殊保护。普攻暴击随机值为 RandomRate()/100f，RandomRate 返回 1..100；与 CriticalProbability 比较。初始化角色 CriticalProbability=0.5，表示代码比较尺度下的概率值。",
+          "sources": [
+            "damage_system",
+            "attack_gap",
+            "numeric"
+          ]
+        },
+        {
+          "id": "skill_calc",
+          "title": "技能：配置表达式",
+          "row": 2,
+          "col": 1,
+          "kind": "process",
+          "lines": "伤害=ceil(表达式)；可选暴击×1.5",
+          "detail": "表达式来自 DamageEffect.DamageValueFormula。解析时若参数含“自身攻击力”，替换为效果拥有者 Attack.Value，然后向上取整。CanCrit=false 时不掷暴击；true 时用施加者暴击概率判断，暴击后再向上取整乘1.5。演示配置 Skill_1002 为固定800且CanCrit=true。",
+          "sources": [
+            "damage_system",
+            "effect_damage",
+            "skill_trigger",
+            "skill_config"
+          ]
+        },
+        {
+          "id": "buff_calc",
+          "title": "Buff：表达式取值",
+          "row": 2,
+          "col": 2,
+          "kind": "process",
+          "lines": "伤害=ceil(表达式)",
+          "detail": "代码分支会检查 CanCrit 并设置 IsCritical，但该分支没有像普攻/技能那样将 DamageValue 乘1.5。因此即使 IsCritical=true，这段 Buff 分支计算值也不变。实现中有此分支；但本仓库没找到将 Buff 周期伤害真正送入此分支的调用点，故真实触发时机与完整运行链未确认。",
+          "sources": [
+            "damage_system",
+            "effect_damage",
+            "buff_gap"
+          ]
+        },
+        {
+          "id": "merge_value",
+          "title": "得到 DamageValue",
+          "row": 3,
+          "col": 1,
+          "kind": "merge",
+          "lines": "整数伤害值进入统一动作流程",
+          "detail": "普攻、技能与 Buff 分支都把本次伤害写入 DamageAction.DamageValue。到这里还未扣生命值。",
+          "sources": [
+            "damage_system",
+            "damage_action"
+          ]
+        },
+        {
+          "id": "before_hooks",
+          "title": "计算前与施加前钩子",
+          "row": 4,
+          "col": 1,
+          "kind": "process",
+          "lines": "前置动作 → 计算 → 施加前钩子",
+          "detail": "ActionSystem 顺序：BeforeExecuteAction、BeforeSufferAction；调用计算函数；若返回 true，再调用 BeforeCauseApply、BeforeReceiveApply。此实现的伤害计算函数固定返回 true，钩子派发结果不会用于取消流程。",
+          "sources": [
+            "action_hooks",
+            "damage_system"
+          ]
+        },
+        {
+          "id": "apply_hp",
+          "title": "从目标生命扣除",
+          "row": 5,
+          "col": 1,
+          "kind": "process",
+          "lines": "HP base = max(0, HP base − DamageValue)",
+          "detail": "HealthSystem.ConsumeHealth 取出 DamageAction.DamageValue 并调用 Minus。NumericSystem.MinusBase 先从生命数值的 baseValue 扣除，再将 baseValue 封底到0，随后按生命数值已有的加成/百分比修饰重新计算 Value。HealthPointComponent.Value 对 float Value 转 int。",
+          "sources": [
+            "health",
+            "numeric"
+          ]
+        },
+        {
+          "id": "after_hooks",
+          "title": "施加后钩子并检查死亡",
+          "row": 6,
+          "col": 1,
+          "kind": "process",
+          "lines": "施加后钩子 → CheckDead(HP≤0) → 销毁动作",
+          "detail": "成功施加后先派发 AfterCauseApply、AfterReceiveApply，再派发 AfterExecuteAction、AfterSufferAction。DamageActionSystem 随后调用 CheckDead，但 if 代码块为空；该处没有死亡状态、动画或复活处理，再销毁 DamageAction。死亡后处理应在仓库其他系统另查，本图没有据此断言不存在。",
+          "sources": [
+            "action_hooks",
+            "damage_system",
+            "health"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "incoming",
+          "b": "source_kind",
+          "label": ""
+        },
+        {
+          "a": "source_kind",
+          "b": "attack_calc",
+          "label": "Attack"
+        },
+        {
+          "a": "source_kind",
+          "b": "skill_calc",
+          "label": "Skill"
+        },
+        {
+          "a": "source_kind",
+          "b": "buff_calc",
+          "label": "Buff"
+        },
+        {
+          "a": "attack_calc",
+          "b": "merge_value",
+          "label": ""
+        },
+        {
+          "a": "skill_calc",
+          "b": "merge_value",
+          "label": ""
+        },
+        {
+          "a": "buff_calc",
+          "b": "merge_value",
+          "label": ""
+        },
+        {
+          "a": "merge_value",
+          "b": "before_hooks",
+          "label": ""
+        },
+        {
+          "a": "before_hooks",
+          "b": "apply_hp",
+          "label": ""
+        },
+        {
+          "a": "apply_hp",
+          "b": "after_hooks",
+          "label": ""
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "演示：技能固定伤害 800",
+      "provenance": "按仓库 Skill_1002 配置与代码手算；非运行实测",
+      "input": "Skill_1002 的伤害表达式为 800、CanCrit=true。假设目标当前生命值为 1,000，施加者本次未暴击。",
+      "trace": [
+        "技能执行片段触发对应 Trigger，效果指派到目标。",
+        "DamageEffect 解析表达式 800，向上取整仍为 800。",
+        "本次未暴击，不乘 1.5，DamageValue=800。",
+        "BeforeExecuteAction、BeforeSufferAction 与施加前钩子依序触发。",
+        "HealthSystem 从生命 baseValue 1,000 扣 800，结果为 200。",
+        "施加后钩子触发；CheckDead 判断 HP≤0 为否；DamageAction 销毁。"
+      ],
+      "result": "剩余生命 200。本例仅示范读取到的配置和执行代码，伤害值与初始生命是假设输入。"
+    }
+  ]
+}

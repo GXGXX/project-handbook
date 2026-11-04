@@ -1,0 +1,403 @@
+{
+  "title": "《破碎像素地牢》攻击如何判定命中或闪避？",
+  "summary": "已沿普通近战与投射物攻击主线追到 Char.attack → Char.hit；英雄攻击还会读取武器、戒指、天赋与护甲，怪物通过各自覆写的 attackSkill/defenseSkill 提供数值。命中由两个随机浮点数比较决定，之后才结算伤害。",
+  "sources": [
+    {
+      "id": "char",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:368-390,615-685",
+      "excerpt": "attack 先排除无敌，再调用 hit(this, enemy, accMulti, false)；hit 取得双方 skill，处理伤害打断、隐形偷袭与无限数值，然后各按 stat 范围随机投掷，依次施加状态、挑战、联盟和外部精度倍率，accRoll >= defRoll 返回 true。"
+    },
+    {
+      "id": "hero",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/hero/Hero.java:511-610,1458-1499,2354-2382",
+      "excerpt": "英雄 attackSkill 从基础 attackSkill 构造 accuracy，应用精准突袭/灵动、戒指、武器命中修正并最少为 1；defenseSkill 从基础 defenseSkill 应用闪避戒指、灵动、棍防、麻痹、护甲和石刻；英雄攻击动作检查目标可攻击并于动作完成时调用 attack。"
+    },
+    {
+      "id": "mob",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java:131,796-840,811-816",
+      "excerpt": "Mob 保存每只怪物各自 defenseSkill；普通怪物被突袭或麻痹或作为盟友被英雄攻击时 defenseSkill 返回 0，否则返回配置在怪物上的 defenseSkill。攻击动画完成时调用 attack(enemy)。"
+    },
+    {
+      "id": "rng",
+      "locator": "SPD-classes/src/main/java/com/watabou/utils/Random.java:76-94",
+      "excerpt": "Random.Float() 是 [0,1) 均匀随机；Random.Float(max) 为 [0,max) 均匀随机。"
+    },
+    {
+      "id": "weapon",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/weapon/Weapon.java:289-310; core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/weapon/missiles/MissileWeapon.java:215-225",
+      "excerpt": "Weapon.accuracyFactor 将武器力量不足、沉重附魔等纳入命中修正；投掷武器还乘距离修正。"
+    },
+    {
+      "id": "example",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Rat.java:35-62; core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Snake.java:37-55; core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:646-684; SPD-classes/src/main/java/com/watabou/utils/Random.java:76-93",
+      "excerpt": "Rat 的 defenseSkill=2；Snake 的 defenseSkill=25、attackSkill=10；Random.Float(max) 范围为 [0,max)。在未叠加其他修正、攻击有效精度 A=10 时，老鼠防御随机值恒为 0..2 且攻击随机值在 0..10，随机推导命中率 90%；对蛇则两个独立连续均匀投掷，命中率 A/(2D)=10/(2×25)=20%。此处只计算命中概率，不代表伤害。"
+    },
+    {
+      "id": "flow",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/hero/Hero.java:744-751; core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:623-644; core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java:819-839",
+      "excerpt": "支持偷袭的隐形攻击精度视为 1,000,000；防御值达到 1,000,000 优先失败（无限闪避胜过无限精度）。怪物面对有效偷袭、麻痹或英雄攻击时防御归零。"
+    },
+    {
+      "id": "damage",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:372-390,405-499,583-604",
+      "excerpt": "对方按当前攻击者类型无敌则 attack 返回 false；命中分支计算伤害、触发防御过程、扣除护甲并造成伤害后返回 true。未命中时只显示防御词并返回 false；命中本身不保证最终伤害大于零。"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "attack",
+      "title": "命中判定主流程",
+      "source": "char",
+      "nodes": [
+        {
+          "id": "start",
+          "title": "攻击发生",
+          "row": 0,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "英雄动作完成或怪物出手",
+          "detail": "英雄从 actAttack 验证存活、可攻击且非隐形的目标，播放攻击动作，再由 onAttackComplete 调用 attack。怪物可见时播放动作，动画完成调用 attack；不可见时直接调用 attack。英雄法术/特殊攻击可使用 Char.hit 的独立调用点。"
+        },
+        {
+          "id": "invulnerable",
+          "title": "目标对此攻击者类型无敌？",
+          "row": 1,
+          "col": 1,
+          "kind": "decision",
+          "lines": "enemy.isInvulnerable(attacker.getClass())",
+          "detail": "普通 Char.attack 在调用命中公式前检查无敌；若目标对此攻击者类型无敌，显示无敌并直接返回 false，不进行命中掷骰。"
+        },
+        {
+          "id": "blocked",
+          "title": "无敌：攻击结束",
+          "row": 1,
+          "col": 2,
+          "kind": "terminal",
+          "lines": "attack 返回 false",
+          "detail": "无敌在命中公式之前截断普通 attack 路径。"
+        },
+        {
+          "id": "skills",
+          "title": "取得两侧有效数值",
+          "row": 2,
+          "col": 1,
+          "kind": "process",
+          "lines": "A = attacker.attackSkill(target)\nD = defender.defenseSkill(attacker)",
+          "detail": "Char 默认两值都是 0；实际英雄、怪物通常覆写。英雄命中数值由基础值、命中戒指、天赋、武器精度合成；怪物数值来自个体覆写。英雄闪避数值由基础值、戒指、天赋、护甲合成。怪物的有效防御在被有效偷袭、麻痹或特定盟友条件下可为 0。"
+        },
+        {
+          "id": "focus",
+          "title": "目标是否获得专注必闪？",
+          "row": 3,
+          "col": 1,
+          "kind": "decision",
+          "lines": "FocusBuff 存在时 D = 1,000,000",
+          "detail": "Char.hit 先算双方 skill；目标具有武僧 FocusBuff 时，防御值改成 INFINITE_EVASION。有限精度无法命中。"
+        },
+        {
+          "id": "roll",
+          "title": "计算攻击与防御掷骰",
+          "row": 4,
+          "col": 1,
+          "kind": "process",
+          "lines": "rA = Random.Float(A) × 攻方修正 × accMulti\nrD = Random.Float(D) × 守方修正",
+          "detail": "Random.Float(x) 是均匀分布 [0,x)。攻击掷骰依次处理祝福 ×1.25、虚弱 Hex ×0.8、恍惚 Daze ×0.5、Champion、Ascension、特定盟友 Bless，再乘外部 accMulti。防御侧处理同类状态与 Ascension/Bless，并乘 FerretTuft.evasionMultiplier。精度/防御统计本身可能已包含武器、护甲和人物修正。"
+        },
+        {
+          "id": "infinite",
+          "title": "是否触发无限数值捷径？",
+          "row": 5,
+          "col": 1,
+          "kind": "switch",
+          "lines": "阈值：1,000,000",
+          "detail": "先检查防御值 >= INFINITE_EVASION；若成立直接 miss。否则若攻击技能值 >= INFINITE_ACCURACY 则直接 hit。注意这是两侧 skill 的阈值检查，正常掷骰之后的状态倍率和 accMulti 在此之后才应用。"
+        },
+        {
+          "id": "forcedmiss",
+          "title": "必定闪避",
+          "row": 5,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "无限闪避优先\n包括无限精度攻击",
+          "detail": "源码注释明确说明无限闪避胜过无限精度。"
+        },
+        {
+          "id": "forcedhit",
+          "title": "必定命中",
+          "row": 5,
+          "col": 2,
+          "kind": "terminal",
+          "lines": "攻击技能值达到无限精度",
+          "detail": "防御未先达到无限闪避阈值时，此分支直接命中。隐形攻击者还必须能进行 surprise attack，才能把攻击 skill 设为无限。英雄持巨链不能 surprise attack。"
+        },
+        {
+          "id": "compare",
+          "title": "比较两个掷骰结果",
+          "row": 6,
+          "col": 1,
+          "kind": "decision",
+          "lines": "rA ≥ rD？",
+          "detail": "Char.hit 以大于或等于判命中，否则闪避。Random.Float 的上下界不包含 max；当某边数值为 0 时该侧掷骰恒为 0。"
+        },
+        {
+          "id": "hit",
+          "title": "命中：进入伤害结算",
+          "row": 7,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "attack 返回 true",
+          "detail": "随后按伤害、减伤与防御过程结算。命中可能仍被减到 0 伤害；特殊防御过程还可能改变或否定伤害。"
+        },
+        {
+          "id": "miss",
+          "title": "闪避：不进入本次伤害结算",
+          "row": 7,
+          "col": 2,
+          "kind": "terminal",
+          "lines": "attack 返回 false\n显示目标的防御动作",
+          "detail": "Miss 的显示文本可能触发招架或圆盾防御 Tracker 的消耗／状态更新；这是命中结果产生后表现及被动处理，不参与普通 rA/rD 比较。"
+        }
+      ],
+      "edges": [
+        {
+          "a": "start",
+          "b": "invulnerable",
+          "label": ""
+        },
+        {
+          "a": "invulnerable",
+          "b": "blocked",
+          "label": "是"
+        },
+        {
+          "a": "invulnerable",
+          "b": "skills",
+          "label": "否"
+        },
+        {
+          "a": "skills",
+          "b": "focus",
+          "label": ""
+        },
+        {
+          "a": "focus",
+          "b": "forcedmiss",
+          "label": "是"
+        },
+        {
+          "a": "focus",
+          "b": "roll",
+          "label": "否"
+        },
+        {
+          "a": "roll",
+          "b": "infinite",
+          "label": ""
+        },
+        {
+          "a": "infinite",
+          "b": "forcedmiss",
+          "label": "D≥阈值"
+        },
+        {
+          "a": "infinite",
+          "b": "forcedhit",
+          "label": "D较低且 A≥阈值"
+        },
+        {
+          "a": "infinite",
+          "b": "compare",
+          "label": "两值低于阈值"
+        },
+        {
+          "a": "compare",
+          "b": "hit",
+          "label": "是"
+        },
+        {
+          "a": "compare",
+          "b": "miss",
+          "label": "否"
+        }
+      ]
+    },
+    {
+      "id": "hero",
+      "title": "英雄数值如何受到装备与状态影响",
+      "source": "hero",
+      "position": {
+        "row": 9,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "heroentry",
+          "title": "英雄发起攻击",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "普通近战或投掷",
+          "detail": "英雄命中检查会调用 Hero.attackSkill(target) 和 Hero.defenseSkill(attacker)。本图只概述核心精度和闪避来源；具体道具等级的成长公式需继续追踪对应物品实现。"
+        },
+        {
+          "id": "accuracy",
+          "title": "组成英雄攻击精度 A",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "基础攻击技能 × accuracy modifiers",
+          "detail": "Hero.attackSkill 初始乘命中戒指；非投掷武器可再乘精准突袭、灵动天赋状态与剑舞；投掷武器可应用奔跑动量相关精度；最终乘武器 accuracyFactor，通常至少为 1。空手斗力戒指攻击走另一分支。"
+        },
+        {
+          "id": "evasion",
+          "title": "组成英雄防御值 D",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "基础防御 × modifiers + 护甲效果",
+          "detail": "Hero.defenseSkill 的普通分支从基础 defenseSkill 开始，应用闪避戒指、灵动闪避状态、棍类防守姿态、麻痹减半和护甲 evasionFactor，再至少为 1。Stone 刻印可覆写为 0（保证攻击者命中）。连击招架、圆盾防御姿态或灵动满级可给出无限闪避。"
+        },
+        {
+          "id": "ranged",
+          "title": "投掷武器额外修正",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "lines": "攻击精度再乘距离因素",
+          "detail": "MissileWeapon.accuracyFactor 额外乘 adjacentAccFactor；当前轮到另一精度因素，不把武器命中加成误当成统一常数。"
+        }
+      ],
+      "edges": [
+        {
+          "a": "heroentry",
+          "b": "accuracy",
+          "label": ""
+        },
+        {
+          "a": "accuracy",
+          "b": "evasion",
+          "label": ""
+        },
+        {
+          "a": "evasion",
+          "b": "ranged",
+          "label": "投掷时"
+        }
+      ]
+    },
+    {
+      "id": "calc",
+      "title": "概率例子与边界",
+      "source": "example",
+      "position": {
+        "row": 9,
+        "col": 2
+      },
+      "nodes": [
+        {
+          "id": "exampleinput",
+          "title": "用老鼠和蛇演示",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "演示：攻击精度 A=10",
+          "detail": "以有效攻击 skill A=10、无状态或外部倍率为假设，仅计算一次攻击的命中率。老鼠 defenseSkill=2；蛇 defenseSkill=25，且 attackSkill=10。数值来自类初始化和方法，不代表玩家实战面板会等于此值。"
+        },
+        {
+          "id": "ratchance",
+          "title": "老鼠：90% 命中",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "rA∈[0,10)，rD∈[0,2)\nP=1−D/(2A)=90%",
+          "detail": "连续独立均匀掷骰且 A≥D 时，P(rA ≥ rD)=1−D/(2A)。A=10、D=2 得 0.9。边界相等的概率为 0，因此 >= 与 > 在这个演示中数值相同。非均匀 buffs、整数伤害舍入等不在公式内。"
+        },
+        {
+          "id": "snakechance",
+          "title": "蛇：20% 命中",
+          "row": 1,
+          "col": 1,
+          "kind": "process",
+          "lines": "rA∈[0,10)，rD∈[0,25)\nP=A/(2D)=20%",
+          "detail": "当 0≤A≤D 且两边独立连续均匀掷骰时，P(rA ≥ rD)=A/(2D)。A=10、D=25 得 0.2。"
+        },
+        {
+          "id": "damageedge",
+          "title": "法术共用比较核心",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "法术部分调用 Char.hit(..., magic=true)",
+          "detail": "Char.hit(attacker, defender, true) 把 accMulti 设为 2f，但不少法术另有自定义效果和命中入口。此图聚焦普通 attack 的 magic=false 路径，不把所有技能效果概括成普通攻击。"
+        },
+        {
+          "id": "damage-result",
+          "title": "命中和伤害是两件事",
+          "row": 3,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "命中后还要过伤害、护甲与防御过程",
+          "detail": "命中分支返回 true 后才按伤害结算；`attack` 的 true 表示命中结果处理完成，不表示必然扣除正数 HP。"
+        }
+      ],
+      "edges": [
+        {
+          "a": "exampleinput",
+          "b": "ratchance",
+          "label": ""
+        },
+        {
+          "a": "exampleinput",
+          "b": "snakechance",
+          "label": ""
+        },
+        {
+          "a": "ratchance",
+          "b": "damageedge",
+          "label": ""
+        },
+        {
+          "a": "snakechance",
+          "b": "damageedge",
+          "label": ""
+        },
+        {
+          "a": "damageedge",
+          "b": "damage-result",
+          "label": ""
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "演示：基础精度 10 对比两种怪物",
+      "provenance": "源码静态数值 + 连续均匀分布推导，不是游戏运行统计",
+      "input": "有效攻击 A=10；无 buffs、无装备倍率；老鼠 D=2；蛇 D=25。",
+      "trace": [
+        "Random.Float(x) 产生 [0,x) 均匀随机数。",
+        "老鼠：P(A掷骰≥D掷骰)=1−2/(2×10)=90%。",
+        "蛇：P(A掷骰≥D掷骰)=10/(2×25)=20%。",
+        "只有判中才进入普通攻击伤害结算。"
+      ],
+      "result": "同样攻击 skill 对高防御目标更容易被闪避；示例未模拟其他游戏修正。"
+    }
+  ],
+  "connections": [
+    {
+      "a": "hit",
+      "b": "damage-result",
+      "label": "命中后"
+    },
+    {
+      "a": "heroentry",
+      "b": "start",
+      "label": "英雄调用共享攻击判定"
+    },
+    {
+      "a": "ranged",
+      "b": "start",
+      "label": "得到 A、D 后"
+    }
+  ]
+}

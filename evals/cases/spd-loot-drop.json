@@ -23,7 +23,7 @@
     {"id": "chance-calc", "label": "掉落率 = 怪物基础掉落率 × 加成",
      "any": ["dropBonus", "dropChanceMultiplier", "掉落率加成", "赏金", "Bounty", "ShardOfOblivion"]},
     {"id": "chance-roll", "label": "按掉落率掷骰",
-     "any": ["lootChance", "掉落率", "掉落概率"]},
+     "any": ["lootChance", "掉落率", "掉落概率", "掉落判定"]},
     {"id": "create-loot", "label": "生成掉落物",
      "any": ["createLoot", "Generator", "生成掉落", "生成物品"]},
     {"id": "exotic", "label": "药水和卷轴有机会换成异种版本",

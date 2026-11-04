@@ -1,0 +1,331 @@
+{
+  "title": "近战攻击一次，最终对怪物造成多少伤害？",
+  "summary": "普通英雄近战的主流程：先判命中，再生成并调整攻击伤害；怪物先触发防御效果，随后扣除一次随机护甲，再经过易伤、武器特效、受伤抗性与护盾，最终扣 HP。未命中不进入伤害计算。具体武器、怪物、天赋和 Buff 会改动各步。",
+  "sources": [
+    {
+      "id": "heroAttack",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/hero/Hero.java:1458-1483, 2354-2382",
+      "excerpt": "玩家攻击动作验证可攻击目标后触发动画；动画完成时调用 attack(attackTarget)，并消耗攻击耗时。"
+    },
+    {
+      "id": "attack",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:368-610",
+      "excerpt": "attack 先检查目标无敌，再命中判定；命中后生成伤害、应用攻击与受击倍率、调用目标 defenseProc、扣 DR、处理 Viscosity/Vulnerable、调用 attackProc，最后调用目标 damage。未命中返回 false。"
+    },
+    {
+      "id": "hit",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:615-685; actors/hero/Hero.java:511-589; actors/mobs/Mob.java:819-839",
+      "excerpt": "命中比较随机精度 roll 与随机闪避 roll；英雄精度由攻击武器、戒指和条件天赋等影响。受惊或麻痹的怪物通常 defenseSkill 为 0。"
+    },
+    {
+      "id": "weaponDamage",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/weapon/melee/MeleeWeapon.java:247-303; items/KindOfWeapon.java:234-251; items/weapon/Weapon.java:97-120",
+      "excerpt": "T 阶武器等级 L 的面板基础范围为 T+L 到 5(T+1)+L；每次在范围内随机掷值。近战武器再应用 DAMAGE/SPEED/NONE 伤害倍率并四舍五入，加上正的超力量随机加值。"
+    },
+    {
+      "id": "heroRoll",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/hero/Hero.java:669-702",
+      "excerpt": "英雄使用当前攻击武器的 damageRoll；近战可加力量戒指伤害，或不武装时用 Ring of Force；再加 PhysicalEmpower，加武器充能天赋乘数并取整，伤害不低于 0。"
+    },
+    {
+      "id": "mobDefense",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/Mob.java:842-899; actors/Char.java:713-755",
+      "excerpt": "Mob.defenseProc 处理惊袭和被动效果，再调用 Char.defenseProc；后者应用目标的 Earthroot、光盾等攻击前防御效果。 Char.attack 随后从已取整伤害扣 DR。"
+    },
+    {
+      "id": "damageTake",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/Char.java:483-512, 830-990",
+      "excerpt": "目标防御后扣攻击者取到的 DR；易伤在护甲后乘 1.33；攻击者 attackProc 在此后执行。damage 对角色来源的伤害不重复施加攻击阶段倍率，然后按免疫/抗性、ChampionEnemy damageTakenFactor 和 AntiMagic 护甲等规则计算实际 dmg，并先消耗 shield 再扣 HP。"
+    },
+    {
+      "id": "heroProc",
+      "locator": "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/hero/Hero.java:1523-1582; actors/hero/Talent.java:868-925; items/weapon/Weapon.java:137-178",
+      "excerpt": "英雄的 attackProc 会触发通用攻击触发、天赋和装备武器的 proc；这些效果可修改本次伤害或另外造成伤害。"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "melee",
+      "title": "从玩家攻击到怪物扣血",
+      "source": "heroAttack",
+      "position": {
+        "row": 0,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "start",
+          "title": "玩家发起近战攻击",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "目标存活、可攻击且可见后播放攻击动作",
+          "detail": "英雄的动作处理检查目标、距离/可攻击条件与可见性。攻击动画完成后调用 attack(attackTarget)；本图从这次普通近战开始，不覆盖武器技能的额外专属伤害。",
+          "sources": [
+            "heroAttack"
+          ]
+        },
+        {
+          "id": "invuln",
+          "title": "目标免疫此攻击者？",
+          "row": 1,
+          "col": 0,
+          "kind": "decision",
+          "lines": "无敌则直接返回，不掷命中或伤害",
+          "detail": "Char.attack 在命中判定前检查目标是否对攻击者类型无敌。是：本次不会造成该次攻击伤害。",
+          "sources": [
+            "attack"
+          ]
+        },
+        {
+          "id": "blocked",
+          "title": "免疫，攻击结束",
+          "row": 1,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "本次普通攻击伤害为 0",
+          "detail": "无敌分支在 Char.attack 中立即返回。",
+          "sources": [
+            "attack"
+          ]
+        },
+        {
+          "id": "hit",
+          "title": "命中判定",
+          "row": 2,
+          "col": 0,
+          "kind": "decision",
+          "lines": "随机精度 roll ≥ 随机闪避 roll",
+          "detail": "两边先取 attackSkill/defenseSkill，再按祝福、虚弱等状态与挑战倍率调整随机 roll。英雄精度还受当前武器、精准戒指、天赋等影响。Mob 的受惊/麻痹等状态可使其防御值为 0；隐身且可突袭的攻击有特殊必中的路径。未命中时不掷伤害。",
+          "sources": [
+            "hit"
+          ]
+        },
+        {
+          "id": "miss",
+          "title": "未命中",
+          "row": 2,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "不调用伤害结算",
+          "detail": "普通未命中显示怪物防御动作后结束。",
+          "sources": [
+            "attack"
+          ]
+        },
+        {
+          "id": "roll",
+          "title": "掷出英雄本次攻击伤害",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "lines": "武器随机基础值 → 武器/力量等修正 → 伤害倍率",
+          "detail": "普通单手近战持武器时，先在武器 damageRoll 的随机范围中取值。T 阶、等级 L 的近战基础范围为 [T+L, 5(T+1)+L]；再乘武器锻造倍率并四舍五入，增加超出力量需求的随机值。英雄随后可加入力量戒指/物理强化等加值，并应用武器充能等乘数。",
+          "sources": [
+            "weaponDamage",
+            "heroRoll"
+          ]
+        },
+        {
+          "id": "mods",
+          "title": "攻击侧与目标侧倍率",
+          "row": 4,
+          "col": 0,
+          "kind": "process",
+          "lines": "先加 dmgBonus；再依次应用触发中的攻击/减伤倍率",
+          "detail": "Char.attack 将掷值乘 dmgMulti 后加 dmgBonus，再按当前状态依序应用：灼热之光等加成、狂战士、Fury、Power of Many、攻击方 Champion、挑战模式攻击方倍率、攻击方坚韧、目标坚韧、竞技场挑战、保护光环、冥想抗性及虚弱。不是每次攻击都会有这些状态；float 阶段尽量延后取整。",
+          "sources": [
+            "attack"
+          ]
+        },
+        {
+          "id": "round",
+          "title": "取整并进入怪物防御触发",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "lines": "Math.round(dmg) → enemy.defenseProc(this, damage)",
+          "detail": "命中后的倍率结算先用 Math.round 转成整数，再传给目标的 defenseProc。Mob 可在这里处理惊袭等效果；随后通用 defenseProc 处理 Earthroot、光盾等目标防御触发。防御触发可以改变/吸收伤害或产生其他效果。",
+          "sources": [
+            "attack",
+            "mobDefense"
+          ]
+        },
+        {
+          "id": "procStop",
+          "title": "防御效果取消后续攻击处理？",
+          "row": 6,
+          "col": 0,
+          "kind": "decision",
+          "lines": "defenseProc 返回负数时跳过后续 on-hit",
+          "detail": "Char.attack 仅在 effectiveDamage >= 0 时继续。负值会跳过 DR、易伤和 attackProc；之后仍会走 damage 调用，但 Char.damage 会忽略负伤害。",
+          "sources": [
+            "attack"
+          ]
+        },
+        {
+          "id": "cancelled",
+          "title": "不触发普通命中后效果",
+          "row": 6,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "没有本次普通攻击扣血",
+          "detail": "这一路只描述 defenseProc 返回负值的情况。防御过程如果自行造成伤害或其他效果，那是额外效果。",
+          "sources": [
+            "attack"
+          ]
+        },
+        {
+          "id": "armor",
+          "title": "扣怪物护甲 DR",
+          "row": 7,
+          "col": 0,
+          "kind": "process",
+          "lines": "max(防御触发后的伤害 − 本次 DR, 0)",
+          "detail": "攻击一开始命中后就先随机取得目标 drRoll，并乘目标挑战模式属性倍率后四舍五入。本流程到这里才扣这笔本次随机 DR。怪物子类可以额外增加随机 DR，例如普通 Rat 有 0–1。护甲不能把本次伤害扣成负数。",
+          "sources": [
+            "attack",
+            "mobDefense"
+          ]
+        },
+        {
+          "id": "postArmor",
+          "title": "延迟伤害与易伤",
+          "row": 8,
+          "col": 0,
+          "kind": "process",
+          "lines": "先 Viscosity 延迟；再 Vulnerable × 1.33",
+          "detail": "Viscosity 会把这次伤害变成延迟伤害；接着 Vulnerable 在护甲之后令 effectiveDamage *= 1.33f（赋给 int 时截小数）。",
+          "sources": [
+            "attack"
+          ]
+        },
+        {
+          "id": "atkProc",
+          "title": "攻击命中特效",
+          "row": 9,
+          "col": 0,
+          "kind": "process",
+          "lines": "attackProc → 天赋 → 武器/附魔等",
+          "detail": "Hero.attackProc 先跑通用 Champion 效果，再过天赋 onAttackProc 和装备武器 proc。它们可能修改本次有效伤害，也可能另外调用 damage 造成独立伤害（例如附魔、Holy Weapon）。因此“本次普通打击伤害”和一击中伴随的额外伤害要分开看。",
+          "sources": [
+            "heroProc",
+            "damageTake"
+          ]
+        },
+        {
+          "id": "damage",
+          "title": "怪物承受这次伤害",
+          "row": 10,
+          "col": 0,
+          "kind": "process",
+          "lines": "免疫/抗性 → 受伤倍率 → 护盾吸收 → HP",
+          "detail": "Char.damage 对角色来源不重复套 Char.attack 的攻击/受击倍率。它先按伤害来源检查免疫或抗性（普通抗性常为 50%，可与戒指等联动），再应用目标 Champion 的承伤倍率和适用的反魔法护甲。最后 ShieldBuff 先吃掉伤害，剩余值才从 HP 扣除。\n\n因此可简写：扣 HP = max(经过来源抗性与减伤的整数伤害 − 护盾吸收量, 0)，但某些特效、延迟伤害、致死触发会另走支路。\n\n浮字在扣盾后显示实际 HP 伤害与护盾吸收之和，所以有护盾时数字可能大于 HP 的减少量。",
+          "sources": [
+            "damageTake"
+          ]
+        },
+        {
+          "id": "end",
+          "title": "本次攻击结算结束",
+          "row": 11,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "结算后检查死亡与攻击完成效果",
+          "detail": "Mob.damage 将最终结算交给 Char.damage；HP 降到 0 后进入死亡处理。成功攻击还会推进英雄攻击完成后的职业/子职业效果。",
+          "sources": [
+            "heroAttack",
+            "damageTake"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "start",
+          "b": "invuln",
+          "label": ""
+        },
+        {
+          "a": "invuln",
+          "b": "blocked",
+          "label": "是"
+        },
+        {
+          "a": "invuln",
+          "b": "hit",
+          "label": "否"
+        },
+        {
+          "a": "hit",
+          "b": "miss",
+          "label": "否"
+        },
+        {
+          "a": "hit",
+          "b": "roll",
+          "label": "是"
+        },
+        {
+          "a": "roll",
+          "b": "mods",
+          "label": ""
+        },
+        {
+          "a": "mods",
+          "b": "round",
+          "label": ""
+        },
+        {
+          "a": "round",
+          "b": "procStop",
+          "label": ""
+        },
+        {
+          "a": "procStop",
+          "b": "cancelled",
+          "label": "是"
+        },
+        {
+          "a": "procStop",
+          "b": "armor",
+          "label": "否"
+        },
+        {
+          "a": "armor",
+          "b": "postArmor",
+          "label": ""
+        },
+        {
+          "a": "postArmor",
+          "b": "atkProc",
+          "label": ""
+        },
+        {
+          "a": "atkProc",
+          "b": "damage",
+          "label": ""
+        },
+        {
+          "a": "damage",
+          "b": "end",
+          "label": ""
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "演示：一把零级短剑打无护甲、无状态的普通鼠",
+      "provenance": "教学演算，不是实机记录。假设攻击命中，所有随机数固定为示例值。",
+      "input": "短剑是 T2、零级、NONE 锻造，英雄力量刚好满足需求；无力量戒指、天赋加成、附魔、Buff；普通 Rat 无免疫/抗性/护盾/减伤 Buff，DR 掷出 1。",
+      "trace": [
+        "短剑基础伤害范围为 2+0 到 5×(2+1)+0，即 2–15；演示掷出 8。",
+        "攻击与受击侧倍率均取 1，额外加值为 0；取整后 damage=8。",
+        "Rat defenseProc 返回 8；本次 DR=1，所以护甲后为 max(8−1,0)=7。",
+        "无 Viscosity、易伤、特效或抗性；damage 中护盾吸收为 0。"
+      ],
+      "result": "怪物本次 HP 减少 7。这个数值仅演示流程；实战中命中、武器伤害和怪物 DR 都会变化。"
+    }
+  ],
+  "connections": []
+}
