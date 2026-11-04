@@ -8,7 +8,8 @@ The key says what a correct answer must contain; the score says how much of it
 the flow shows. It checks content, not layout: build_flow.py already checks the
 structure. Matching is plain keyword search, so keys list both code names and
 Chinese wording. A step counts as covered if any node mentions it; for order
-checks its position is the node whose title names it (then lines, then detail).
+checks its position is every node whose title or formula line names it (detail
+only as a fallback), and branch targets skip pass-through terminal notes.
 
 Checks and weights:
   concepts   40  each required step appears in some node
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import deque
 from pathlib import Path
@@ -39,7 +41,17 @@ def _text(node):
 
 
 def _matches(text, words):
-    return any(word.lower() in text for word in words)
+    """Keyword search. A keyword that starts with an ASCII letter must not
+    continue a longer identifier, so "Vulnerable" does not match inside
+    "isInvulnerable" while "drRoll" still matches "enemy.drRoll()"."""
+    for word in words:
+        word = word.lower()
+        if word[:1].isascii() and word[:1].isalpha():
+            if re.search(r'(?<![a-z])' + re.escape(word), text):
+                return True
+        elif word in text:
+            return True
+    return False
 
 
 def _graph(flow):
@@ -66,10 +78,15 @@ def _reaches(edges, start, goal):
 
 
 def _place(nodes, words):
-    """Where a step sits: nodes whose title names it, else whose formula line
-    does, else any mention. Details often refer ahead ("dr 要到 defenseProc 之后
-    才用"), so a mention there must not count as the step's position."""
-    for fields in (('title',), ('title', 'lines'), ('title', 'lines', 'detail')):
+    """Where a step sits: every node whose title or formula line names it.
+
+    Only when no title or line names it do detail mentions count. Details often
+    refer ahead ("dr 要到 defenseProc 之后才用"), so they must not place a step
+    that has its own node. Titles and lines are both kept because generic words
+    also appear in other titles ("通用死亡掉落处理结束" mentions 死亡); order
+    checks pass if any placed node of one step leads to any of the other.
+    """
+    for fields in (('title', 'lines'), ('title', 'lines', 'detail')):
         found = [node['id'] for node in nodes
                  if _matches(' '.join(str(node.get(key, '')) for key in fields).lower(), words)]
         if found:
@@ -141,7 +158,11 @@ def score(case, flow):
             rule_id = rule['before'] + ' -> ' + rule['after']
         else:
             deciders = [nid for nid in covering[rule['decision']] if kinds[nid] == 'decision']
-            value, note = _branches(edges, deciders, placed[rule['target']], kind)
+            targets = placed[rule['target']]
+            # A terminal that only says "继续走财富戒分支" is a hand-off, not the
+            # step itself; use the step's real node when the flow has one.
+            working = [nid for nid in targets if kinds[nid] != 'terminal']
+            value, note = _branches(edges, deciders, working or targets, kind)
             rule_id = rule['decision'] + ' ' + kind + ' ' + rule['target']
         results['order'].append({'id': rule_id, 'label': rule['why'], 'trap': bool(rule.get('trap')),
                                  'score': value, 'note': note})

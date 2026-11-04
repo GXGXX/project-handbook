@@ -29,7 +29,7 @@
     {"id": "exotic", "label": "药水和卷轴有机会换成异种版本",
      "any": ["Exotic", "异种"]},
     {"id": "wealth-bonus", "label": "财富戒指额外掉落",
-     "any": ["tryForBonusDrop", "额外掉落"]},
+     "any": ["tryForBonusDrop", "额外掉落", "RingOfWealth", "Wealth", "财富之戒", "财富戒指", "财富戒"]},
     {"id": "lucky", "label": "幸运附魔额外掉落",
      "any": ["Lucky", "幸运"]}
   ],
@@ -53,7 +53,7 @@
   "constants": [
     {"label": "等级上限 maxLvl + 2", "any": ["+ 2", "+2"]},
     {"label": "Boss 额外掷 15 次", "any": ["15 次", "15次"]},
-    {"label": "小 Boss 额外掷 5 次", "any": ["掷 5 次", "掷5次", "rolls = 5", "5 rolls"]},
+    {"label": "小 Boss 额外掷 5 次", "any": ["掷 5 次", "掷5次", "rolls = 5", "5 rolls", "Boss 5次", "Boss 5 次"]},
     {"label": "赏金猎人每级备战 2% 起", "any": ["0.02", "2%"]}
   ],
   "evidence_files": ["Mob.java"],

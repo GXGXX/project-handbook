@@ -19,7 +19,7 @@
     {"id": "damage-roll", "label": "掷基础伤害",
      "any": ["damageRoll", "基础伤害", "掷伤害"]},
     {"id": "multipliers", "label": "乘以攻击方和防守方的各种倍率",
-     "any": ["dmgMulti", "倍率", "Fury", "狂怒", "Weakness", "虚弱"]},
+     "any": ["倍率", "Fury", "狂怒", "Weakness", "虚弱"]},
     {"id": "round", "label": "四舍五入成整数",
      "any": ["Math.round", "四舍五入"]},
     {"id": "defense-proc", "label": "交给防守方的 defenseProc（护甲刻印等）",

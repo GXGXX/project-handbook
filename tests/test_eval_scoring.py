@@ -164,6 +164,40 @@ class ScoringRuleTests(unittest.TestCase):
         self.assertEqual(result['checks']['decisions'][0]['score'], 0)
         self.assertEqual(result['checks']['constants'][0]['score'], 0)
 
+    def test_generic_word_in_a_later_title_does_not_move_the_step(self):
+        # Codex wrote "通用死亡掉落处理结束" at the end; death is still the entry.
+        case = {**self.case, 'concepts': [{'id': 'a', 'label': 'A', 'any': ['die(', '死亡']},
+                                          {'id': 'b', 'label': 'B', 'any': ['敌对']},
+                                          {'id': 'd', 'label': 'D', 'any': ['gate']}]}
+        nodes = [{'id': 'hp', 'kind': 'terminal', 'title': '生命值归零', 'lines': '调用 die(cause)'},
+                 {'id': 'enemy', 'kind': 'decision', 'title': '是敌对阵营吗？'},
+                 {'id': 'end', 'kind': 'terminal', 'title': '通用死亡掉落处理结束'}]
+        edges = [{'a': 'hp', 'b': 'enemy'}, {'a': 'enemy', 'b': 'end'}]
+        result = score(case, self.flow(nodes, edges))
+        self.assertEqual(result['checks']['order'][0]['score'], 1.0)
+
+    def test_keywords_do_not_match_inside_longer_identifiers(self):
+        case = {**self.case, 'concepts': [{'id': 'a', 'label': 'A', 'any': ['Vulnerable']},
+                                          {'id': 'b', 'label': 'B', 'any': ['drRoll']},
+                                          {'id': 'd', 'label': 'D', 'any': ['gate']}]}
+        nodes = [{'id': 'n', 'kind': 'process', 'title': 'x', 'lines': 'isInvulnerable() then enemy.drRoll()'}]
+        result = score(case, self.flow(nodes, []))
+        self.assertEqual([row['score'] for row in result['checks']['concepts']], [0.0, 1.0, 0.0])
+
+    def test_pass_through_terminal_is_not_the_branch_target(self):
+        case = {**self.case, 'concepts': [{'id': 'd', 'label': 'D', 'any': ['被偷']},
+                                          {'id': 'w', 'label': 'W', 'any': ['财富戒']}],
+                'decisions': ['d'], 'constants': [],
+                'order': [{'type': 'both_branches_reach', 'decision': 'd', 'target': 'w', 'why': 'w'}]}
+        nodes = [{'id': 'd', 'kind': 'decision', 'title': '被偷了吗？'},
+                 {'id': 'note', 'kind': 'terminal', 'title': '结束', 'lines': '不再走财富戒'},
+                 {'id': 'roll', 'kind': 'process', 'title': '掷普通掉落'},
+                 {'id': 'w', 'kind': 'process', 'title': '财富戒额外掉落'}]
+        edges = [{'a': 'd', 'b': 'note', 'label': '是'}, {'a': 'd', 'b': 'roll', 'label': '否'},
+                 {'a': 'roll', 'b': 'w'}]
+        result = score(case, self.flow(nodes, edges))
+        self.assertEqual(result['checks']['order'][0]['score'], 0.0)
+
     def test_evidence_needs_named_file_and_long_enough_example(self):
         nodes = [{'id': 'a', 'kind': 'process', 'title': 'alpha'}]
         flow = self.flow(nodes, [])
