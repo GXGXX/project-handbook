@@ -2,7 +2,7 @@
 name: project-handbook
 description: Use when someone supplies client, server or docs directories and asks how a process or calculation in that project works (伤害流程是怎样的、奖励怎么发、这个数值怎么算、帮我梳理登录流程), including vague newcomer questions. Traces the directories read-only and delivers one interactive offline HTML flowchart with branches, formulas, worked examples, node evidence and in-page follow-up questions. Not for README edits, API reference generation or changing project code.
 metadata:
-  version: "1.5.0"
+  version: "2.0.0"
   source-inspiration: "https://github.com/lili-luo/aicoding-cookbook"
 ---
 
@@ -73,10 +73,3 @@ for example when "奖励" could mean the grant pipeline or the whole economy.
 - `scripts/build_flow.py`: validate `flow.json` and render the offline HTML.
 - `scripts/flow_server.py`: serve the flow with in-page Codex follow-ups, saved
   answers, compiled versions and redacted exports.
-
-## Other formats, only when explicitly asked
-
-A multi-section concept handbook or a multi-page documentation site is a
-different deliverable with its own manifest and scripts. Use it only when the
-reader asks for that format rather than for how a process works; see
-[references/other-formats.md](references/other-formats.md).
