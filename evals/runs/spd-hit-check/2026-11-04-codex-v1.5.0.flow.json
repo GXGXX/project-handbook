@@ -1,0 +1,346 @@
+{
+  "title": "攻击时是怎么判定命中还是闪避的？",
+  "summary": "普通攻击先计算攻击与防守基础值，各自独立随机掷值，再应用状态修正；最终攻击掷值 ≥ 防守掷值即命中。无限闪避优先于无限命中。点击流程节点查看角色、装备、状态、魔法攻击修正与源码证据。",
+  "sources": [
+    {
+      "id": "char-hit",
+      "locator": "actors/Char.java · attack(), hit(), lines 368-389, 612-685",
+      "excerpt": "attack(enemy) 默认使用 accMulti=1；目标无敌时提前返回 false，否则调用 hit(this, enemy, accMulti, false)。hit 获取 attackSkill/defenseSkill；先判断无限闪避，再判断无限命中；普通情况下分别计算 Random.Float(acuStat) 与 Random.Float(defStat)，应用 Buff、Ascension、Champion 与技能修正，acuRoll >= defRoll 为命中。"
+    },
+    {
+      "id": "hero",
+      "locator": "actors/hero/Hero.java · attackSkill()/defenseSkill(), actAttack(), onAttackComplete(), lines 497-610, 1458-1483, 2353-2382",
+      "excerpt": "英雄攻击基础值从 attackSkill 字段开始，乘命中戒指、天赋、Sword Dance 和武器命中因子后四舍五入，最小为1；徒手攻击不用武器因子。防守基础值从 defenseSkill 开始，乘闪避戒指和姿态修正、应用麻痹和盔甲闪避因子，最终最小为1。招架/格挡/特定天赋可以返回 INFINITE_EVASION。英雄攻击动作完成时实际调用 attack(attackTarget)。"
+    },
+    {
+      "id": "mob",
+      "locator": "actors/mobs/Mob.java · doAttack(), onAttackComplete(), defenseSkill(), surprisedBy(), lines 796-839, 906-914",
+      "excerpt": "Mob 攻击动画结束后调用 attack(enemy)。Mob 默认防守值使用 defenseSkill 字段；被攻击者处于惊讶、麻痹或由英雄攻击友方等条件下可将其降至0；惊讶攻击条件要求敌人是英雄且处于隐形或未被看见，并符合 canSurpriseAttack()。"
+    },
+    {
+      "id": "weapon",
+      "locator": "items/weapon/Weapon.java · accuracyFactor(), lines 288-304; items/weapon/missiles/MissileWeapon.java · accuracyFactor(), lines 214-233",
+      "excerpt": "普通武器精度因子来自武器 ACC；力量不足时每差1点除以1.5；Wayward 特定条件再除以5。投掷武器还乘相邻距离因子：英雄相邻为0.5 + 每点 Point Blank 天赋0.25，非英雄相邻为0.5，非相邻为1.5。"
+    },
+    {
+      "id": "magic",
+      "locator": "actors/Char.java · hit(Char, Char, boolean), lines 615-617; actors/mobs/Warlock.java · zap(), lines 105-129",
+      "excerpt": "hit(..., magic=true) 使用 accMulti=2f。Warlock 法术调用 hit(this, enemy, true)，命中后才造成伤害；Shaman 的法术也调用这个魔法分支。该修正只适用于显式调用 magic=true 的命中检查，不会自动施加到一般物理攻击。"
+    },
+    {
+      "id": "random",
+      "locator": "SPD-classes/src/main/java/com/watabou/utils/Random.java · Float(), lines 77-93; actors/buffs/ChampionEnemy.java · Blessed.evasionAndAccuracyFactor(), lines 242-253; items/rings/RingOfAccuracy.java · accuracyMultiplier(), line 61; items/rings/RingOfEvasion.java · evasionMultiplier(), line 61",
+      "excerpt": "Random.Float(max) 返回 Float()*max，Float() 使用 nextFloat()；基础掷值是在 [0,max) 区间内的连续随机值。Blessed Champion 把精度和闪避掷值都乘4；精度戒指倍率为1.3的有效等级次方，闪避戒指倍率为1.125的有效等级次方。"
+    },
+    {
+      "id": "damage",
+      "locator": "actors/Char.java · attack(), lines 388-389, 405-421, 483-512",
+      "excerpt": "命中之后才抽取伤害并传入防守方防御处理；再扣除 drRoll 并调用 enemy.damage(effectiveDamage, this)。本流程将其标作命中判定之后的路径，伤害值不等于命中率。"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "attack-hit",
+      "title": "从攻击调用到命中结果",
+      "source": "char-hit",
+      "nodes": [
+        {
+          "id": "start",
+          "title": "攻击动作完成，调用 attack()",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "英雄与 Mob 都在攻击动作完成后调用",
+          "detail": "英雄从 onAttackComplete() 调用 attack(attackTarget)；Mob 从 onAttackComplete() 调用 attack(enemy)。Char.attack(enemy) 默认参数为 dmgMulti=1、dmgBonus=0、accMulti=1。攻击动作的起点及实际调用可在相应来源中核对。",
+          "source": "hero"
+        },
+        {
+          "id": "target-valid",
+          "title": "攻击目标存在？",
+          "row": 1,
+          "col": 0,
+          "kind": "decision",
+          "lines": "null 目标在进入命中判定前结束",
+          "detail": "Char.attack() 首先检查 enemy == null；为空时立即返回 false，不继续做命中骰。否则继续检查目标无敌状态。",
+          "source": "char-hit"
+        },
+        {
+          "id": "no-target",
+          "title": "目标为空，攻击返回失败",
+          "row": 1,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "没有执行 hit()",
+          "detail": "这是 attack() 入口的空目标保护，不是一次闪避判定。",
+          "source": "char-hit"
+        },
+        {
+          "id": "invulnerable",
+          "title": "目标对攻击者无敌？",
+          "row": 2,
+          "col": 0,
+          "kind": "decision",
+          "lines": "无敌则返回 false；否则调用 hit()",
+          "detail": "Char.attack() 在随机命中判定之前执行 enemy.isInvulnerable(getClass())。无敌目标直接拦截攻击并返回 false；不能将该结果误解成普通闪避骰输掉。",
+          "source": "char-hit"
+        },
+        {
+          "id": "invulnerable-stop",
+          "title": "目标免疫，攻击被拦截",
+          "row": 2,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "提前返回 false",
+          "detail": "没有进入 hit()，也没有走成功命中的伤害路径。",
+          "source": "char-hit"
+        },
+        {
+          "id": "base-stats",
+          "title": "取得攻击与防守基础值",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "lines": "acuStat = attackSkill(defender)\ndefStat = defenseSkill(attacker)",
+          "detail": "hit() 先调用双方各自的 attackSkill() 和 defenseSkill()。普通 Char 默认这两个方法返回0，但具体英雄和怪物会重写它们。attack() 的 accMulti 默认是1；它在后续攻击骰修正后才相乘，不参与此前的无限命中阈值检查。",
+          "source": "char-hit"
+        },
+        {
+          "id": "surprise",
+          "title": "惊讶攻击与特殊防守能改变基础值",
+          "row": 4,
+          "col": 0,
+          "kind": "process",
+          "lines": "英雄隐身且可偷袭 → acuStat = 1,000,000\n目标防守可降至 0 或升至 1,000,000",
+          "detail": "攻击者处于隐形且 canSurpriseAttack() 时，hit() 将攻击值强制设为 INFINITE_ACCURACY。Mob 防守方被惊讶或麻痹时其 defenseSkill() 可为0；英雄武僧招架、盾牌格挡、特定天赋或怪物专注会返回 INFINITE_EVASION。Hero.canSurpriseAttack() 还会依据力量不足的武器、连枷等条件限制偷袭。",
+          "source": "hero"
+        },
+        {
+          "id": "infinite-evasion",
+          "title": "防守值达到无限闪避？",
+          "row": 5,
+          "col": 0,
+          "kind": "decision",
+          "lines": "defStat ≥ 1,000,000",
+          "detail": "hit() 首先判断 defStat >= INFINITE_EVASION，并立即返回闪避。这个判断排在无限命中之前，所以哪怕双方同时有无限值，无限闪避仍胜出，不掷普通骰。",
+          "source": "char-hit"
+        },
+        {
+          "id": "forced-miss",
+          "title": "无限闪避，直接闪避",
+          "row": 5,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "不进行普通随机掷值",
+          "detail": "例如 Hero 的招架或防守架势、Monk 的 Focus 可以设置无限闪避。",
+          "source": "hero"
+        },
+        {
+          "id": "infinite-accuracy",
+          "title": "攻击值达到无限命中？",
+          "row": 6,
+          "col": 0,
+          "kind": "decision",
+          "lines": "acuStat ≥ 1,000,000",
+          "detail": "只有无限闪避检查未命中时才走这里。若 acuStat >= INFINITE_ACCURACY，hit() 立即返回命中；否则双方各自掷随机值。",
+          "source": "char-hit"
+        },
+        {
+          "id": "forced-hit",
+          "title": "无限命中，直接命中",
+          "row": 6,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "不进行普通随机掷值",
+          "detail": "可命中技能或隐身偷袭能进入无限命中分支。后续仍由 Char.attack() 执行伤害处理。",
+          "source": "char-hit"
+        },
+        {
+          "id": "rolls",
+          "title": "分别掷攻击骰与防守骰，并应用修正",
+          "row": 7,
+          "col": 0,
+          "kind": "process",
+          "lines": "acuRoll = Random.Float(acuStat) × 攻击方修正 × accMulti\ndefRoll = Random.Float(defStat) × 防守方修正",
+          "detail": "攻击和防守分别调用 Random.Float(其基础值)，两次抽样独立；Random.Float(max) = nextFloat() × max。随后两边各自应用 Bless ×1.25、Hex ×0.8、Daze ×0.5、冠军效果和 Ascension 属性修正；满足条件的祝福天赋也会修正盟友。攻击骰再乘 accMulti；防守骰最后再乘 FerretTuft 闪避倍率。举例：普通武器精度因子是 ACC；英雄力量每不足 1 点，武器精度除以 1.5；投射物在相邻距离对英雄还有 Point Blank 距离修正。",
+          "source": "random"
+        },
+        {
+          "id": "compare",
+          "title": "比较最终两个掷值",
+          "row": 8,
+          "col": 0,
+          "kind": "decision",
+          "lines": "acuRoll ≥ defRoll ?",
+          "detail": "判定使用两个修正后的数值，不是直接拿攻击力除以防御力，也不是简单抽一个百分比。大于或等于即命中，小于即闪避。",
+          "source": "char-hit"
+        },
+        {
+          "id": "hit",
+          "title": "命中",
+          "row": 9,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "hit() 返回 true",
+          "detail": "在 Char.attack() 中，命中后才掷伤害，并进入目标防御、DR 和受伤处理。命中不表示伤害一定大于0。",
+          "source": "damage"
+        },
+        {
+          "id": "miss",
+          "title": "闪避",
+          "row": 9,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "hit() 返回 false",
+          "detail": "普通骰未达到比较条件时，attack() 展示防御动作并返回 false；命中分支中的伤害步骤不执行。",
+          "source": "char-hit"
+        },
+        {
+          "id": "damage-after-hit",
+          "title": "命中后才进入伤害处理",
+          "row": 10,
+          "col": 0,
+          "kind": "process",
+          "lines": "伤害 → defenseProc → DR → attackProc → damage",
+          "detail": "命中骰决定是否走伤害路径。基础伤害、攻击加成、防守者减伤和后续伤害触发是在命中之后处理；它们影响实际受伤，不改变已经完成的 hit() 比较结果。",
+          "source": "damage"
+        }
+      ],
+      "edges": [
+        {
+          "a": "start",
+          "b": "target-valid",
+          "label": ""
+        },
+        {
+          "a": "target-valid",
+          "b": "no-target",
+          "label": "否"
+        },
+        {
+          "a": "target-valid",
+          "b": "invulnerable",
+          "label": "是"
+        },
+        {
+          "a": "invulnerable",
+          "b": "invulnerable-stop",
+          "label": "是"
+        },
+        {
+          "a": "invulnerable",
+          "b": "base-stats",
+          "label": "否"
+        },
+        {
+          "a": "base-stats",
+          "b": "surprise",
+          "label": ""
+        },
+        {
+          "a": "surprise",
+          "b": "infinite-evasion",
+          "label": ""
+        },
+        {
+          "a": "infinite-evasion",
+          "b": "forced-miss",
+          "label": "是"
+        },
+        {
+          "a": "infinite-evasion",
+          "b": "infinite-accuracy",
+          "label": "否"
+        },
+        {
+          "a": "infinite-accuracy",
+          "b": "forced-hit",
+          "label": "是"
+        },
+        {
+          "a": "infinite-accuracy",
+          "b": "rolls",
+          "label": "否"
+        },
+        {
+          "a": "rolls",
+          "b": "compare",
+          "label": ""
+        },
+        {
+          "a": "compare",
+          "b": "hit",
+          "label": "是"
+        },
+        {
+          "a": "compare",
+          "b": "miss",
+          "label": "否"
+        },
+        {
+          "a": "forced-hit",
+          "b": "hit",
+          "label": "无限命中，跳过普通骰",
+          "route": "bypass"
+        },
+        {
+          "a": "forced-miss",
+          "b": "miss",
+          "label": "无限闪避，跳过普通骰",
+          "route": "bypass"
+        },
+        {
+          "a": "hit",
+          "b": "damage-after-hit",
+          "label": ""
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "普通骰演示：8 点攻击对 5 点防守",
+      "provenance": "依照源码所用的连续随机区间演示，不是游戏实测",
+      "input": "假设攻击基础值为8、防守基础值为5，没有任何额外状态修正、装备修正或无限值。攻击骰的可能范围是[0,8)，防守骰的可能范围是[0,5)。",
+      "trace": [
+        "取得 acuStat=8 与 defStat=5，且两者都没有达到 1,000,000。",
+        "分别抽 acuRoll=6.2 和 defRoll=4.6。",
+        "应用修正后 acuRoll ≥ defRoll，因此 hit() 返回 true，攻击进入后续伤害处理。",
+        "若另一次抽到 acuRoll=3.1 与 defRoll=4.2，同一个基础值组合则会返回 false。"
+      ],
+      "result": "这两种演示骰值分别命中和闪避。同一基础值组合不是固定结果；两个骰独立随机决定。"
+    },
+    {
+      "title": "基础命中概率演示：攻击8、防守5",
+      "provenance": "由两个相互独立的均匀随机值推导的教学示例，不是游戏实测",
+      "input": "不考虑任何额外修正，令 A 均匀分布于[0,8)，D 均匀分布于[0,5)。",
+      "trace": [
+        "当 A≥5 时，无论 D 取什么值都命中；该区间占攻击骰范围的3/8。",
+        "当0≤A<5时，命中概率为A/5；对这段攻击骰范围积分，贡献为5/16。",
+        "基础命中概率 = 3/8 + 5/16 = 11/16 = 68.75%。"
+      ],
+      "result": "只有独立均匀随机且无修正时，8对5才有此68.75%理论概率；不能套用到有状态、装备或特殊规则的战斗。"
+    },
+    {
+      "title": "特殊分支演示：双方都有无限值",
+      "provenance": "依照源码的分支顺序演示，不是游戏实测",
+      "input": "假设攻击方 acuStat 与防守方 defStat 都达到1,000,000。",
+      "trace": [
+        "hit() 先检查 defStat >= INFINITE_EVASION。",
+        "条件成立，立即返回闪避。",
+        "无限命中分支不会执行。"
+      ],
+      "result": "双方无限值冲突时，无限闪避优先。"
+    },
+    {
+      "title": "魔法命中修正演示",
+      "provenance": "依照 hit(..., magic=true) 的源码调用演示，不是单次战斗实测",
+      "input": "怪物法术通过 hit(attacker, defender, true) 检查命中。",
+      "trace": [
+        "magic=true 选择 accMulti=2。",
+        "攻击骰在状态修正后再乘2；防守骰仍按自身修正计算。",
+        "只有攻击法术明确使用这个入口时才有此修正。"
+      ],
+      "result": "魔法入口的攻击骰有2倍修正；其他攻击不能因此推定也有2倍命中。"
+    }
+  ]
+}

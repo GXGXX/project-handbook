@@ -120,6 +120,26 @@ class TrapTests(unittest.TestCase):
         self.assertIn('level-cap one_branch_skips wealth-bonus', failed(result))
 
 
+class RealRunTests(unittest.TestCase):
+    """Codex outputs from the first baseline, checked by hand against the source.
+
+    All three flows are correct on every trap; the scorer must keep saying so.
+    Their remaining deductions are real: loot omits exotic conversion and puts
+    the rate calculation in the roll node; melee merges Vulnerable with
+    attackProc in one node.
+    """
+
+    def test_first_baseline_keeps_its_traps_and_scores(self):
+        expected = {'spd-hit-check': 100.0, 'spd-loot-drop': 94.5, 'spd-melee-damage': 98.6}
+        for case_id, value in expected.items():
+            with self.subTest(case=case_id):
+                flow = load(ROOT / 'evals/runs' / case_id / '2026-11-04-codex-v1.5.0.flow.json')
+                validate(flow)
+                result = score(load(ROOT / 'evals/cases' / (case_id + '.json')), flow)
+                self.assertEqual(result['traps_passed'], result['traps'], failed(result))
+                self.assertEqual(result['score'], value, failed(result))
+
+
 class RunsTests(unittest.TestCase):
     def test_scores_each_run_against_its_case(self):
         import tempfile

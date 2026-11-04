@@ -1,0 +1,365 @@
+{
+  "title": "近战攻击一次，最后打到怪身上的伤害是怎么算出来的？",
+  "summary": "范围：英雄一次普通近战攻击怪物。流程从完成攻击动作后进行命中判定，经过英雄与目标的伤害修正，进入目标 damage，再到吸收护盾与扣血。装备、天赋、附魔、Buff 和怪物覆写会改变具体数字。",
+  "sources": [
+    {
+      "id": "hero",
+      "locator": "actors/hero/Hero.java · actAttack、onAttackComplete、damageRoll、attackProc",
+      "excerpt": "Hero.onAttackComplete 调用 attack(attackTarget)。Hero.damageRoll 根据装备攻击武器或 RingOfForce 分支取伤害，并处理 PhysicalEmpower、Weapon Recharging 等。Hero.attackProc 依次进入 Talent.onAttackProc 和武器 proc。"
+    },
+    {
+      "id": "char-attack",
+      "locator": "actors/Char.java · attack(Char,float,float,float)，hit，drRoll，attackProc",
+      "excerpt": "attack 先检查目标无敌，然后 hit。命中后 dr = round(enemy.drRoll() * AscensionChallenge.statModifier(enemy))；原始攻击伤害乘 dmgMulti，加 dmgBonus；再按 Berserk、Fury 等修正，调用 enemy.defenseProc。返回值非负时，先减 DR，再处理 Viscosity、Vulnerable 和 attackProc，最后 enemy.damage(effectiveDamage, this)。未命中直接返回 false。"
+    },
+    {
+      "id": "weapon",
+      "locator": "items/weapon/melee/MeleeWeapon.java · min、max、damageRoll；items/weapon/Weapon.java · Augment",
+      "excerpt": "MeleeWeapon.damageRoll：damage = augment.damageFactor(super.damageRoll(owner))；若 Hero 力量超过力量需求，再从 0 到超出点数追加伤害。Weapon.Augment：SPEED 伤害倍率 0.7，DAMAGE 伤害倍率 1.5，NONE 为 1；整数倍率用 Math.round。"
+    },
+    {
+      "id": "target",
+      "locator": "actors/Char.java · damage、resist、isImmune；actors/buffs/ShieldBuff.java · processDamage",
+      "excerpt": "Char.damage 对来自 Char 的伤害不重复应用 Aura of Protection 的同伴减伤；按目标 Doom、DeathMark、免疫与抗性等修正并 Math.round；ChampionEnemy.damageTakenFactor 使用 Math.ceil；最后 ShieldBuff.processDamage 吸收护盾，再执行 HP -= dmg。ShieldBuff 按优先级消耗护盾。"
+    },
+    {
+      "id": "special-cases",
+      "locator": "actors/mobs/Slime.java · damage；actors/mobs/GreatCrab.java · defenseSkill、damage；actors/buffs/Preparation.java · AttackLevel.damageRoll",
+      "excerpt": "Slime.damage 在调用父类前对高伤害作非线性压缩。GreatCrab 对满足条件的当前目标返回 INFINITE_EVASION，因而普通命中判定失败。Preparation 会取多次伤害掷骰的最大值并乘以等级加成；它不是普通一次伤害掷骰。"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "melee",
+      "title": "一次英雄普通近战攻击：从命中到扣血",
+      "source": "char-attack",
+      "nodes": [
+        {
+          "id": "attack-action",
+          "title": "攻击动作完成",
+          "row": 0,
+          "col": 0,
+          "kind": "process",
+          "lines": "Hero.onAttackComplete → attack(target)",
+          "detail": "英雄的攻击动画完成后，Hero.onAttackComplete 调用 attack(attackTarget)。下面从这次调用开始追踪普通英雄攻击怪物。攻击距离、能否执行动作等前置检查发生在更早的 actAttack/canAttack。",
+          "source": "hero"
+        },
+        {
+          "id": "invulnerable",
+          "title": "目标对攻击者无敌？",
+          "row": 1,
+          "col": 0,
+          "kind": "decision",
+          "lines": "isInvulnerable(attacker.getClass())",
+          "detail": "Char.attack 首先检查目标是否对攻击者类别无敌。是：显示无敌状态，返回 false，不进入命中、伤害掷骰或扣血。否：继续命中判定。Char.isInvulnerable 当前识别 SpectatorFreeze 和 Invulnerability。",
+          "source": "char-attack"
+        },
+        {
+          "id": "invulnerable-end",
+          "title": "无敌，攻击结束",
+          "row": 1,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "没有本次攻击伤害",
+          "detail": "无敌分支在取攻击伤害之前返回，因此这次近战不会进入下游常规伤害结算。",
+          "source": "char-attack"
+        },
+        {
+          "id": "hit-check",
+          "title": "攻击命中？",
+          "row": 2,
+          "col": 0,
+          "kind": "decision",
+          "lines": "随机命中能力掷骰 ≥ 随机闪避能力掷骰",
+          "detail": "Char.hit 取得攻击者 attackSkill 和目标 defenseSkill，分别在对应能力区间随机掷骰，再应用 Bless、Hex、Daze、ChampionEnemy、AscensionChallenge 等修正，最终比较两次掷骰。英雄的一般准确率也受武器 ACC、力量不足造成的 accuracyFactor 影响。仅当不等式成立时进入伤害结算。",
+          "source": "char-attack"
+        },
+        {
+          "id": "miss-end",
+          "title": "未命中，攻击结束",
+          "row": 2,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "返回 false，不扣目标生命",
+          "detail": "未命中分支显示目标的防御动作并返回 false。英雄攻击耗时、可见攻击效果等发生在外层动作完成代码里，不是伤害数字。",
+          "source": "char-attack"
+        },
+        {
+          "id": "roll",
+          "title": "掷出本次基础攻击伤害",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "lines": "通常取 weapon.damageRoll(hero)；非均匀 Random.NormalIntRange",
+          "detail": "通常装备近战武器时，Hero.damageRoll 调用武器伤害掷骰。MeleeWeapon 先根据该武器等级的 min/max 随机取值；初始短剑 tier 1、+0：min=1，max=10。英雄的掷骰可被 ThirteenLeafClover 改变。准备攻击 Preparation 会改用其多次伤害掷骰取最大值再加成；匕首伏击也有专用伤害区间。",
+          "source": "weapon"
+        },
+        {
+          "id": "weapon-mods",
+          "title": "应用武器与英雄伤害加成",
+          "row": 4,
+          "col": 0,
+          "kind": "process",
+          "lines": "武器增幅 → 超额力量 → 力量戒指等 → PhysicalEmpower / 天赋",
+          "detail": "近战武器对掷骰应用增幅（伤害型 ×1.5，速度型 ×0.7），然后根据超出武器力量需求的力量追加 0 到超出点数的掷骰伤害。Hero.damageRoll 还可添加力量戒指武器加成、PhysicalEmpower 和满足条件时的 Weapon Recharging。命中后 Hero.attackProc 再应用 Talent.onAttackProc 的天赋伤害与武器 proc。具体可包括伏击、条件跟进攻击、附魔触发等；附魔还可能另造成独立伤害。各项目取整点不同，需以该武器及效果实现为准。",
+          "source": "hero"
+        },
+        {
+          "id": "attack-multipliers",
+          "title": "按出手方与目标状态修正伤害",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "lines": "damage = damage × dmgMulti + dmgBonus → 各种条件倍率",
+          "detail": "Char.attack 先计算 dmg*dmgMulti，再加 dmgBonus（注释明确：平伤加值受前面的倍率影响，即本行次序是先乘再加）。接着可能应用 Illuminated/灼光天赋、Berserk、Fury ×1.5、PowerOfMany、ChampionEnemy 的近战倍率、出手方 AscensionChallenge、攻方 Endure、受击方 Endure、ChallengeArena ×0.67、Aura of Protection 同伴减伤、Meditate ×0.2、Weakness ×0.67。条件不成立的修正跳过。之后 Math.round 并进入目标 defenseProc。",
+          "source": "char-attack"
+        },
+        {
+          "id": "defense-proc",
+          "title": "目标执行命中时的防御处理",
+          "row": 6,
+          "col": 0,
+          "kind": "process",
+          "lines": "effectiveDamage = target.defenseProc(attacker, round(damage))",
+          "detail": "防御前置处理根据角色类型而异。Char.defenseProc 可能有 Earthroot 等效果；英雄会处理护甲特效、RockArmor 等；Mob 会处理伏击状态、SoulMark 等后调用父类。不同怪物可覆写此方法。GreatCrab 会在命中检查阶段对当前可见攻击者给出无限闪避；这不是这里的伤害减甲。",
+          "source": "char-attack"
+        },
+        {
+          "id": "negative-defense",
+          "title": "防御处理返回负值？",
+          "row": 7,
+          "col": 0,
+          "kind": "decision",
+          "lines": "effectiveDamage < 0",
+          "detail": "Char.attack 明确只在 defenseProc 返回非负值时触发后续受击方防御点减伤、Viscosity、Vulnerable 和 attackProc。",
+          "source": "char-attack"
+        },
+        {
+          "id": "negative-end",
+          "title": "结束 on-hit 链",
+          "row": 7,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "负伤害不会扣血；跳过后续命中触发",
+          "detail": "代码不会对负值运行后续 on-hit 链；它仍传给 target.damage，而 Char.damage 对 dmg < 0 立即返回。目标专属覆写的行为依其实现。",
+          "source": "char-attack"
+        },
+        {
+          "id": "dr",
+          "title": "扣除目标随机防御值 DR",
+          "row": 8,
+          "col": 0,
+          "kind": "process",
+          "lines": "effectiveDamage = max(effectiveDamage − round(target.drRoll × Ascension修正), 0)",
+          "detail": "攻击开始时先记录目标 DR 掷骰：enemy.drRoll() 乘目标 AscensionChallenge.statModifier 后 Math.round。成功返回非负的 defenseProc 之后再扣这个 DR，并以 Math.max(...,0) 截断。drRoll 可能带怪物专属随机护甲；Barkskin 也能加入掷骰。英雄使用特定狙击远程攻击或武僧无武器技能时的 DR 归零是特殊分支，不属于普通近战。",
+          "source": "char-attack"
+        },
+        {
+          "id": "post-defense",
+          "title": "处理延迟伤害、易伤及攻击触发",
+          "row": 9,
+          "col": 0,
+          "kind": "process",
+          "lines": "Viscosity 延迟 → Vulnerable ×1.33 → attacker.attackProc",
+          "detail": "Viscosity 会处理/延迟当前伤害并移除延迟标记；随后 Vulnerable 在护甲减伤之后乘 1.33；再调用攻击者 attackProc。英雄攻击触发按 Talent.onAttackProc 和武器 proc 顺序运行。附魔或天赋效果可能在这里对当前怪或其他目标另行造成伤害；这些单独伤害不等于传给本次 target.damage 的主伤害值。",
+          "source": "char-attack"
+        },
+        {
+          "id": "damage-entry",
+          "title": "把修正后的攻击伤害交给怪物",
+          "row": 10,
+          "col": 0,
+          "kind": "process",
+          "lines": "target.damage(effectiveDamage, attacker)",
+          "detail": "此时 effectiveDamage 是攻击链交给目标 damage 函数的整数。通用 Char.damage 遇到不是存活状态的角色或负数会立即返回；调用时 src 是攻击者 Char，因此不会重复执行只针对非角色来源的部分队友保护减伤。Mob.damage 通常先处理仇恨再调用 Char.damage。",
+          "source": "target"
+        },
+        {
+          "id": "damage-overrides",
+          "title": "目标子类先改写伤害？",
+          "row": 11,
+          "col": 0,
+          "kind": "decision",
+          "lines": "检查具体怪物是否覆写 damage",
+          "detail": "目标子类可以在调用父类 damage 前先变换伤害，所以不存在覆盖所有怪物的单一最终掉血公式。普通 Slime.damage 对较大伤害按非线性公式压缩；其他特殊目标也可能改变或拒绝伤害。没有覆写时沿普通 Char/Mob damage 路径。",
+          "source": "special-cases"
+        },
+        {
+          "id": "override-exit",
+          "title": "目标专属规则处理后",
+          "row": 11,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "结果取决于该目标覆写的 damage 实现",
+          "detail": "以史莱姆为例，先按强度压缩传入伤害再交给父类：在普通无 Ascension 修正时，传入伤害小于 5 原样保留；达到 5 后公式为 floor(4 + (sqrt(8 × (d−4)+1)−1)/2)。例如 d=10 得 7。之后仍会继续父类抗性、护盾与扣血等步骤，所以这个变换值也不总是最终 HP 损失。",
+          "source": "special-cases"
+        },
+        {
+          "id": "incoming-mods",
+          "title": "应用目标收到伤害的状态修正",
+          "row": 12,
+          "col": 0,
+          "kind": "process",
+          "lines": "Doom / DeathMark 等 → 免疫或抗性 → Math.round",
+          "detail": "Char.damage 先处理 LifeLink 分摊及部分非 Char 来源的修正，再处理 Doom ×1.67、对敌人的 DeathMark ×1.25。按 src 类别检查免疫；免疫则设为 0，否则乘目标抗性，再 Math.round。Resistance 默认每种匹配效果乘 0.5 且不叠加重复同类抗性，并可受 RingOfElements 等影响。目标自己覆写 damage 时可能已经先改了输入。",
+          "source": "target"
+        },
+        {
+          "id": "champion",
+          "title": "应用挑战者承伤倍率",
+          "row": 13,
+          "col": 0,
+          "kind": "process",
+          "lines": "每个 ChampionEnemy：dmg = ceil(dmg × damageTakenFactor)",
+          "detail": "Char.damage 抗性取整后，依次应用所有 ChampionEnemy 的承伤倍率，并用 Math.ceil 向上取整。倍率由具体 Champion 类型决定；如 Giant 会降低承伤。",
+          "source": "target"
+        },
+        {
+          "id": "shield",
+          "title": "护盾吸收伤害",
+          "row": 14,
+          "col": 0,
+          "kind": "process",
+          "lines": "按盾优先级吸收；剩余伤害再扣 HP",
+          "detail": "ShieldBuff.processDamage 按盾使用优先级从高到低消耗目标的各层护盾。若总护盾足够，本次剩余生命伤害为 0；否则只有超过护盾的部分继续扣血。饥饿伤害不走这套护盾吸收逻辑。",
+          "source": "target"
+        },
+        {
+          "id": "hp-loss",
+          "title": "结算本次生命值损失",
+          "row": 15,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "HP = max(HP − 护盾吸收后的伤害, 0)",
+          "detail": "Char.damage 执行 HP -= dmg，接着处理 Grim、Kinetic 等后续特效并把 HP 下限设为 0；生命值归零时执行死亡结算。因此通常理解的实际掉血是护盾吸收后的剩余伤害再受 HP 下限约束，拥有特殊怪物覆写、额外触发效果、伤害分摊或延迟效果时还需看对应分支。",
+          "source": "target"
+        }
+      ],
+      "edges": [
+        {
+          "a": "attack-action",
+          "b": "invulnerable",
+          "label": ""
+        },
+        {
+          "a": "invulnerable",
+          "b": "invulnerable-end",
+          "label": "是"
+        },
+        {
+          "a": "invulnerable",
+          "b": "hit-check",
+          "label": "否"
+        },
+        {
+          "a": "hit-check",
+          "b": "miss-end",
+          "label": "否"
+        },
+        {
+          "a": "hit-check",
+          "b": "roll",
+          "label": "是"
+        },
+        {
+          "a": "roll",
+          "b": "weapon-mods",
+          "label": ""
+        },
+        {
+          "a": "weapon-mods",
+          "b": "attack-multipliers",
+          "label": ""
+        },
+        {
+          "a": "attack-multipliers",
+          "b": "defense-proc",
+          "label": ""
+        },
+        {
+          "a": "defense-proc",
+          "b": "negative-defense",
+          "label": ""
+        },
+        {
+          "a": "negative-defense",
+          "b": "negative-end",
+          "label": "是"
+        },
+        {
+          "a": "negative-defense",
+          "b": "dr",
+          "label": "否"
+        },
+        {
+          "a": "dr",
+          "b": "post-defense",
+          "label": ""
+        },
+        {
+          "a": "post-defense",
+          "b": "damage-entry",
+          "label": ""
+        },
+        {
+          "a": "damage-entry",
+          "b": "damage-overrides",
+          "label": ""
+        },
+        {
+          "a": "damage-overrides",
+          "b": "override-exit",
+          "label": "是"
+        },
+        {
+          "a": "damage-overrides",
+          "b": "incoming-mods",
+          "label": "否"
+        },
+        {
+          "a": "incoming-mods",
+          "b": "champion",
+          "label": ""
+        },
+        {
+          "a": "champion",
+          "b": "shield",
+          "label": ""
+        },
+        {
+          "a": "shield",
+          "b": "hp-loss",
+          "label": ""
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "演示：初始短剑一次普通命中",
+      "provenance": "教学演示，按源码规则演算，不是游戏运行实测",
+      "input": "假设使用未强化的初始短剑（tier 1、+0、无增幅），英雄力量恰好满足需求；随机伤害掷出 6；命中；没有天赋、Buff、附魔和额外倍率；目标普通 DR 掷出 2；目标无抗性、无护盾、无怪物专属 damage 覆写。",
+      "trace": [
+        "目标通过无敌检查且命中成功，因此进入伤害链。",
+        "短剑基础伤害范围为 1–10；演示假定此次随机掷出 6。",
+        "无增幅、无额外力量、无其它攻击加成，伤害保持 6。",
+        "Char.attack 的默认倍率 dmgMulti=1、平伤 dmgBonus=0，因此仍为 6。",
+        "演示假定 defenseProc 返回 6，攻击时记下的 DR 为 2；减甲后为 max(6−2,0)=4。",
+        "无 Viscosity、Vulnerable 或攻方触发修改，传入目标 damage 的伤害为 4。",
+        "无目标增伤/抗性/挑战者倍率，也无护盾；最终 HP 减少 4。"
+      ],
+      "result": "这组输入的 HP 损失是 4。游戏使用随机数与条件效果，真实每次攻击结果会变化。"
+    },
+    {
+      "title": "分清攻击伤害与实际掉血：护盾例子",
+      "provenance": "教学演示，不是运行实测",
+      "input": "假设最终传入一个没有额外减伤的普通目标 damage 函数的伤害是 7；目标现有护盾为 5。",
+      "trace": [
+        "Char.damage 抵达护盾处理。",
+        "护盾吸收 5，剩余伤害 7−5=2。",
+        "目标生命值减少 2，而不是 7。"
+      ],
+      "result": "主攻击链的伤害值、护盾后的 HP 损失是两个不同的数。"
+    }
+  ]
+}
