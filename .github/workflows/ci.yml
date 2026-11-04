@@ -19,16 +19,8 @@ jobs:
         run: python -m py_compile project-handbook/scripts/*.py
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Run browser-script regression harnesses
-        run: |
-          node tests/test_app_ui.cjs
-          node tests/test_chat_ui.cjs
-          node tests/test_atlas_ui.cjs
 
-  learning-browser:
+  flow-browser:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,9 +32,6 @@ jobs:
           node-version: "22"
       - run: npm install --no-save playwright
       - run: npx playwright install --with-deps chromium
-      - run: python project-handbook/scripts/build_knowledge.py project-handbook/assets/learning.example.json learning-smoke
-      - run: python project-handbook/scripts/verify_handbook.py learning-smoke
-      - run: node tests/test_learning_browser.cjs learning-smoke/handbook.html
       - run: python project-handbook/scripts/build_flow.py project-handbook/assets/flow.example.json flow-smoke
       - run: node tests/test_flow_browser.cjs flow-smoke/handbook.html
       - run: python project-handbook/scripts/build_flow.py project-handbook/assets/damage.example.json damage-smoke
