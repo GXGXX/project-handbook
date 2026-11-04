@@ -1,0 +1,868 @@
+{
+  "title": "一次近战攻击，怪物最后掉多少血？",
+  "summary": "玩家普通近战：命中 → 武器/徒手掷值 → 减甲前修正 → 怪物防御钩子 → 随机护甲 → 易伤与攻击特效 → 怪物专属受伤 → 通用倍率与护盾 → HP。沿三段连线阅读，点击节点看公式、先后次序和源码；数值例子为教学演示。",
+  "graphs": [
+    {
+      "id": "attack-entry",
+      "title": "① 发起与命中",
+      "source": "entry",
+      "position": {
+        "row": 0,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "tap",
+          "title": "点击可攻击怪物",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "Hero.handle → HeroAction.Attack",
+          "detail": "原问题：近战攻击一次，最后打到怪身上的伤害是怎么算出来的？\n阅读口径：玩家对怪物的一次普通近战攻击，追到实际 HP 写入和飘字；包含徒手及影响这条链的常见特例。武器主动技能、远程、法杖的独立入口、所有 Boss 阶段不逐项展开。只读取给定源码，无存档、实机日志与随机种子。",
+          "sources": [
+            "entry"
+          ]
+        },
+        {
+          "id": "ready-hit",
+          "title": "满足攻击执行条件？",
+          "row": 1,
+          "col": 0,
+          "kind": "decision",
+          "lines": "未被目标魅惑；目标活着、可及且可见",
+          "detail": "actAttack 先检查 isCharmedBy，再检查 isAlive、canAttack、invisible==0；符合后播放攻击动画。",
+          "sources": [
+            "act"
+          ]
+        },
+        {
+          "id": "wait-or-stop",
+          "title": "走近或结束本次操作",
+          "row": 1,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "此刻没有伤害结算",
+          "detail": "魅惑时 ready；距离等不符时，如可见且 getCloser 成功则走近，否则 ready。这里的“否”归并这些未开始攻击的结果。",
+          "sources": [
+            "act"
+          ]
+        },
+        {
+          "id": "callback-hit",
+          "title": "攻击动画回调",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "onAttackComplete → attack(target)\n参数 = (1, 0, 1)",
+          "detail": "CharSprite 动画结束调用 ch.onAttackComplete；Hero 调用 attack(attackTarget)。Char 的单参数入口转成 dmgMulti=1、dmgBonus=0、accMulti=1。Hero.attack 再调用 super.attack。攻速在之后 spend(attackDelay()) 消耗时间，不是本次伤害倍率。",
+          "sources": [
+            "anim",
+            "complete",
+            "gate"
+          ]
+        },
+        {
+          "id": "invul-hit",
+          "title": "目标对英雄类无敌？",
+          "row": 3,
+          "col": 0,
+          "kind": "decision",
+          "lines": "enemy.isInvulnerable(getClass())",
+          "detail": "这是 attack 入口的前置拦截；无敌则直接 return false，不掷伤害。",
+          "sources": [
+            "gate"
+          ]
+        },
+        {
+          "id": "no-hp-hit",
+          "title": "本次主伤害不扣血",
+          "row": 3,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "无敌或未命中 → return false",
+          "detail": "命中失败不进入后续伤害链；可播放闪避/招架提示。这里和护甲抵消到 0 不同：后者仍属于成功命中。",
+          "sources": [
+            "gate",
+            "hit"
+          ]
+        },
+        {
+          "id": "accuracy-hit",
+          "title": "命中判定通过？",
+          "row": 4,
+          "col": 0,
+          "kind": "decision",
+          "lines": "U(0,命中) × 修正 ≥ U(0,闪避) × 修正",
+          "detail": "分别读取 Hero.attackSkill 与怪物 defenseSkill。Hero 命中包含准确戒指、天赋、武器 accuracyFactor；力量不足时该武器因子除以 1.5^缺少力量。随机点数再受 Bless×1.25、Hex×0.8、Daze×0.5、冠军与飞升等修正，攻击方额外乘 accMulti；防守方还乘 FerretTuft 因子。无限闪避优先于无限命中。\n怪物被可伏击的英雄偷袭或瘫痪时通常 defenseSkill=0；隐形且允许伏击的攻击者设无限命中。不能简单把命中率写成 命中/(命中+闪避)。大螃蟹在看到当前目标、未睡未瘫痪、目标不隐形时可返回无限闪避。",
+          "sources": [
+            "hit",
+            "hacc",
+            "wacc",
+            "mdef",
+            "crabblock"
+          ]
+        },
+        {
+          "id": "landed-hit",
+          "title": "进入伤害计算",
+          "row": 5,
+          "col": 0,
+          "kind": "merge",
+          "lines": "成功命中 ≠ 一定掉血",
+          "detail": "接下来先采样怪物 drRoll，再采样玩家 damageRoll；主流程保留此随机调用顺序。",
+          "sources": [
+            "gate"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "tap",
+          "b": "ready-hit",
+          "label": ""
+        },
+        {
+          "a": "ready-hit",
+          "b": "wait-or-stop",
+          "label": "否"
+        },
+        {
+          "a": "ready-hit",
+          "b": "callback-hit",
+          "label": "是"
+        },
+        {
+          "a": "callback-hit",
+          "b": "invul-hit",
+          "label": ""
+        },
+        {
+          "a": "invul-hit",
+          "b": "no-hp-hit",
+          "label": "是"
+        },
+        {
+          "a": "invul-hit",
+          "b": "accuracy-hit",
+          "label": "否"
+        },
+        {
+          "a": "accuracy-hit",
+          "b": "no-hp-hit",
+          "label": "否"
+        },
+        {
+          "a": "accuracy-hit",
+          "b": "landed-hit",
+          "label": "是"
+        }
+      ]
+    },
+    {
+      "id": "attack-roll",
+      "title": "② 伤害骰与减甲",
+      "source": "mods",
+      "position": {
+        "row": 0,
+        "col": 3
+      },
+      "nodes": [
+        {
+          "id": "armor-roll",
+          "title": "先掷目标护甲抵消值",
+          "row": 0,
+          "col": 0,
+          "kind": "process",
+          "lines": "DR = round(drRoll × 飞升修正)",
+          "detail": "drRoll 是本次攻击的随机抵消值，不是固定百分比。Char 默认包含 Barkskin 随机值；如螃蟹再加 NormalIntRange(0,4)。普通持械近战照常减甲；武僧徒手技能跟踪器可令 DR=0。狙击手远距离投掷免甲分支不属于本图近战主线。",
+          "sources": [
+            "gate",
+            "dr",
+            "crab"
+          ]
+        },
+        {
+          "id": "weapon-mode",
+          "title": "本次按徒手处理？",
+          "row": 1,
+          "col": 0,
+          "kind": "decision",
+          "lines": "RingOfForce.fightingUnarmed(hero)",
+          "detail": "没有攻击武器、武僧徒手技能，或有效斗士姿态，会走徒手分支；投掷或 abilityWeapon 存在时另按其规则判断。",
+          "sources": [
+            "heroRoll",
+            "forceMode"
+          ]
+        },
+        {
+          "id": "unarmed-roll",
+          "title": "徒手或武力戒指掷值",
+          "row": 2,
+          "col": 1,
+          "kind": "process",
+          "lines": "无戒指：R(1, max(STR−8,1))",
+          "detail": "有武力戒指时按 RingOfForce 的等效 tier 与戒指有效 bonus 决定 min/max，斗士姿态另加伤害；无戒指为左列公式。部分徒手模式可继承武器精炼。武僧徒手技能会忽略武力戒指的伤害影响。此分支直接替换武器伤害来源，不额外叠加 armedDamageBonus。",
+          "sources": [
+            "force",
+            "heroRoll",
+            "forceMode"
+          ]
+        },
+        {
+          "id": "weapon-roll",
+          "title": "武器掷值＋力量与戒指",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "W = round(R(min,max) × 精炼)\n＋ R(0,多余力量) ＋ 持械戒指加成",
+          "detail": "通用近战武器 min=tier+L，max=5(tier+1)+L(tier+1)，L=buffedLvl()；具体武器可重写，例如匕首 max。精炼：速度0.7、伤害1.5、普通1；先取整，再加多余力量骰。多余力量=max(STR−STRReq(),0)，需求力量使用武器实际 level()，并处理精通药剂；不应拿 buffedLvl 替代需求等级。短剑 tier=2，+0 时 min=2、max=15、需求12。\nR 为 Hero.heroDamageIntRange：默认 Random.NormalIntRange，十三叶草可改写。相关随机工具实现位于给定根目录外，本图未核验其离散分布，不能假称均匀分布。匕首伏击把基础掷值下限提高到 min+round((max−min)×0.75)，并不是全武器通用暴击倍率。",
+          "sources": [
+            "range",
+            "melee",
+            "augment",
+            "strreq",
+            "heroRoll",
+            "forceBonus",
+            "sword",
+            "dagger"
+          ]
+        },
+        {
+          "id": "hero-bonus",
+          "title": "英雄掷值补正／刺客准备",
+          "row": 3,
+          "col": 0,
+          "kind": "merge",
+          "lines": "D0 = max(英雄伤害骰, 0)\n准备时取多次最大值后乘增伤",
+          "detail": "有 PhysicalEmpower 时加 dmgBoost 并消耗次数；非决斗家且有 WEAPON_RECHARGING 并正在充能时，round(伤害×(1.025+0.025×天赋点))。无准备时 D0 即 Hero.damageRoll 返回。Preparation 替换为从完整 damageRoll 取 1/1/2/3 次最大值，再 round(×1.10/1.20/1.35/1.50)，对应准备1/3/5/9回合。多掷会真实多次调用有消耗的 damageRoll。",
+          "sources": [
+            "heroRoll",
+            "prep",
+            "mods"
+          ]
+        },
+        {
+          "id": "prearmor-mod",
+          "title": "按顺序做减甲前修正",
+          "row": 4,
+          "col": 0,
+          "kind": "process",
+          "lines": "D = D0 × dmgMulti + dmgBonus\n继续乘／加状态修正；最后 round",
+          "detail": "普通攻击 dmgMulti=1、dmgBonus=0。精确顺序：照明 SEARING_LIGHT 平加(1+2×天赋点) → Berserk 伤害因子 → Fury×1.5 → PowerOfMany×1.25（或特定 BeamingRay）→ 攻击者各 Champion 因子 → 攻击者飞升修正 → 攻击者 Endure → 防守者 Endure → ChallengeArena×0.67 → 友方保护光环 → 冥想×0.2 → 攻击者 Weakness×0.67。中间主要使用 float，进入 defenseProc 前 Math.round。Berserk 因子=min(1.5,1+power/2)。dmgBonus 是在 dmgMulti 之后相加，但仍受后续倍率影响。",
+          "sources": [
+            "mods",
+            "berserk"
+          ]
+        },
+        {
+          "id": "defense-hook",
+          "title": "怪物防御钩子",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "lines": "P = enemy.defenseProc(hero, round(D))",
+          "detail": "先运行具体怪物重写，再经 Mob 的伏击表现、仇恨与 SoulMark 等处理，随后 Char.defenseProc 可做 Earthroot 吸收、ShieldOfLight 减值与友方光环护甲触发。这一步在实际 DR 减法之前。特殊怪物可能改写返回值。",
+          "sources": [
+            "order",
+            "mobproc",
+            "defproc"
+          ]
+        },
+        {
+          "id": "defense-cancel",
+          "title": "防御返回值 P < 0？",
+          "row": 6,
+          "col": 0,
+          "kind": "decision",
+          "lines": "负值 → 跳过减甲、易伤、攻击特效",
+          "detail": "源码约定用负值抑制命中特效。Char.attack 仍会在存活检查后调用 enemy.damage(P,this)；通用 Char.damage 对 dmg<0 直接 return。具体怪物重写可能先做自己的逻辑，不能等同于 attack 返回 false。",
+          "sources": [
+            "order",
+            "damageA"
+          ]
+        },
+        {
+          "id": "negative-stop",
+          "title": "交给怪物接收负值",
+          "row": 6,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "通用 Char.damage 直接拒绝负伤害",
+          "detail": "此处不声称所有怪物重写均无副作用；本图主线继续使用 P≥0。",
+          "sources": [
+            "damageA",
+            "order"
+          ]
+        },
+        {
+          "id": "subtract-armor",
+          "title": "减甲 → 延迟 → 易伤",
+          "row": 7,
+          "col": 0,
+          "kind": "process",
+          "lines": "A = max(P − DR, 0)\n易伤时 A = (int)(A × 1.33f)",
+          "detail": "严格顺序：扣 DR → 有 ViscosityTracker 时 deferDamage 并移除跟踪器 → 再算 Vulnerable。Viscosity 将部分伤害转为后续 DeferedDamage。易伤是 int 变量复合赋值 *=1.33f，向零截断，不是 Math.round；非负数等同向下取整，例如 8×1.33→10。即使减甲结果为0，也能继续触发攻击天赋或附魔。",
+          "sources": [
+            "order",
+            "viscosity"
+          ]
+        },
+        {
+          "id": "offense-hook",
+          "title": "英雄天赋 → 武器附魔",
+          "row": 8,
+          "col": 0,
+          "kind": "process",
+          "lines": "E = Hero.attackProc(enemy, A)",
+          "detail": "依次 super.attackProc → Talent.onAttackProc → wep.proc。天赋可在减甲后平加或乘伤，如激怒、伏击、后续打击、耐心打击、致命追击；附魔也可改主伤害，如 Kinetic 加储存伤害。Weapon.proc 在非魔免下处理常规附魔、BodyForm、HolyWeapon 与 Smite；徒手是否继承附魔由武力戒指模式决定。附魔或神术也可单独调用 enemy.damage，构成额外伤害包，不能一律塞进 E。若这些副作用已经杀死目标，Char.attack 会停止本次后续主伤害调用。",
+          "sources": [
+            "heroProc",
+            "talent",
+            "enchant",
+            "kinetic",
+            "order"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "armor-roll",
+          "b": "weapon-mode",
+          "label": ""
+        },
+        {
+          "a": "weapon-mode",
+          "b": "unarmed-roll",
+          "label": "是"
+        },
+        {
+          "a": "weapon-mode",
+          "b": "weapon-roll",
+          "label": "否"
+        },
+        {
+          "a": "weapon-roll",
+          "b": "hero-bonus",
+          "label": ""
+        },
+        {
+          "a": "unarmed-roll",
+          "b": "hero-bonus",
+          "label": ""
+        },
+        {
+          "a": "hero-bonus",
+          "b": "prearmor-mod",
+          "label": ""
+        },
+        {
+          "a": "prearmor-mod",
+          "b": "defense-hook",
+          "label": ""
+        },
+        {
+          "a": "defense-hook",
+          "b": "defense-cancel",
+          "label": ""
+        },
+        {
+          "a": "defense-cancel",
+          "b": "negative-stop",
+          "label": "是"
+        },
+        {
+          "a": "defense-cancel",
+          "b": "subtract-armor",
+          "label": "否"
+        },
+        {
+          "a": "subtract-armor",
+          "b": "offense-hook",
+          "label": ""
+        }
+      ]
+    },
+    {
+      "id": "attack-receive",
+      "title": "③ 怪物接收、护盾与实际扣血",
+      "source": "damageA",
+      "position": {
+        "row": 0,
+        "col": 6
+      },
+      "nodes": [
+        {
+          "id": "target-alive",
+          "title": "目标仍存活？",
+          "row": 0,
+          "col": 0,
+          "kind": "decision",
+          "lines": "特效结算之后再检查",
+          "detail": "defenseProc 或 attackProc 的副作用可能先造成死亡。死亡时 return true，未再调用主伤害包；成功命中返回 true 不能理解成一定扣了主伤害。",
+          "sources": [
+            "order"
+          ]
+        },
+        {
+          "id": "proc-killed",
+          "title": "特效已杀死，停止主包",
+          "row": 0,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "本次攻击仍算命中",
+          "detail": "已有额外伤害以它自己的 damage 调用结算。",
+          "sources": [
+            "order"
+          ]
+        },
+        {
+          "id": "target-rewrite",
+          "title": "具体怪物接收伤害",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "enemy.damage(E, hero)\n实际动态派发，再到 Mob/Char",
+          "detail": "普通 Mob.damage 只做唤醒与仇恨，然后 super.damage。具体怪物可以重写伤害，如 Slime：s=飞升修正，x=E/s；x≥5 时 x=4+(sqrt(8(x−4)+1)−1)/2；传入通用受伤值=int(x×s)。普通 s=1 时，10点传入变7点。Boss 阶段、全体怪物重写未逐一审计：实际目标需要继续核验其 damage/defenseProc/drRoll/isInvulnerable。",
+          "sources": [
+            "slime",
+            "mobDamage"
+          ]
+        },
+        {
+          "id": "reject-packet",
+          "title": "已死、负值或再次无敌？",
+          "row": 2,
+          "col": 0,
+          "kind": "decision",
+          "lines": "Char.damage 再次校验",
+          "detail": "!isAlive 或 dmg<0 立即返回；isInvulnerable(src.getClass()) 也返回。此时 src 是英雄对象，来源类就是 Hero 类，而不是武器类。",
+          "sources": [
+            "damageA"
+          ]
+        },
+        {
+          "id": "packet-stopped",
+          "title": "主伤害包到此结束",
+          "row": 2,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "不执行此包通用 HP 减法",
+          "detail": "之后 Char.attack 中的命中后逻辑仍可能运行；此节点不等于整次行动无任何效果。",
+          "sources": [
+            "damageA",
+            "finish"
+          ]
+        },
+        {
+          "id": "receive-mod",
+          "title": "分摊 → 受伤倍率／免疫",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "lines": "生命链接先 ceil(d/(链接数+1))\n再处理减伤、厄运、死印与抗性",
+          "detail": "生命链接先删除失效对象，再 ceil 均分给自己和有效链接目标（原来源为 LifeLink/Hunger 时不再次分摊）。对自己继续：PowerOfMany 通常×0.75（生命链接神术为0.70−0.05×天赋点）→ 恢复部分受击状态 → Doom且不免疫时×1.67 → 非友方死印×1.25 → 按 src.getClass() 免疫清零或乘 resist → Math.round。每个匹配抗性类×0.5，再乘元素戒指 resist。英雄主近战包的 src 是 Hero，不可把附魔属性抗性套到整个近战包。冠军受伤因子随后逐个 Math.ceil；抗魔护甲仅对来源白名单额外减值，不能再扣一次普通 DR。",
+          "sources": [
+            "damageA",
+            "damageB",
+            "resist"
+          ]
+        },
+        {
+          "id": "bleed-path",
+          "title": "转化为流血且数值>0？",
+          "row": 4,
+          "col": 0,
+          "kind": "decision",
+          "lines": "收割或 Vorpal 跟踪器",
+          "detail": "收割：不免疫流血时 bleedAmt=进入通用受伤时的 dmg；Vorpal：powerMulti×(2+dmg/2)。两者在通用受伤倍率回写前取值，避免流血结算时重复叠倍率。Vorpal 若本包 dmg>护盾+HP 则取消流血；随后 bleedAmt>0 时挂 Bleeding 并 return，不立即扣 HP。护盾激活、瘫痪受击处理位于此 return 前；本图不展开这些不改变主线公式的通知。",
+          "sources": [
+            "damageB",
+            "damageC"
+          ]
+        },
+        {
+          "id": "bleed-later",
+          "title": "改为后续流血伤害",
+          "row": 4,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "当前主包不执行即时扣血",
+          "detail": "显示流血提示后返回；后续 Bleeding 行为属于另一次持续伤害结算，本图不将它当成本次即时掉血。",
+          "sources": [
+            "damageC"
+          ]
+        },
+        {
+          "id": "shield-hp",
+          "title": "护盾吸收，余额扣 HP",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "lines": "H = ShieldBuff.processDamage(d)\nHP ← HP − H",
+          "detail": "各 ShieldBuff 按 shieldUsePriority 从高到低消费，单层吸收 min(护盾,剩余伤害)，直到剩余0或盾耗尽。物理护甲 DR 已在前段扣过，此处是可消耗护盾。普通无其他特例时 H=max(d−可用护盾,0)。",
+          "sources": [
+            "shield",
+            "damageC"
+          ]
+        },
+        {
+          "id": "grim-hp",
+          "title": "追加 Grim，再完成结算",
+          "row": 6,
+          "col": 0,
+          "kind": "process",
+          "lines": "未死且触发 Grim → 再扣额外 HP\n显示 d实际扣除 + shielded",
+          "detail": "Grim 跟踪器在首次 HP 减法后检查：触发率=maxChance×((HT−HP)/HT)^2；触发再扣 round(剩余HP×resist(Grim))。Kinetic 随后记录溢出；普通飘字显示 dmg+shielded，其中 dmg 可已加入 Grim 额外量，因此飘字包含护盾消耗，并可能大于原先HP。最终 HP<0 归零，按 isAlive 决定 die；死印等有专门存活语义。",
+          "sources": [
+            "damageC",
+            "damageD"
+          ]
+        },
+        {
+          "id": "post-hit",
+          "title": "一次近战的后续效果",
+          "row": 7,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "火／冰灌注；准备斩杀等\n普通路径到此可读到实际 HP",
+          "detail": "Char.attack 在主伤害返回后做 FireImbue/FrostImbue，再检查 Preparation.canKO 或 CombinedLethality 阈值，可能直接设 HP=0，并处理特殊存活。于是“一次攻击造成的全部后果”可包含主包、独立附加包、持续伤害与斩杀。若只问无特效普通近战：实际掉血=min(原HP,max(伤害骰−随机DR,0))；该简式前提为已命中、无增减伤、无怪物重写、无护盾及额外钩子。",
+          "sources": [
+            "finish",
+            "prep"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "target-alive",
+          "b": "proc-killed",
+          "label": "否"
+        },
+        {
+          "a": "target-alive",
+          "b": "target-rewrite",
+          "label": "是"
+        },
+        {
+          "a": "target-rewrite",
+          "b": "reject-packet",
+          "label": ""
+        },
+        {
+          "a": "reject-packet",
+          "b": "packet-stopped",
+          "label": "是"
+        },
+        {
+          "a": "reject-packet",
+          "b": "receive-mod",
+          "label": "否"
+        },
+        {
+          "a": "receive-mod",
+          "b": "bleed-path",
+          "label": ""
+        },
+        {
+          "a": "bleed-path",
+          "b": "bleed-later",
+          "label": "是"
+        },
+        {
+          "a": "bleed-path",
+          "b": "shield-hp",
+          "label": "否"
+        },
+        {
+          "a": "shield-hp",
+          "b": "grim-hp",
+          "label": ""
+        },
+        {
+          "a": "grim-hp",
+          "b": "post-hit",
+          "label": ""
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "entry",
+      "locator": "actors/hero/Hero.java:1940–1953",
+      "excerpt": "1940: \t\tChar ch = Actor.findChar( cell );\n1941: \t\tHeap heap = Dungeon.level.heaps.get( cell );\n1942: \n1943: \t\tif (Dungeon.level.map[cell] == Terrain.ALCHEMY && cell != pos) {\n1944: \t\t\t\n1945: \t\t\tcurAction = new HeroAction.Alchemy( cell );\n1946: \t\t\t\n1947: \t\t} else if (ch instanceof Mob && (fieldOfView[cell] || Char.hasProp(ch, Property.OBJECT))) {\n1948: \n1949: \t\t\tif (((Mob) ch).heroShouldInteract()) {\n1950: \t\t\t\tcurAction = new HeroAction.Interact( ch );\n1951: \t\t\t} else {\n1952: \t\t\t\tcurAction = new HeroAction.Attack( ch );\n1953: \t\t\t}"
+    },
+    {
+      "id": "act",
+      "locator": "actors/hero/Hero.java:1458–1499",
+      "excerpt": "1458: \tprivate boolean actAttack( HeroAction.Attack action ) {\n1459: \n1460: \t\tattackTarget = action.target;\n1461: \n1462: \t\tif (isCharmedBy(attackTarget)){\n1463: \t\t\tGLog.w( Messages.get(Charm.class, \"cant_attack\"));\n1464: \t\t\tready();\n1465: \t\t\treturn false;\n1466: \t\t}\n1467: \n1468: \t\tif (attackTarget.isAlive() && canAttack(attackTarget) && attackTarget.invisible == 0) {\n1469: \n1470: \t\t\tif (heroClass != HeroClass.DUELIST\n1471: \t\t\t\t\t&& hasTalent(Talent.AGGRESSIVE_BARRIER)\n1472: \t\t\t\t\t&& buff(Talent.AggressiveBarrierCooldown.class) == null\n1473: \t\t\t\t\t&& (HP / (float)HT) <= 0.5f){\n1474: \t\t\t\tint shieldAmt = 1 + 2*pointsInTalent(Talent.AGGRESSIVE_BARRIER);\n1475: \t\t\t\tBuff.affect(this, Barrier.class).setShield(shieldAmt);\n1476: \t\t\t\tsprite.showStatusWithIcon(CharSprite.POSITIVE, Integer.toString(shieldAmt), FloatingText.SHIELDING);\n1477: \t\t\t\tBuff.affect(this, Talent.AggressiveBarrierCooldown.class, 50f);\n1478: \n1479: \t\t\t}\n1480: \t\t\t//attack target cleared on onAttackComplete\n1481: \t\t\tsprite.attack( attackTarget.pos );\n1482: \n1483: \t\t\treturn false;\n1484: \n1485: \t\t} else {\n1486: \n1487: \t\t\tif (fieldOfView[attackTarget.pos] && getCloser( attackTarget.pos )) {\n1488: \n1489: \t\t\t\tattackTarget = null;\n1490: \t\t\t\treturn true;\n1491: \n1492: \t\t\t} else {\n1493: \t\t\t\tready();\n1494: \t\t\t\tattackTarget = null;\n1495: \t\t\t\treturn false;\n1496: \t\t\t}\n1497: \n1498: \t\t}\n1499: \t}"
+    },
+    {
+      "id": "complete",
+      "locator": "actors/hero/Hero.java:2354–2382",
+      "excerpt": "2354: \tpublic void onAttackComplete() {\n2355: \n2356: \t\tif (attackTarget == null){\n2357: \t\t\tcurAction = null;\n2358: \t\t\tsuper.onAttackComplete();\n2359: \t\t\treturn;\n2360: \t\t}\n2361: \t\t\n2362: \t\tAttackIndicator.target(attackTarget);\n2363: \t\tboolean wasEnemy = attackTarget.alignment == Alignment.ENEMY\n2364: \t\t\t\t|| (attackTarget instanceof Mimic && attackTarget.alignment == Alignment.NEUTRAL);\n2365: \n2366: \t\tboolean hit = attack(attackTarget);\n2367: \t\t\n2368: \t\tInvisibility.dispel();\n2369: \t\tspend( attackDelay() );\n2370: \n2371: \t\tif (hit && subClass == HeroSubClass.GLADIATOR && wasEnemy){\n2372: \t\t\tBuff.affect( this, Combo.class ).hit(attackTarget);\n2373: \t\t}\n2374: \n2375: \t\tif (hit && heroClass == HeroClass.DUELIST && wasEnemy){\n2376: \t\t\tBuff.affect( this, Sai.ComboStrikeTracker.class).addHit( attackTarget );\n2377: \t\t}\n2378: \n2379: \t\tcurAction = null;\n2380: \t\tattackTarget = null;\n2381: \n2382: \t\tsuper.onAttackComplete();"
+    },
+    {
+      "id": "anim",
+      "locator": "sprites/CharSprite.java:838–858",
+      "excerpt": "838: \n839: \t\t}\n840: \t}\n841: \n842: \t@Override\n843: \tpublic synchronized void onComplete( Animation anim ) {\n844: \t\t\n845: \t\tif (animCallback != null) {\n846: \t\t\tCallback executing = animCallback;\n847: \t\t\tanimCallback = null;\n848: \t\t\texecuting.call();\n849: \t\t} else {\n850: \t\t\t\n851: \t\t\tif (anim == attack) {\n852: \t\t\t\t\n853: \t\t\t\tidle();\n854: \t\t\t\tch.onAttackComplete();\n855: \t\t\t\t\n856: \t\t\t} else if (anim == operate) {\n857: \t\t\t\t\n858: \t\t\t\tidle();"
+    },
+    {
+      "id": "gate",
+      "locator": "actors/Char.java:368–403",
+      "excerpt": "368: \tfinal public boolean attack( Char enemy ){\n369: \t\treturn attack(enemy, 1f, 0f, 1f);\n370: \t}\n371: \t\n372: \tpublic boolean attack( Char enemy, float dmgMulti, float dmgBonus, float accMulti ) {\n373: \n374: \t\tif (enemy == null) return false;\n375: \t\t\n376: \t\tboolean visibleFight = Dungeon.level.heroFOV[pos] || Dungeon.level.heroFOV[enemy.pos];\n377: \n378: \t\tif (enemy.isInvulnerable(getClass())) {\n379: \n380: \t\t\tif (visibleFight) {\n381: \t\t\t\tenemy.sprite.showStatus( CharSprite.POSITIVE, Messages.get(this, \"invulnerable\") );\n382: \n383: \t\t\t\tSample.INSTANCE.play(Assets.Sounds.HIT_PARRY, 1f, Random.Float(0.96f, 1.05f));\n384: \t\t\t}\n385: \n386: \t\t\treturn false;\n387: \n388: \t\t} else if (hit( this, enemy, accMulti, false )) {\n389: \t\t\t\n390: \t\t\tint dr = Math.round(enemy.drRoll() * AscensionChallenge.statModifier(enemy));\n391: \t\t\t\n392: \t\t\tif (this instanceof Hero){\n393: \t\t\t\tHero h = (Hero)this;\n394: \t\t\t\tif (h.belongings.attackingWeapon() instanceof MissileWeapon\n395: \t\t\t\t\t\t&& h.subClass == HeroSubClass.SNIPER\n396: \t\t\t\t\t\t&& !Dungeon.level.adjacent(h.pos, enemy.pos)){\n397: \t\t\t\t\tdr = 0;\n398: \t\t\t\t}\n399: \n400: \t\t\t\tif (h.buff(MonkEnergy.MonkAbility.UnarmedAbilityTracker.class) != null){\n401: \t\t\t\t\tdr = 0;\n402: \t\t\t\t}\n403: \t\t\t}"
+    },
+    {
+      "id": "hit",
+      "locator": "actors/Char.java:619–684",
+      "excerpt": "619: \tpublic static boolean hit( Char attacker, Char defender, float accMulti, boolean magic ) {\n620: \t\tfloat acuStat = attacker.attackSkill( defender );\n621: \t\tfloat defStat = defender.defenseSkill( attacker );\n622: \n623: \t\tif (defender instanceof Hero && ((Hero) defender).damageInterrupt){\n624: \t\t\t((Hero) defender).interrupt();\n625: \t\t}\n626: \n627: \t\t//invisible chars always hit (for the hero this is surprise attacking)\n628: \t\tif (attacker.invisible > 0 && attacker.canSurpriseAttack()){\n629: \t\t\tacuStat = INFINITE_ACCURACY;\n630: \t\t}\n631: \n632: \t\tif (defender.buff(MonkEnergy.MonkAbility.Focus.FocusBuff.class) != null){\n633: \t\t\tdefStat = INFINITE_EVASION;\n634: \t\t}\n635: \n636: \t\t//if accuracy or evasion are large enough, treat them as infinite.\n637: \t\t//note that infinite evasion beats infinite accuracy\n638: \t\tif (defStat >= INFINITE_EVASION){\n639: \t\t\thitMissIcon = FloatingText.getMissReasonIcon(attacker, acuStat, defender, INFINITE_EVASION);\n640: \t\t\treturn false;\n641: \t\t} else if (acuStat >= INFINITE_ACCURACY){\n642: \t\t\thitMissIcon = FloatingText.getHitReasonIcon(attacker, INFINITE_ACCURACY, defender, defStat);\n643: \t\t\treturn true;\n644: \t\t}\n645: \n646: \t\tfloat acuRoll = Random.Float( acuStat );\n647: \t\tif (attacker.buff(Bless.class) != null) acuRoll *= 1.25f;\n648: \t\tif (attacker.buff(  Hex.class) != null) acuRoll *= 0.8f;\n649: \t\tif (attacker.buff( Daze.class) != null) acuRoll *= 0.5f;\n650: \t\tfor (ChampionEnemy buff : attacker.buffs(ChampionEnemy.class)){\n651: \t\t\tacuRoll *= buff.evasionAndAccuracyFactor();\n652: \t\t}\n653: \t\tacuRoll *= AscensionChallenge.statModifier(attacker);\n654: \t\tif (Dungeon.hero.heroClass != HeroClass.CLERIC\n655: \t\t\t\t&& Dungeon.hero.hasTalent(Talent.BLESS)\n656: \t\t\t\t&& attacker.alignment == Alignment.ALLY){\n657: \t\t\t// + 3%/5%\n658: \t\t\tacuRoll *= 1.01f + 0.02f*Dungeon.hero.pointsInTalent(Talent.BLESS);\n659: \t\t}\n660: \t\tacuRoll *= accMulti;\n661: \n662: \t\tfloat defRoll = Random.Float( defStat );\n663: \t\tif (defender.buff(Bless.class) != null) defRoll *= 1.25f;\n664: \t\tif (defender.buff(  Hex.class) != null) defRoll *= 0.8f;\n665: \t\tif (defender.buff( Daze.class) != null) defRoll *= 0.5f;\n666: \t\tfor (ChampionEnemy buff : defender.buffs(ChampionEnemy.class)){\n667: \t\t\tdefRoll *= buff.evasionAndAccuracyFactor();\n668: \t\t}\n669: \t\tdefRoll *= AscensionChallenge.statModifier(defender);\n670: \t\tif (Dungeon.hero.heroClass != HeroClass.CLERIC\n671: \t\t\t\t&& Dungeon.hero.hasTalent(Talent.BLESS)\n672: \t\t\t\t&& defender.alignment == Alignment.ALLY){\n673: \t\t\t// + 3%/5%\n674: \t\t\tdefRoll *= 1.01f + 0.02f*Dungeon.hero.pointsInTalent(Talent.BLESS);\n675: \t\t}\n676: \t\tdefRoll *= FerretTuft.evasionMultiplier();\n677: \n678: \t\tif (acuRoll >= defRoll){\n679: \t\t\thitMissIcon = FloatingText.getHitReasonIcon(attacker, acuRoll, defender, defRoll);\n680: \t\t\treturn true;\n681: \t\t} else {\n682: \t\t\thitMissIcon = FloatingText.getMissReasonIcon(attacker, acuRoll, defender, defRoll);\n683: \t\t\treturn false;\n684: \t\t}"
+    },
+    {
+      "id": "hacc",
+      "locator": "actors/hero/Hero.java:510–564",
+      "excerpt": "510: \t@Override\n511: \tpublic int attackSkill( Char target ) {\n512: \t\tKindOfWeapon wep = belongings.attackingWeapon();\n513: \t\t\n514: \t\tfloat accuracy = 1;\n515: \t\taccuracy *= RingOfAccuracy.accuracyMultiplier( this );\n516: \t\t\n517: \t\t//precise assault and liquid agility\n518: \t\tif (!(wep instanceof MissileWeapon)) {\n519: \t\t\tif ((hasTalent(Talent.PRECISE_ASSAULT) || hasTalent(Talent.LIQUID_AGILITY))\n520: \t\t\t\t\t//does not trigger on ability attacks\n521: \t\t\t\t\t&& belongings.abilityWeapon != wep && buff(MonkEnergy.MonkAbility.UnarmedAbilityTracker.class) == null){\n522: \n523: \t\t\t\t//non-duelist benefit for precise assault, can stack with liquid agility\n524: \t\t\t\tif (heroClass != HeroClass.DUELIST) {\n525: \t\t\t\t\t//persistent +10%/20%/30% ACC for other heroes\n526: \t\t\t\t\taccuracy *= 1f + 0.1f * pointsInTalent(Talent.PRECISE_ASSAULT);\n527: \t\t\t\t}\n528: \n529: \t\t\t\tif (wep instanceof Flail && buff(Flail.SpinAbilityTracker.class) != null){\n530: \t\t\t\t\t//do nothing, this is not a regular attack so don't consume talent fx\n531: \t\t\t\t} else if (wep instanceof Crossbow && buff(Crossbow.ChargedShot.class) != null){\n532: \t\t\t\t\t//do nothing, this is not a regular attack so don't consume talent fx\n533: \t\t\t\t} else if (buff(Talent.PreciseAssaultTracker.class) != null) {\n534: \t\t\t\t\t// 2x/5x/inf. ACC for duelist if she just used a weapon ability\n535: \t\t\t\t\tswitch (pointsInTalent(Talent.PRECISE_ASSAULT)){\n536: \t\t\t\t\t\tdefault: case 1:\n537: \t\t\t\t\t\t\taccuracy *= 2; break;\n538: \t\t\t\t\t\tcase 2:\n539: \t\t\t\t\t\t\taccuracy *= 5; break;\n540: \t\t\t\t\t\tcase 3:\n541: \t\t\t\t\t\t\taccuracy *= Float.POSITIVE_INFINITY; break;\n542: \t\t\t\t\t}\n543: \t\t\t\t} else if (buff(Talent.LiquidAgilACCTracker.class) != null){\n544: \t\t\t\t\t// 3x/inf. ACC, depending on talent level\n545: \t\t\t\t\taccuracy *= pointsInTalent(Talent.LIQUID_AGILITY) == 2 ? Float.POSITIVE_INFINITY : 3f;\n546: \t\t\t\t\tTalent.LiquidAgilACCTracker buff = buff(Talent.LiquidAgilACCTracker.class);\n547: \t\t\t\t\tbuff.uses--;\n548: \t\t\t\t}\n549: \t\t\t}\n550: \t\t} else {\n551: \t\t\tif (buff(Momentum.class) != null && buff(Momentum.class).freerunning()){\n552: \t\t\t\taccuracy *= 1f + pointsInTalent(Talent.PROJECTILE_MOMENTUM)/2f;\n553: \t\t\t}\n554: \t\t}\n555: \n556: \t\tif (buff(Scimitar.SwordDance.class) != null){\n557: \t\t\taccuracy *= 1.50f;\n558: \t\t}\n559: \t\t\n560: \t\tif (!RingOfForce.fightingUnarmed(this)) {\n561: \t\t\treturn Math.max(1, Math.round(attackSkill * accuracy * wep.accuracyFactor( this, target )));\n562: \t\t} else {\n563: \t\t\treturn Math.max(1, Math.round(attackSkill * accuracy));\n564: \t\t}"
+    },
+    {
+      "id": "wacc",
+      "locator": "items/weapon/Weapon.java:289–303",
+      "excerpt": "289: \tpublic float accuracyFactor(Char owner, Char target) {\n290: \t\t\n291: \t\tint encumbrance = 0;\n292: \t\t\n293: \t\tif( owner instanceof Hero ){\n294: \t\t\tencumbrance = STRReq() - ((Hero)owner).STR();\n295: \t\t}\n296: \n297: \t\tfloat ACC = this.ACC;\n298: \n299: \t\tif (owner.buff(Wayward.WaywardBuff.class) != null && enchantment instanceof Wayward){\n300: \t\t\tACC /= 5;\n301: \t\t}\n302: \n303: \t\treturn encumbrance > 0 ? (float)(ACC / Math.pow( 1.5, encumbrance )) : ACC;"
+    },
+    {
+      "id": "mdef",
+      "locator": "actors/mobs/Mob.java:819–840",
+      "excerpt": "819: \tpublic int defenseSkill( Char enemy ) {\n820: \t\tif (buff(GuidingLight.Illuminated.class) != null && Dungeon.hero.heroClass == HeroClass.CLERIC){\n821: \t\t\t//if the attacker is the cleric, they must be using a weapon they have the str for\n822: \t\t\tif (enemy instanceof Hero){\n823: \t\t\t\tHero h = (Hero) enemy;\n824: \t\t\t\tif (!(h.belongings.attackingWeapon() instanceof Weapon)\n825: \t\t\t\t\t\t|| ((Weapon) h.belongings.attackingWeapon()).STRReq() <= h.STR()){\n826: \t\t\t\t\treturn 0;\n827: \t\t\t\t}\n828: \t\t\t} else {\n829: \t\t\t\treturn 0;\n830: \t\t\t}\n831: \t\t}\n832: \n833: \t\tif ( !surprisedBy(enemy)\n834: \t\t\t\t&& paralysed == 0\n835: \t\t\t\t&& !(alignment == Alignment.ALLY && enemy == Dungeon.hero)) {\n836: \t\t\treturn this.defenseSkill;\n837: \t\t} else {\n838: \t\t\treturn 0;\n839: \t\t}\n840: \t}"
+    },
+    {
+      "id": "crabblock",
+      "locator": "actors/mobs/GreatCrab.java:94–111",
+      "excerpt": "94: \t@Override\n95: \tpublic int defenseSkill( Char enemy ) {\n96: \t\t//crab blocks all melee attacks from its current target\n97: \t\tif (enemySeen\n98: \t\t\t\t&& state != SLEEPING\n99: \t\t\t\t&& paralysed == 0\n100: \t\t\t\t&& enemy == this.enemy\n101: \t\t\t\t&& enemy.invisible == 0){\n102: \t\t\tif (sprite != null && sprite.visible) {\n103: \t\t\t\tSample.INSTANCE.play(Assets.Sounds.HIT_PARRY, 1, Random.Float(0.96f, 1.05f));\n104: \t\t\t\tGLog.n( Messages.get(this, \"noticed\") );\n105: \t\t\t}\n106: \t\t\tif (enemy == Dungeon.hero){\n107: \t\t\t\tStatistics.questScores[0] -= 50;\n108: \t\t\t}\n109: \t\t\treturn INFINITE_EVASION;\n110: \t\t}\n111: \t\treturn super.defenseSkill( enemy );"
+    },
+    {
+      "id": "heroRoll",
+      "locator": "actors/hero/Hero.java:669–710",
+      "excerpt": "669: \tpublic int damageRoll() {\n670: \t\tKindOfWeapon wep = belongings.attackingWeapon();\n671: \t\tint dmg;\n672: \n673: \t\tif (!RingOfForce.fightingUnarmed(this)) {\n674: \t\t\tdmg = wep.damageRoll( this );\n675: \n676: \t\t\tif (!(wep instanceof MissileWeapon)) dmg += RingOfForce.armedDamageBonus(this);\n677: \t\t} else {\n678: \t\t\tdmg = RingOfForce.damageRoll(this);\n679: \t\t\tif (RingOfForce.unarmedGetsWeaponAugment(this)){\n680: \t\t\t\tdmg = ((Weapon)belongings.attackingWeapon()).augment.damageFactor(dmg);\n681: \t\t\t}\n682: \t\t}\n683: \n684: \t\tPhysicalEmpower emp = buff(PhysicalEmpower.class);\n685: \t\tif (emp != null){\n686: \t\t\tdmg += emp.dmgBoost;\n687: \t\t\temp.left--;\n688: \t\t\tif (emp.left <= 0) {\n689: \t\t\t\temp.detach();\n690: \t\t\t}\n691: \t\t\tSample.INSTANCE.play(Assets.Sounds.HIT_STRONG, 0.75f, 1.2f);\n692: \t\t}\n693: \n694: \t\tif (heroClass != HeroClass.DUELIST\n695: \t\t\t\t&& hasTalent(Talent.WEAPON_RECHARGING)\n696: \t\t\t\t&& (buff(Recharging.class) != null || buff(ArtifactRecharge.class) != null)){\n697: \t\t\tdmg = Math.round(dmg * (1.025f + .025f*pointsInTalent(Talent.WEAPON_RECHARGING)));\n698: \t\t}\n699: \n700: \t\tif (dmg < 0) dmg = 0;\n701: \t\treturn dmg;\n702: \t}\n703: \n704: \t//damage rolls that come from the hero can have their RNG influenced by clover\n705: \tpublic static int heroDamageIntRange(int min, int max ){\n706: \t\tif (Random.Float() < ThirteenLeafClover.alterHeroDamageChance()){\n707: \t\t\treturn ThirteenLeafClover.alterDamageRoll(min, max);\n708: \t\t} else {\n709: \t\t\treturn Random.NormalIntRange(min, max);\n710: \t\t}"
+    },
+    {
+      "id": "range",
+      "locator": "items/KindOfWeapon.java:234–250",
+      "excerpt": "234: \tpublic int min(){\n235: \t\treturn min(buffedLvl());\n236: \t}\n237: \n238: \tpublic int max(){\n239: \t\treturn max(buffedLvl());\n240: \t}\n241: \n242: \tabstract public int min(int lvl);\n243: \tabstract public int max(int lvl);\n244: \n245: \tpublic int damageRoll( Char owner ) {\n246: \t\tif (owner instanceof Hero){\n247: \t\t\treturn Hero.heroDamageIntRange(min(), max());\n248: \t\t} else {\n249: \t\t\treturn Random.NormalIntRange(min(), max());\n250: \t\t}"
+    },
+    {
+      "id": "melee",
+      "locator": "items/weapon/melee/MeleeWeapon.java:247–303",
+      "excerpt": "247: \tpublic int tier;\n248: \n249: \t@Override\n250: \tpublic int min(int lvl) {\n251: \t\treturn  tier +  //base\n252: \t\t\t\tlvl;    //level scaling\n253: \t}\n254: \n255: \t@Override\n256: \tpublic int max(int lvl) {\n257: \t\treturn  5*(tier+1) +    //base\n258: \t\t\t\tlvl*(tier+1);   //level scaling\n259: \t}\n260: \n261: \tpublic int STRReq(int lvl){\n262: \t\tint req = STRReq(tier, lvl);\n263: \t\tif (masteryPotionBonus){\n264: \t\t\treq -= 2;\n265: \t\t}\n266: \t\treturn req;\n267: \t}\n268: \n269: \tprivate static boolean evaluatingTwinUpgrades = false;\n270: \t@Override\n271: \tpublic int buffedLvl() {\n272: \t\tif (!evaluatingTwinUpgrades && Dungeon.hero != null && isEquipped(Dungeon.hero) && Dungeon.hero.hasTalent(Talent.TWIN_UPGRADES)){\n273: \t\t\tKindOfWeapon other = null;\n274: \t\t\tif (Dungeon.hero.belongings.weapon() != this) other = Dungeon.hero.belongings.weapon();\n275: \t\t\tif (Dungeon.hero.belongings.secondWep() != this) other = Dungeon.hero.belongings.secondWep();\n276: \n277: \t\t\tif (other instanceof MeleeWeapon) {\n278: \t\t\t\tevaluatingTwinUpgrades = true;\n279: \t\t\t\tint otherLevel = other.buffedLvl();\n280: \t\t\t\tevaluatingTwinUpgrades = false;\n281: \n282: \t\t\t\t//weaker weapon needs to be 2/1/0 tiers lower, based on talent level\n283: \t\t\t\tif ((tier + (3 - Dungeon.hero.pointsInTalent(Talent.TWIN_UPGRADES))) <= ((MeleeWeapon) other).tier\n284: \t\t\t\t\t\t&& otherLevel > super.buffedLvl()) {\n285: \t\t\t\t\treturn otherLevel;\n286: \t\t\t\t}\n287: \n288: \t\t\t}\n289: \t\t}\n290: \t\treturn super.buffedLvl();\n291: \t}\n292: \n293: \t@Override\n294: \tpublic int damageRoll(Char owner) {\n295: \t\tint damage = augment.damageFactor(super.damageRoll( owner ));\n296: \n297: \t\tif (owner instanceof Hero) {\n298: \t\t\tint exStr = ((Hero)owner).STR() - STRReq();\n299: \t\t\tif (exStr > 0) {\n300: \t\t\t\tdamage += Hero.heroDamageIntRange( 0, exStr );\n301: \t\t\t}\n302: \t\t}\n303: \t\treturn damage;"
+    },
+    {
+      "id": "augment",
+      "locator": "items/weapon/Weapon.java:97–123",
+      "excerpt": "97: \tpublic enum Augment {\n98: \t\tSPEED   (0.7f, 2/3f),\n99: \t\tDAMAGE  (1.5f, 5/3f),\n100: \t\tNONE\t(1.0f, 1f);\n101: \n102: \t\tprivate float damageFactor;\n103: \t\tprivate float delayFactor;\n104: \n105: \t\tAugment(float dmg, float dly){\n106: \t\t\tdamageFactor = dmg;\n107: \t\t\tdelayFactor = dly;\n108: \t\t}\n109: \n110: \t\tpublic int damageFactor(int dmg){\n111: \t\t\treturn Math.round(dmg * damageFactor);\n112: \t\t}\n113: \n114: \t\tpublic float damageFactor(float dmg){\n115: \t\t\treturn dmg * damageFactor;\n116: \t\t}\n117: \n118: \t\tpublic float delayFactor(float dly){\n119: \t\t\treturn dly * delayFactor;\n120: \t\t}\n121: \t}\n122: \t\n123: \tpublic Augment augment = Augment.NONE;"
+    },
+    {
+      "id": "strreq",
+      "locator": "items/weapon/Weapon.java:352–364",
+      "excerpt": "352: \tpublic int STRReq(){\n353: \t\treturn STRReq(level());\n354: \t}\n355: \n356: \tpublic abstract int STRReq(int lvl);\n357: \n358: \tprotected static int STRReq(int tier, int lvl){\n359: \t\tlvl = Math.max(0, lvl);\n360: \n361: \t\t//strength req decreases at +1,+3,+6,+10,etc.\n362: \t\treturn (8 + tier * 2) - (int)(Math.sqrt(8 * lvl + 1) - 1)/2;\n363: \t}\n364: "
+    },
+    {
+      "id": "force",
+      "locator": "items/rings/RingOfForce.java:73–127",
+      "excerpt": "73: \tprivate static float tier(int str){\n74: \t\tfloat tier = Math.max(1, (str - 8)/2f);\n75: \t\t//each str point after 18 is half as effective\n76: \t\tif (tier > 5){\n77: \t\t\ttier = 5 + (tier - 5) / 2f;\n78: \t\t}\n79: \t\treturn tier;\n80: \t}\n81: \n82: \tpublic static int damageRoll( Hero hero ){\n83: \t\t//level can be 0 while still using a ring, so we specifically check for the presence of a ring of force\n84: \t\tboolean usingForce = hero.buff(Force.class) != null;\n85: \t\tif (hero.buff(SpiritForm.SpiritFormBuff.class) != null && hero.buff(SpiritForm.SpiritFormBuff.class).ring() instanceof RingOfForce){\n86: \t\t\tusingForce = true;\n87: \t\t}\n88: \t\t//and ignore that presence if using monk abilities\n89: \t\tif (hero.buff(MonkEnergy.MonkAbility.UnarmedAbilityTracker.class) != null){\n90: \t\t\tusingForce = false;\n91: \t\t}\n92: \t\tif (usingForce) {\n93: \t\t\tint level = getBuffedBonus(hero, Force.class);\n94: \t\t\tfloat tier = tier(hero.STR());\n95: \t\t\tint dmg = Hero.heroDamageIntRange(min(level, tier), max(level, tier));\n96: \t\t\tif (hero.buff(BrawlersStance.class) != null\n97: \t\t\t\t&& hero.buff(BrawlersStance.class).active){\n98: \t\t\t\t// 3+tier base dmg, roughly +60%->45% dmg at T1->5\n99: \t\t\t\t// lvl*((4+2*tier)/8) scaling, +50% dmg\n100: \t\t\t\tdmg += Math.round(3+tier+(level*((4+2*tier)/8f)));\n101: \t\t\t}\n102: \t\t\treturn dmg;\n103: \t\t} else {\n104: \t\t\t//attack without any ring of force influence\n105: \t\t\treturn Hero.heroDamageIntRange(1, Math.max(hero.STR()-8, 1));\n106: \t\t}\n107: \t}\n108: \n109: \t//same as equivalent tier weapon\n110: \tprivate static int min(int lvl, float tier){\n111: \t\tif (lvl <= 0) tier = 1; //tier is forced to 1 if cursed\n112: \n113: \t\treturn Math.max( 0, Math.round(\n114: \t\t\t\ttier +  //base\n115: \t\t\t\tlvl     //level scaling\n116: \t\t));\n117: \t}\n118: \n119: \t//same as equivalent tier weapon\n120: \tprivate static int max(int lvl, float tier){\n121: \t\tif (lvl <= 0) tier = 1; //tier is forced to 1 if cursed\n122: \n123: \t\treturn Math.max( 0, Math.round(\n124: \t\t\t\t5*(tier+1) +    //base\n125: \t\t\t\tlvl*(tier+1)    //level scaling\n126: \t\t));\n127: \t}"
+    },
+    {
+      "id": "forceMode",
+      "locator": "items/rings/RingOfForce.java:257–277",
+      "excerpt": "257: \tpublic static boolean fightingUnarmed( Hero hero ){\n258: \t\tif (hero.belongings.attackingWeapon() == null\n259: \t\t\t|| hero.buff(MonkEnergy.MonkAbility.UnarmedAbilityTracker.class) != null){\n260: \t\t\treturn true;\n261: \t\t}\n262: \t\tif (hero.belongings.thrownWeapon != null || hero.belongings.abilityWeapon != null){\n263: \t\t\treturn false;\n264: \t\t}\n265: \t\tBrawlersStance stance = hero.buff(BrawlersStance.class);\n266: \t\tif (stance != null && stance.active){\n267: \t\t\t//clear the buff if no ring of force is equipped\n268: \t\t\tif (hero.buff(RingOfForce.Force.class) == null){\n269: \t\t\t\tstance.active = false;\n270: \t\t\t\tAttackIndicator.updateState();\n271: \t\t\t\treturn false;\n272: \t\t\t} else {\n273: \t\t\t\treturn true;\n274: \t\t\t}\n275: \t\t}\n276: \t\treturn false;\n277: \t}"
+    },
+    {
+      "id": "forceBonus",
+      "locator": "items/rings/RingOfForce.java:54–56",
+      "excerpt": "54: \tpublic static int armedDamageBonus( Char ch ){\n55: \t\treturn getBuffedBonus( ch, Force.class);\n56: \t}"
+    },
+    {
+      "id": "prep",
+      "locator": "actors/buffs/Preparation.java:62–118",
+      "excerpt": "62: \tpublic enum AttackLevel{\n63: \t\tLVL_1( 1, 0.10f, 1),\n64: \t\tLVL_2( 3, 0.20f, 1),\n65: \t\tLVL_3( 5, 0.35f, 2),\n66: \t\tLVL_4( 9, 0.50f, 3);\n67: \n68: \t\tfinal int turnsReq;\n69: \t\tfinal float baseDmgBonus;\n70: \t\tfinal int damageRolls;\n71: \t\t\n72: \t\tAttackLevel( int turns, float base, int rolls){\n73: \t\t\tturnsReq = turns;\n74: \t\t\tbaseDmgBonus = base;\n75: \t\t\tdamageRolls = rolls;\n76: \t\t}\n77: \n78: \t\t//1st index is prep level, 2nd is talent level\n79: \t\tprivate static final float[][] KOThresholds = new float[][]{\n80: \t\t\t\t{.03f, .04f, .05f, .06f},\n81: \t\t\t\t{.10f, .13f, .17f, .20f},\n82: \t\t\t\t{.20f, .27f, .33f, .40f},\n83: \t\t\t\t{.50f, .67f, .83f, 1.0f}\n84: \t\t};\n85: \n86: \t\tpublic float KOThreshold(){\n87: \t\t\treturn KOThresholds[ordinal()][Dungeon.hero.pointsInTalent(Talent.ENHANCED_LETHALITY)];\n88: \t\t}\n89: \n90: \t\t//1st index is prep level, 2nd is talent level\n91: \t\tprivate static final int[][] blinkRanges = new int[][]{\n92: \t\t\t\t{1, 1, 2, 2},\n93: \t\t\t\t{2, 3, 4, 5},\n94: \t\t\t\t{3, 4, 6, 7},\n95: \t\t\t\t{4, 6, 8, 10}\n96: \t\t};\n97: \n98: \t\tpublic int blinkDistance(){\n99: \t\t\treturn blinkRanges[ordinal()][Dungeon.hero.pointsInTalent(Talent.ASSASSINS_REACH)];\n100: \t\t}\n101: \t\t\n102: \t\tpublic boolean canKO(Char defender){\n103: \t\t\tif (defender.properties().contains(Char.Property.MINIBOSS)\n104: \t\t\t\t\t|| defender.properties().contains(Char.Property.BOSS)){\n105: \t\t\t\treturn (defender.HP/(float)defender.HT) < (KOThreshold()/5f);\n106: \t\t\t} else {\n107: \t\t\t\treturn (defender.HP/(float)defender.HT) < KOThreshold();\n108: \t\t\t}\n109: \t\t}\n110: \t\t\n111: \t\tpublic int damageRoll( Char attacker ){\n112: \t\t\tint dmg = attacker.damageRoll();\n113: \t\t\tfor( int i = 1; i < damageRolls; i++){\n114: \t\t\t\tint newDmg = attacker.damageRoll();\n115: \t\t\t\tif (newDmg > dmg) dmg = newDmg;\n116: \t\t\t}\n117: \t\t\treturn Math.round(dmg * (1f + baseDmgBonus));\n118: \t\t}"
+    },
+    {
+      "id": "dagger",
+      "locator": "items/weapon/melee/Dagger.java:55–79",
+      "excerpt": "55: \t@Override\n56: \tpublic int max(int lvl) {\n57: \t\treturn  4*(tier+1) +    //8 base, down from 10\n58: \t\t\t\tlvl*(tier+1);   //scaling unchanged\n59: \t}\n60: \t\n61: \t@Override\n62: \tpublic int damageRoll(Char owner) {\n63: \t\tif (owner instanceof Hero) {\n64: \t\t\tHero hero = (Hero)owner;\n65: \t\t\tChar enemy = hero.attackTarget();\n66: \t\t\tif (enemy instanceof Mob && ((Mob) enemy).surprisedBy(hero)) {\n67: \t\t\t\t//deals 75% toward max to max on surprise, instead of min to max.\n68: \t\t\t\tint diff = max() - min();\n69: \t\t\t\tint damage = augment.damageFactor(Hero.heroDamageIntRange(\n70: \t\t\t\t\t\tmin() + Math.round(diff*0.75f),\n71: \t\t\t\t\t\tmax()));\n72: \t\t\t\tint exStr = hero.STR() - STRReq();\n73: \t\t\t\tif (exStr > 0) {\n74: \t\t\t\t\tdamage += Hero.heroDamageIntRange(0, exStr);\n75: \t\t\t\t}\n76: \t\t\t\treturn damage;\n77: \t\t\t}\n78: \t\t}\n79: \t\treturn super.damageRoll(owner);"
+    },
+    {
+      "id": "mods",
+      "locator": "actors/Char.java:405–481",
+      "excerpt": "405: \t\t\t//we use a float here briefly so that we don't have to constantly round while\n406: \t\t\t// potentially applying various multiplier effects\n407: \t\t\tfloat dmg;\n408: \t\t\tPreparation prep = buff(Preparation.class);\n409: \t\t\tif (prep != null){\n410: \t\t\t\tdmg = prep.damageRoll(this);\n411: \t\t\t\tif (this == Dungeon.hero && Dungeon.hero.hasTalent(Talent.BOUNTY_HUNTER)) {\n412: \t\t\t\t\tBuff.affect(Dungeon.hero, Talent.BountyHunterTracker.class, 0.0f);\n413: \t\t\t\t}\n414: \t\t\t} else {\n415: \t\t\t\tdmg = damageRoll();\n416: \t\t\t}\n417: \n418: \t\t\tdmg = dmg*dmgMulti;\n419: \n420: \t\t\t//flat damage bonus is affected by multipliers\n421: \t\t\tdmg += dmgBonus;\n422: \n423: \t\t\tif (enemy.buff(GuidingLight.Illuminated.class) != null){\n424: \t\t\t\tenemy.buff(GuidingLight.Illuminated.class).detach();\n425: \t\t\t\tif (this == Dungeon.hero && Dungeon.hero.hasTalent(Talent.SEARING_LIGHT)){\n426: \t\t\t\t\tdmg += 1 + 2*Dungeon.hero.pointsInTalent(Talent.SEARING_LIGHT);\n427: \t\t\t\t}\n428: \t\t\t\tif (this != Dungeon.hero && Dungeon.hero.subClass == HeroSubClass.PRIEST){\n429: \t\t\t\t\tenemy.damage(5+Dungeon.hero.lvl, GuidingLight.INSTANCE);\n430: \t\t\t\t}\n431: \t\t\t}\n432: \n433: \t\t\tBerserk berserk = buff(Berserk.class);\n434: \t\t\tif (berserk != null) dmg = berserk.damageFactor(dmg);\n435: \n436: \t\t\tif (buff( Fury.class ) != null) {\n437: \t\t\t\tdmg *= 1.5f;\n438: \t\t\t}\n439: \n440: \t\t\tif (buff( PowerOfMany.PowerBuff.class) != null){\n441: \t\t\t\tif (buff( BeamingRay.BeamingRayBoost.class) != null\n442: \t\t\t\t\t&& buff( BeamingRay.BeamingRayBoost.class).object == enemy.id()){\n443: \t\t\t\t\tdmg *= 1.3f + 0.05f*Dungeon.hero.pointsInTalent(Talent.BEAMING_RAY);\n444: \t\t\t\t} else {\n445: \t\t\t\t\tdmg *= 1.25f;\n446: \t\t\t\t}\n447: \t\t\t}\n448: \n449: \t\t\tfor (ChampionEnemy buff : buffs(ChampionEnemy.class)){\n450: \t\t\t\tdmg *= buff.meleeDamageFactor();\n451: \t\t\t}\n452: \n453: \t\t\tdmg *= AscensionChallenge.statModifier(this);\n454: \n455: \t\t\t//friendly endure\n456: \t\t\tEndure.EndureTracker endure = buff(Endure.EndureTracker.class);\n457: \t\t\tif (endure != null) dmg = endure.damageFactor(dmg);\n458: \n459: \t\t\t//enemy endure\n460: \t\t\tendure = enemy.buff(Endure.EndureTracker.class);\n461: \t\t\tif (endure != null){\n462: \t\t\t\tdmg = endure.adjustDamageTaken(dmg);\n463: \t\t\t}\n464: \n465: \t\t\tif (enemy.buff(ScrollOfChallenge.ChallengeArena.class) != null){\n466: \t\t\t\tdmg *= 0.67f;\n467: \t\t\t}\n468: \n469: \t\t\tif (Dungeon.hero.alignment == enemy.alignment\n470: \t\t\t\t\t&& Dungeon.hero.buff(AuraOfProtection.AuraBuff.class) != null\n471: \t\t\t\t\t&& (Dungeon.level.distance(enemy.pos, Dungeon.hero.pos) <= 2 || enemy.buff(LifeLinkSpell.LifeLinkSpellBuff.class) != null)){\n472: \t\t\t\tdmg *= 0.9f - 0.1f*Dungeon.hero.pointsInTalent(Talent.AURA_OF_PROTECTION);\n473: \t\t\t}\n474: \n475: \t\t\tif (enemy.buff(MonkEnergy.MonkAbility.Meditate.MeditateResistance.class) != null){\n476: \t\t\t\tdmg *= 0.2f;\n477: \t\t\t}\n478: \n479: \t\t\tif ( buff(Weakness.class) != null ){\n480: \t\t\t\tdmg *= 0.67f;\n481: \t\t\t}"
+    },
+    {
+      "id": "berserk",
+      "locator": "actors/buffs/Berserk.java:172–174",
+      "excerpt": "172: \tpublic float damageFactor(float dmg){\n173: \t\treturn dmg * Math.min(1.5f, 1f + (power / 2f));\n174: \t}"
+    },
+    {
+      "id": "order",
+      "locator": "actors/Char.java:483–512",
+      "excerpt": "483: \t\t\tint effectiveDamage = enemy.defenseProc( this, Math.round(dmg) );\n484: \t\t\t//do not trigger on-hit logic if defenseProc returned a negative value\n485: \t\t\tif (effectiveDamage >= 0) {\n486: \t\t\t\teffectiveDamage = Math.max(effectiveDamage - dr, 0);\n487: \n488: \t\t\t\tif (enemy.buff(Viscosity.ViscosityTracker.class) != null) {\n489: \t\t\t\t\teffectiveDamage = enemy.buff(Viscosity.ViscosityTracker.class).deferDamage(effectiveDamage);\n490: \t\t\t\t\tenemy.buff(Viscosity.ViscosityTracker.class).detach();\n491: \t\t\t\t}\n492: \n493: \t\t\t\t//vulnerable specifically applies after armor reductions\n494: \t\t\t\tif (enemy.buff(Vulnerable.class) != null) {\n495: \t\t\t\t\teffectiveDamage *= 1.33f;\n496: \t\t\t\t}\n497: \n498: \t\t\t\teffectiveDamage = attackProc(enemy, effectiveDamage);\n499: \t\t\t}\n500: \t\t\tif (visibleFight) {\n501: \t\t\t\tif (effectiveDamage > 0 || !enemy.blockSound(Random.Float(0.96f, 1.05f))) {\n502: \t\t\t\t\thitSound(Random.Float(0.87f, 1.15f));\n503: \t\t\t\t}\n504: \t\t\t}\n505: \n506: \t\t\t// If the enemy is already dead, interrupt the attack.\n507: \t\t\t// This matters as defence procs can sometimes inflict self-damage, such as armor glyphs.\n508: \t\t\tif (!enemy.isAlive()){\n509: \t\t\t\treturn true;\n510: \t\t\t}\n511: \n512: \t\t\tenemy.damage( effectiveDamage, this );"
+    },
+    {
+      "id": "defproc",
+      "locator": "actors/Char.java:723–754",
+      "excerpt": "723: \tpublic int defenseProc( Char enemy, int damage ) {\n724: \n725: \t\tEarthroot.Armor armor = buff( Earthroot.Armor.class );\n726: \t\tif (armor != null) {\n727: \t\t\tdamage = armor.absorb( damage );\n728: \t\t}\n729: \n730: \t\tShieldOfLight.ShieldOfLightTracker shield = buff( ShieldOfLight.ShieldOfLightTracker.class);\n731: \t\tif (shield != null && shield.object == enemy.id()){\n732: \t\t\tint min = 1 + Dungeon.hero.pointsInTalent(Talent.SHIELD_OF_LIGHT);\n733: \t\t\tdamage -= Random.NormalIntRange(min, 2*min);\n734: \t\t\tdamage = Math.max(damage, 0);\n735: \t\t} else if (this == Dungeon.hero\n736: \t\t\t\t&& Dungeon.hero.heroClass != HeroClass.CLERIC\n737: \t\t\t\t&& Dungeon.hero.hasTalent(Talent.SHIELD_OF_LIGHT)\n738: \t\t\t\t&& TargetHealthIndicator.instance.target() == enemy){\n739: \t\t\t//33/50%\n740: \t\t\tif (Random.Int(6) < 1+Dungeon.hero.pointsInTalent(Talent.SHIELD_OF_LIGHT)){\n741: \t\t\t\tdamage -= 1;\n742: \t\t\t}\n743: \t\t}\n744: \n745: \t\t// hero and pris images skip this as they already benefit from hero's armor glyph proc\n746: \t\tif (!(this instanceof Hero || this instanceof PrismaticImage)) {\n747: \t\t\tif (Dungeon.hero.alignment == alignment && Dungeon.hero.belongings.armor() != null\n748: \t\t\t\t\t&& Dungeon.hero.buff(AuraOfProtection.AuraBuff.class) != null\n749: \t\t\t\t\t&& (Dungeon.level.distance(pos, Dungeon.hero.pos) <= 2 || buff(LifeLinkSpell.LifeLinkSpellBuff.class) != null)) {\n750: \t\t\t\tdamage = Dungeon.hero.belongings.armor().proc( enemy, this, damage );\n751: \t\t\t}\n752: \t\t}\n753: \n754: \t\treturn damage;"
+    },
+    {
+      "id": "mobproc",
+      "locator": "actors/mobs/Mob.java:843–898",
+      "excerpt": "843: \tpublic int defenseProc( Char enemy, int damage ) {\n844: \t\t\n845: \t\tif (enemy instanceof Hero\n846: \t\t\t\t&& ((Hero) enemy).belongings.attackingWeapon() instanceof MissileWeapon){\n847: \t\t\tStatistics.thrownAttacks++;\n848: \t\t\tBadges.validateHuntressUnlock();\n849: \t\t}\n850: \t\t\n851: \t\tif (surprisedBy(enemy)) {\n852: \t\t\tStatistics.sneakAttacks++;\n853: \t\t\tBadges.validateRogueUnlock();\n854: \t\t\t//TODO this is somewhat messy, it would be nicer to not have to manually handle delays here\n855: \t\t\t// playing the strong hit sound might work best as another property of weapon?\n856: \t\t\tif (Dungeon.hero.belongings.attackingWeapon() instanceof SpiritBow.SpiritArrow\n857: \t\t\t\t|| Dungeon.hero.belongings.attackingWeapon() instanceof Dart){\n858: \t\t\t\tSample.INSTANCE.playDelayed(Assets.Sounds.HIT_STRONG, 0.125f);\n859: \t\t\t} else {\n860: \t\t\t\tSample.INSTANCE.play(Assets.Sounds.HIT_STRONG);\n861: \t\t\t}\n862: \t\t\tif (enemy.buff(Preparation.class) != null) {\n863: \t\t\t\tWound.hit(this);\n864: \t\t\t} else {\n865: \t\t\t\tSurprise.hit(this);\n866: \t\t\t}\n867: \t\t}\n868: \n869: \t\t//if attacked by something else than current target, and that thing is closer, switch targets\n870: \t\t//or if attacked by target, simply update target position\n871: \t\tif (state != FLEEING) {\n872: \t\t\tif (state != HUNTING) {\n873: \t\t\t\taggro(enemy);\n874: \t\t\t\ttarget = enemy.pos;\n875: \t\t\t} else {\n876: \t\t\t\trecentlyAttackedBy.add(enemy);\n877: \t\t\t}\n878: \t\t}\n879: \n880: \t\tif (buff(SoulMark.class) != null) {\n881: \t\t\tint restoration = Math.min(damage, HP+shielding());\n882: \t\t\t\n883: \t\t\t//physical damage that doesn't come from the hero is less effective\n884: \t\t\tif (enemy != Dungeon.hero){\n885: \t\t\t\trestoration = Math.round(restoration * 0.4f*Dungeon.hero.pointsInTalent(Talent.SOUL_SIPHON)/3f);\n886: \t\t\t}\n887: \t\t\tif (restoration > 0) {\n888: \t\t\t\tBuff.affect(Dungeon.hero, Hunger.class).affectHunger(restoration*Dungeon.hero.pointsInTalent(Talent.SOUL_EATER)/3f);\n889: \n890: \t\t\t\tif (Dungeon.hero.HP < Dungeon.hero.HT) {\n891: \t\t\t\t\tint heal = (int)Math.ceil(restoration * 0.4f);\n892: \t\t\t\t\tDungeon.hero.HP = Math.min(Dungeon.hero.HT, Dungeon.hero.HP + heal);\n893: \t\t\t\t\tDungeon.hero.sprite.showStatusWithIcon(CharSprite.POSITIVE, Integer.toString(heal), FloatingText.HEALING);\n894: \t\t\t\t}\n895: \t\t\t}\n896: \t\t}\n897: \n898: \t\treturn super.defenseProc(enemy, damage);"
+    },
+    {
+      "id": "dr",
+      "locator": "actors/Char.java:701–706",
+      "excerpt": "701: \tpublic int drRoll() {\n702: \t\tint dr = 0;\n703: \n704: \t\tdr += Random.NormalIntRange( 0 , Barkskin.currentLevel(this) );\n705: \n706: \t\treturn dr;"
+    },
+    {
+      "id": "crab",
+      "locator": "actors/mobs/Crab.java:30–58",
+      "excerpt": "30: \n31: \t{\n32: \t\tspriteClass = CrabSprite.class;\n33: \t\t\n34: \t\tHP = HT = 15;\n35: \t\tdefenseSkill = 5;\n36: \t\tbaseSpeed = 2f;\n37: \t\t\n38: \t\tEXP = 4;\n39: \t\tmaxLvl = 9;\n40: \t\t\n41: \t\tloot = MysteryMeat.class;\n42: \t\tlootChance = 0.167f;\n43: \t}\n44: \t\n45: \t@Override\n46: \tpublic int damageRoll() {\n47: \t\treturn Random.NormalIntRange( 1, 7 );\n48: \t}\n49: \t\n50: \t@Override\n51: \tpublic int attackSkill( Char target ) {\n52: \t\treturn 12;\n53: \t}\n54: \t\n55: \t@Override\n56: \tpublic int drRoll() {\n57: \t\treturn super.drRoll() + Random.NormalIntRange(0, 4);\n58: \t}"
+    },
+    {
+      "id": "sword",
+      "locator": "items/weapon/melee/Shortsword.java:30–38",
+      "excerpt": "30: public class Shortsword extends MeleeWeapon {\n31: \n32: \t{\n33: \t\timage = ItemSpriteSheet.SHORTSWORD;\n34: \t\thitSound = Assets.Sounds.HIT_SLASH;\n35: \t\thitSoundPitch = 1.1f;\n36: \n37: \t\ttier = 2;\n38: \t}"
+    },
+    {
+      "id": "heroProc",
+      "locator": "actors/hero/Hero.java:1524–1550",
+      "excerpt": "1524: \tpublic int attackProc( final Char enemy, int damage ) {\n1525: \t\tdamage = super.attackProc( enemy, damage );\n1526: \n1527: \t\tKindOfWeapon wep;\n1528: \t\tif (RingOfForce.fightingUnarmed(this) && !RingOfForce.unarmedGetsWeaponEnchantment(this)){\n1529: \t\t\twep = null;\n1530: \t\t} else {\n1531: \t\t\twep = belongings.attackingWeapon();\n1532: \t\t}\n1533: \n1534: \t\tdamage = Talent.onAttackProc( this, enemy, damage );\n1535: \n1536: \t\tif (wep != null) {\n1537: \t\t\tdamage = wep.proc( this, enemy, damage );\n1538: \t\t} else {\n1539: \n1540: \t\t\tif (buff(BodyForm.BodyFormBuff.class) != null && buff(BodyForm.BodyFormBuff.class).enchant() != null){\n1541: \t\t\t\tdamage = buff(BodyForm.BodyFormBuff.class).enchant().proc(new WornShortsword(), this, enemy, damage);\n1542: \t\t\t}\n1543: \t\t\tif (enemy.isAlive() && buff(HolyWeapon.HolyWepBuff.class) != null) {\n1544: \t\t\t\tint dmg = subClass == HeroSubClass.PALADIN ? 6 : 2;\n1545: \t\t\t\tenemy.damage(Math.round(dmg * Weapon.Enchantment.genericProcChanceMultiplier(this)), HolyWeapon.INSTANCE);\n1546: \t\t\t}\n1547: \t\t\tif (enemy.isAlive() && buff(Smite.SmiteTracker.class) != null) {\n1548: \t\t\t\tenemy.damage(Smite.bonusDmg(this, enemy), Smite.INSTANCE);\n1549: \t\t\t}\n1550: \t\t}"
+    },
+    {
+      "id": "talent",
+      "locator": "actors/hero/Talent.java:868–925",
+      "excerpt": "868: \tpublic static int onAttackProc( Hero hero, Char enemy, int dmg ){\n869: \n870: \t\tif (hero.hasTalent(Talent.PROVOKED_ANGER)\n871: \t\t\t&& hero.buff(ProvokedAngerTracker.class) != null){\n872: \t\t\tdmg += 1 + 2*hero.pointsInTalent(Talent.PROVOKED_ANGER);\n873: \t\t\thero.buff(ProvokedAngerTracker.class).detach();\n874: \t\t}\n875: \n876: \t\tif (hero.hasTalent(Talent.LINGERING_MAGIC)\n877: \t\t\t\t&& hero.buff(LingeringMagicTracker.class) != null){\n878: \t\t\tdmg += Random.IntRange(hero.pointsInTalent(Talent.LINGERING_MAGIC) , 2);\n879: \t\t\thero.buff(LingeringMagicTracker.class).detach();\n880: \t\t}\n881: \n882: \t\tif (hero.hasTalent(Talent.SUCKER_PUNCH)\n883: \t\t\t\t&& enemy instanceof Mob && ((Mob) enemy).surprisedBy(hero)\n884: \t\t\t\t&& enemy.buff(SuckerPunchTracker.class) == null){\n885: \t\t\tdmg += Random.IntRange(hero.pointsInTalent(Talent.SUCKER_PUNCH) , 2);\n886: \t\t\tBuff.affect(enemy, SuckerPunchTracker.class);\n887: \t\t}\n888: \n889: \t\tif (hero.hasTalent(Talent.FOLLOWUP_STRIKE) && enemy.isAlive() && enemy.alignment == Char.Alignment.ENEMY) {\n890: \t\t\tif (hero.belongings.attackingWeapon() instanceof MissileWeapon) {\n891: \t\t\t\tBuff.prolong(hero, FollowupStrikeTracker.class, 5f).object = enemy.id();\n892: \t\t\t} else if (hero.buff(FollowupStrikeTracker.class) != null\n893: \t\t\t\t\t&& hero.buff(FollowupStrikeTracker.class).object == enemy.id()){\n894: \t\t\t\tdmg += 1 + hero.pointsInTalent(FOLLOWUP_STRIKE);\n895: \t\t\t\thero.buff(FollowupStrikeTracker.class).detach();\n896: \t\t\t}\n897: \t\t}\n898: \n899: \t\tif (hero.buff(Talent.SpiritBladesTracker.class) != null\n900: \t\t\t\t&& Random.Int(10) < 3*hero.pointsInTalent(Talent.SPIRIT_BLADES)){\n901: \t\t\tSpiritBow bow = hero.belongings.getItem(SpiritBow.class);\n902: \t\t\tif (bow != null) dmg = bow.proc( hero, enemy, dmg );\n903: \t\t\thero.buff(Talent.SpiritBladesTracker.class).detach();\n904: \t\t}\n905: \n906: \t\tif (hero.hasTalent(PATIENT_STRIKE)){\n907: \t\t\tif (hero.buff(PatientStrikeTracker.class) != null\n908: \t\t\t\t\t&& !(hero.belongings.attackingWeapon() instanceof MissileWeapon)){\n909: \t\t\t\thero.buff(PatientStrikeTracker.class).detach();\n910: \t\t\t\tdmg += Random.IntRange(hero.pointsInTalent(Talent.PATIENT_STRIKE), 2);\n911: \t\t\t}\n912: \t\t}\n913: \n914: \t\tif (hero.hasTalent(DEADLY_FOLLOWUP) && enemy.alignment == Char.Alignment.ENEMY) {\n915: \t\t\tif (hero.belongings.attackingWeapon() instanceof MissileWeapon) {\n916: \t\t\t\tif (!(hero.belongings.attackingWeapon() instanceof SpiritBow.SpiritArrow)) {\n917: \t\t\t\t\tBuff.prolong(hero, DeadlyFollowupTracker.class, 5f).object = enemy.id();\n918: \t\t\t\t}\n919: \t\t\t} else if (hero.buff(DeadlyFollowupTracker.class) != null\n920: \t\t\t\t\t&& hero.buff(DeadlyFollowupTracker.class).object == enemy.id()){\n921: \t\t\t\tdmg = Math.round(dmg * (1.0f + .1f*hero.pointsInTalent(DEADLY_FOLLOWUP)));\n922: \t\t\t}\n923: \t\t}\n924: \n925: \t\treturn dmg;"
+    },
+    {
+      "id": "enchant",
+      "locator": "items/weapon/Weapon.java:137–177",
+      "excerpt": "137: \tpublic int proc( Char attacker, Char defender, int damage ) {\n138: \n139: \t\tif (attacker.buff(MagicImmune.class) == null) {\n140: \t\t\tEnchantment trinityEnchant = null;\n141: \t\t\t//only when it's the hero or a char that uses the hero's weapon\n142: \t\t\tif (Dungeon.hero.buff(BodyForm.BodyFormBuff.class) != null && this instanceof MeleeWeapon\n143: \t\t\t\t\t&& (attacker == Dungeon.hero || attacker instanceof MirrorImage || attacker instanceof ShadowClone.ShadowAlly)){\n144: \t\t\t\ttrinityEnchant = Dungeon.hero.buff(BodyForm.BodyFormBuff.class).enchant();\n145: \t\t\t\tif (enchantment != null && trinityEnchant != null && trinityEnchant.getClass() == enchantment.getClass()){\n146: \t\t\t\t\ttrinityEnchant = null;\n147: \t\t\t\t}\n148: \t\t\t}\n149: \n150: \t\t\tif (attacker instanceof Hero && isEquipped((Hero) attacker)\n151: \t\t\t\t\t&& attacker.buff(HolyWeapon.HolyWepBuff.class) != null){\n152: \t\t\t\tif (enchantment != null &&\n153: \t\t\t\t\t\t(((Hero) attacker).subClass == HeroSubClass.PALADIN || hasCurseEnchant())){\n154: \t\t\t\t\tdamage = enchantment.proc(this, attacker, defender, damage);\n155: \t\t\t\t}\n156: \t\t\t\tif (defender.isAlive() && trinityEnchant != null){\n157: \t\t\t\t\tdamage = trinityEnchant.proc(this, attacker, defender, damage);\n158: \t\t\t\t}\n159: \t\t\t\tif (defender.isAlive()) {\n160: \t\t\t\t\tint dmg = ((Hero) attacker).subClass == HeroSubClass.PALADIN ? 6 : 2;\n161: \t\t\t\t\tdefender.damage(Math.round(dmg * Enchantment.genericProcChanceMultiplier(attacker)), HolyWeapon.INSTANCE);\n162: \t\t\t\t}\n163: \n164: \t\t\t} else {\n165: \t\t\t\tif (enchantment != null) {\n166: \t\t\t\t\tdamage = enchantment.proc(this, attacker, defender, damage);\n167: \t\t\t\t}\n168: \n169: \t\t\t\tif (defender.isAlive() && trinityEnchant != null){\n170: \t\t\t\t\tdamage = trinityEnchant.proc(this, attacker, defender, damage);\n171: \t\t\t\t}\n172: \t\t\t}\n173: \n174: \t\t\tif (attacker instanceof Hero && isEquipped((Hero) attacker) &&\n175: \t\t\t\t\tattacker.buff(Smite.SmiteTracker.class) != null && defender.isAlive()){\n176: \t\t\t\tdefender.damage(Smite.bonusDmg((Hero) attacker, defender), Smite.INSTANCE);\n177: \t\t\t}"
+    },
+    {
+      "id": "kinetic",
+      "locator": "items/weapon/enchantments/Kinetic.java:37–49",
+      "excerpt": "37: \t\n38: \t@Override\n39: \tpublic int proc(Weapon weapon, Char attacker, Char defender, int damage) {\n40: \t\t\n41: \t\tint conservedDamage = 0;\n42: \t\tif (attacker.buff(ConservedDamage.class) != null) {\n43: \t\t\tconservedDamage = attacker.buff(ConservedDamage.class).damageBonus();\n44: \t\t}\n45: \n46: \t\t//use a tracker so that we can know the true final damage\n47: \t\tBuff.affect(attacker, KineticTracker.class).conservedDamage = conservedDamage;\n48: \t\t\n49: \t\treturn damage + conservedDamage;"
+    },
+    {
+      "id": "slime",
+      "locator": "actors/mobs/Slime.java:58–66",
+      "excerpt": "58: \tpublic void damage(int dmg, Object src) {\n59: \t\tfloat scaleFactor = AscensionChallenge.statModifier(this);\n60: \t\tfloat scaledDmg = dmg/scaleFactor;\n61: \t\tif (scaledDmg >= 5){\n62: \t\t\t//takes 5/6/7/8/9/10 dmg at 5/7/10/14/19/25 incoming dmg\n63: \t\t\tscaledDmg = 4 + (float)(Math.sqrt(8*(scaledDmg - 4) + 1) - 1)/2;\n64: \t\t}\n65: \t\tdmg = (int)(scaledDmg*AscensionChallenge.statModifier(this));\n66: \t\tsuper.damage(dmg, src);"
+    },
+    {
+      "id": "mobDamage",
+      "locator": "actors/mobs/Mob.java:939–962",
+      "excerpt": "939: \tpublic void damage( int dmg, Object src ) {\n940: \n941: \t\tif (!isInvulnerable(src.getClass())) {\n942: \t\t\tif (state == SLEEPING) {\n943: \t\t\t\tstate = WANDERING;\n944: \t\t\t}\n945: \t\t\tif (!(src instanceof Corruption) && state != FLEEING) {\n946: \t\t\t\tif (state != HUNTING) {\n947: \t\t\t\t\talerted = true;\n948: \t\t\t\t\t//assume the hero is hitting us in these common cases\n949: \t\t\t\t\tif (src instanceof Wand || src instanceof ClericSpell || src instanceof ArmorAbility) {\n950: \t\t\t\t\t\taggro(Dungeon.hero);\n951: \t\t\t\t\t\ttarget = Dungeon.hero.pos;\n952: \t\t\t\t\t}\n953: \t\t\t\t} else {\n954: \t\t\t\t\tif (src instanceof Wand || src instanceof ClericSpell || src instanceof ArmorAbility) {\n955: \t\t\t\t\t\trecentlyAttackedBy.add(Dungeon.hero);\n956: \t\t\t\t\t}\n957: \t\t\t\t}\n958: \t\t\t}\n959: \t\t}\n960: \t\t\n961: \t\tsuper.damage( dmg, src );\n962: \t}"
+    },
+    {
+      "id": "damageA",
+      "locator": "actors/Char.java:830–884",
+      "excerpt": "830: \tpublic void damage( int dmg, Object src ) {\n831: \t\t\n832: \t\tif (!isAlive() || dmg < 0) {\n833: \t\t\treturn;\n834: \t\t}\n835: \n836: \t\tif(isInvulnerable(src.getClass())){\n837: \t\t\tsprite.showStatus(CharSprite.POSITIVE, Messages.get(this, \"invulnerable\"));\n838: \t\t\treturn;\n839: \t\t}\n840: \n841: \t\tif (!(src instanceof LifeLink || src instanceof Hunger) && buff(LifeLink.class) != null){\n842: \t\t\tHashSet<LifeLink> links = buffs(LifeLink.class);\n843: \t\t\tfor (LifeLink link : links.toArray(new LifeLink[0])){\n844: \t\t\t\tif (Actor.findById(link.object) == null){\n845: \t\t\t\t\tlinks.remove(link);\n846: \t\t\t\t\tlink.detach();\n847: \t\t\t\t}\n848: \t\t\t}\n849: \t\t\tdmg = (int)Math.ceil(dmg / (float)(links.size()+1));\n850: \t\t\tfor (LifeLink link : links){\n851: \t\t\t\tChar ch = (Char)Actor.findById(link.object);\n852: \t\t\t\tif (ch != null) {\n853: \t\t\t\t\tch.damage(dmg, link);\n854: \t\t\t\t\tif (!ch.isAlive()) {\n855: \t\t\t\t\t\tlink.detach();\n856: \t\t\t\t\t\tif (ch == Dungeon.hero){\n857: \t\t\t\t\t\t\tBadges.validateDeathFromFriendlyMagic();\n858: \t\t\t\t\t\t\tDungeon.fail(src);\n859: \t\t\t\t\t\t\tGLog.n( Messages.get(LifeLink.class, \"ondeath\") );\n860: \t\t\t\t\t\t}\n861: \t\t\t\t\t}\n862: \t\t\t\t}\n863: \t\t\t}\n864: \t\t}\n865: \n866: \t\t//temporarily assign to a float to avoid rounding a bunch\n867: \t\tfloat damage = dmg;\n868: \n869: \t\t//if dmg is from a character we already reduced it in Char.attack\n870: \t\tif (!(src instanceof Char)) {\n871: \t\t\tif (Dungeon.hero.alignment == alignment\n872: \t\t\t\t\t&& Dungeon.hero.buff(AuraOfProtection.AuraBuff.class) != null\n873: \t\t\t\t\t&& (Dungeon.level.distance(pos, Dungeon.hero.pos) <= 2 || buff(LifeLinkSpell.LifeLinkSpellBuff.class) != null)) {\n874: \t\t\t\tdamage *= 0.9f - 0.1f*Dungeon.hero.pointsInTalent(Talent.AURA_OF_PROTECTION);\n875: \t\t\t}\n876: \t\t}\n877: \n878: \t\tif (buff(PowerOfMany.PowerBuff.class) != null){\n879: \t\t\tif (buff(LifeLinkSpell.LifeLinkSpellBuff.class) != null){\n880: \t\t\t\tdamage *= 0.70f - 0.05f*Dungeon.hero.pointsInTalent(Talent.LIFE_LINK);\n881: \t\t\t} else {\n882: \t\t\t\tdamage *= 0.75f;\n883: \t\t\t}\n884: \t\t}"
+    },
+    {
+      "id": "damageB",
+      "locator": "actors/Char.java:904–951",
+      "excerpt": "904: \t\tif (this.buff(Doom.class) != null && !isImmune(Doom.class)){\n905: \t\t\tdamage *= 1.67f;\n906: \t\t}\n907: \t\tif (alignment != Alignment.ALLY && this.buff(DeathMark.DeathMarkTracker.class) != null){\n908: \t\t\tdamage *= 1.25f;\n909: \t\t}\n910: \n911: \t\t//two separate things can convert dmg to bleed, we handle that here\n912: \t\t//we do this before modifiers are applied back to dmg as we don't want to stack them twice (from this and bleed)\n913: \t\tfloat bleedAmt = 0;\n914: \t\tClass bleedSrc = null;\n915: \t\tif (src instanceof Char && ((Char) src).buff(Sickle.HarvestBleedTracker.class) != null){\n916: \t\t\tif (!isImmune(Bleeding.class)){\n917: \t\t\t\tbleedAmt = dmg;\n918: \t\t\t\tbleedSrc = Sickle.HarvestBleedTracker.class;\n919: \t\t\t}\n920: \t\t\t((Char) src).buff(Sickle.HarvestBleedTracker.class).detach();\n921: \t\t} else if (src instanceof Char && ((Char) src).buff(Vorpal.VorpalTracker.class) != null){\n922: \t\t\tif (!isImmune(Bleeding.class)){\n923: \t\t\t\tbleedAmt = ((Char) src).buff(Vorpal.VorpalTracker.class).powerMulti*(2+dmg/2f);\n924: \t\t\t\tbleedSrc = Vorpal.class;\n925: \t\t\t}\n926: \t\t\t((Char) src).buff(Vorpal.VorpalTracker.class).detach();\n927: \t\t}\n928: \n929: \t\tClass<?> srcClass = src.getClass();\n930: \t\tif (isImmune( srcClass )) {\n931: \t\t\tdamage = 0;\n932: \t\t} else {\n933: \t\t\tdamage *= resist( srcClass );\n934: \t\t}\n935: \n936: \t\tdmg = Math.round(damage);\n937: \n938: \t\t//we ceil these specifically to favor the player vs. champ dmg reduction\n939: \t\t// most important vs. giant champions in the earlygame\n940: \t\tfor (ChampionEnemy buff : buffs(ChampionEnemy.class)){\n941: \t\t\tdmg = (int) Math.ceil(dmg * buff.damageTakenFactor());\n942: \t\t}\n943: \t\t\n944: \t\t//TODO improve this when I have proper damage source logic\n945: \t\tif (AntiMagic.RESISTS.contains(src.getClass())){\n946: \t\t\tdmg -= AntiMagic.drRoll(this, glyphLevel(AntiMagic.class));\n947: \t\t\tif (buff(ArcaneArmor.class) != null) {\n948: \t\t\t\tdmg -= Random.NormalIntRange(0, buff(ArcaneArmor.class).level());\n949: \t\t\t}\n950: \t\t\tif (dmg < 0) dmg = 0;\n951: \t\t}"
+    },
+    {
+      "id": "damageC",
+      "locator": "actors/Char.java:968–1005",
+      "excerpt": "968: \t\t//cancel bleed if the vorpal hit is going to kill\n969: \t\tif (bleedSrc == Vorpal.class && dmg > (shielding() + HP)){\n970: \t\t\tbleedAmt = 0;\n971: \t\t}\n972: \n973: \t\tif (bleedAmt > 0){\n974: \t\t\tBleeding b = buff(Bleeding.class);\n975: \t\t\tif (b == null){\n976: \t\t\t\tb = new Bleeding();\n977: \t\t\t}\n978: \t\t\tb.announced = false;\n979: \t\t\tb.attachTo(this);\n980: \t\t\tb.set(bleedAmt, bleedSrc);\n981: \t\t\tsprite.showStatus(CharSprite.WARNING, Messages.titleCase(b.name()) + \" \" + dmg);\n982: \t\t\tSplash.at( sprite.center(), -PointF.PI / 2, PointF.PI / 6, sprite.blood(), 10 );\n983: \t\t\treturn;\n984: \t\t}\n985: \n986: \t\tint shielded = dmg;\n987: \t\tdmg = ShieldBuff.processDamage(this, dmg, src);\n988: \t\tshielded -= dmg;\n989: \t\tHP -= dmg;\n990: \n991: \t\tif (HP > 0 && src instanceof Char && ((Char) src).buff(Grim.GrimTracker.class) != null){\n992: \n993: \t\t\tfloat finalChance = ((Char) src).buff(Grim.GrimTracker.class).maxChance;\n994: \t\t\tfinalChance *= (float)Math.pow( ((HT - HP) / (float)HT), 2);\n995: \n996: \t\t\tif (Random.Float() < finalChance) {\n997: \t\t\t\tint extraDmg = Math.round(HP*resist(Grim.class));\n998: \t\t\t\tdmg += extraDmg;\n999: \t\t\t\tHP -= extraDmg;\n1000: \n1001: \t\t\t\tsprite.emitter().burst( ShadowParticle.UP, 5 );\n1002: \t\t\t\tif (!isAlive() && ((Char) src).buff(Grim.GrimTracker.class).qualifiesForBadge){\n1003: \t\t\t\t\tBadges.validateGrimWeapon();\n1004: \t\t\t\t}\n1005: \t\t\t}"
+    },
+    {
+      "id": "damageD",
+      "locator": "actors/Char.java:1066–1075",
+      "excerpt": "1066: \t\t\tsprite.showStatusWithIcon(CharSprite.NEGATIVE, Integer.toString(dmg + shielded), icon);\n1067: \t\t}\n1068: \n1069: \t\tif (HP < 0) HP = 0;\n1070: \n1071: \t\tif (!isAlive()) {\n1072: \t\t\tdie( src );\n1073: \t\t} else if (HP == 0 && buff(DeathMark.DeathMarkTracker.class) != null){\n1074: \t\t\tDeathMark.processFearTheReaper(this);\n1075: \t\t}"
+    },
+    {
+      "id": "resist",
+      "locator": "actors/Char.java:1360–1397",
+      "excerpt": "1360: \tpublic float resist( Class effect ){\n1361: \t\tHashSet<Class> resists = new HashSet<>(resistances);\n1362: \t\tfor (Property p : properties()){\n1363: \t\t\tresists.addAll(p.resistances());\n1364: \t\t}\n1365: \t\tfor (Buff b : buffs()){\n1366: \t\t\tresists.addAll(b.resistances());\n1367: \t\t}\n1368: \t\t\n1369: \t\tfloat result = 1f;\n1370: \t\tfor (Class c : resists){\n1371: \t\t\tif (c.isAssignableFrom(effect)){\n1372: \t\t\t\tresult *= 0.5f;\n1373: \t\t\t}\n1374: \t\t}\n1375: \t\treturn result * RingOfElements.resist(this, effect);\n1376: \t}\n1377: \t\n1378: \tprotected final HashSet<Class> immunities = new HashSet<>();\n1379: \t\n1380: \tpublic boolean isImmune(Class effect ){\n1381: \t\tHashSet<Class> immunes = new HashSet<>(immunities);\n1382: \t\tfor (Property p : properties()){\n1383: \t\t\timmunes.addAll(p.immunities());\n1384: \t\t}\n1385: \t\tfor (Buff b : buffs()){\n1386: \t\t\timmunes.addAll(b.immunities());\n1387: \t\t}\n1388: \t\tif (glyphLevel(Brimstone.class) >= 0){\n1389: \t\t\timmunes.add(Burning.class);\n1390: \t\t}\n1391: \t\t\n1392: \t\tfor (Class c : immunes){\n1393: \t\t\tif (c.isAssignableFrom(effect)){\n1394: \t\t\t\treturn true;\n1395: \t\t\t}\n1396: \t\t}\n1397: \t\treturn false;"
+    },
+    {
+      "id": "shield",
+      "locator": "actors/buffs/ShieldBuff.java:93–136",
+      "excerpt": "93: \t//returns the amount of damage leftover\n94: \tpublic int absorbDamage( int dmg ){\n95: \t\tif (shielding >= dmg){\n96: \t\t\tshielding -= dmg;\n97: \t\t\tdmg = 0;\n98: \t\t} else {\n99: \t\t\tdmg -= shielding;\n100: \t\t\tshielding = 0;\n101: \t\t}\n102: \t\tif (shielding <= 0 && detachesAtZero){\n103: \t\t\tdetach();\n104: \t\t}\n105: \t\tif (target != null) target.needsShieldUpdate = true;\n106: \t\treturn dmg;\n107: \t}\n108: \n109: \tpublic static int processDamage( Char target, int damage, Object src ){\n110: \t\t//hunger damage is not affected by shielding\n111: \t\tif (src instanceof Hunger){\n112: \t\t\treturn damage;\n113: \t\t}\n114: \n115: \t\tArrayList<ShieldBuff> buffs = new ArrayList<>(target.buffs(ShieldBuff.class));\n116: \t\tif (!buffs.isEmpty()){\n117: \t\t\t//sort in descending order based on shield use priority\n118: \t\t\tCollections.sort(buffs, new Comparator<ShieldBuff>() {\n119: \t\t\t\t@Override\n120: \t\t\t\tpublic int compare(ShieldBuff a, ShieldBuff b) {\n121: \t\t\t\t\treturn b.shieldUsePriority - a.shieldUsePriority;\n122: \t\t\t\t}\n123: \t\t\t});\n124: \t\t\tfor (ShieldBuff buff : buffs){\n125: \t\t\t\tif (buff.shielding() <= 0) continue;\n126: \t\t\t\tdamage = buff.absorbDamage(damage);\n127: \t\t\t\tif (buff.shielding() <= 0){\n128: \t\t\t\t\tif (target instanceof Hero && ((Hero) target).hasTalent(Talent.PROVOKED_ANGER)){\n129: \t\t\t\t\t\tBuff.affect(target, Talent.ProvokedAngerTracker.class, 5f);\n130: \t\t\t\t\t}\n131: \t\t\t\t}\n132: \t\t\t\tif (damage == 0) break;\n133: \t\t\t}\n134: \t\t}\n135: \n136: \t\treturn damage;"
+    },
+    {
+      "id": "finish",
+      "locator": "actors/Char.java:512–555",
+      "excerpt": "512: \t\t\tenemy.damage( effectiveDamage, this );\n513: \n514: \t\t\tif (buff(FireImbue.class) != null)  buff(FireImbue.class).proc(enemy);\n515: \t\t\tif (buff(FrostImbue.class) != null) buff(FrostImbue.class).proc(enemy);\n516: \n517: \t\t\tif (enemy.isAlive() && enemy.alignment != alignment && prep != null && prep.canKO(enemy)){\n518: \t\t\t\tenemy.HP = 0;\n519: \t\t\t\tfor (Buff b : enemy.buffs(Brute.BruteRage.class)){\n520: \t\t\t\t\tb.detach();\n521: \t\t\t\t}\n522: \t\t\t\tif (!enemy.isAlive()) {\n523: \t\t\t\t\tenemy.die(this);\n524: \t\t\t\t} else {\n525: \t\t\t\t\t//helps with triggering any on-damage effects that need to activate\n526: \t\t\t\t\tenemy.damage(-1, this);\n527: \t\t\t\t\tDeathMark.processFearTheReaper(enemy);\n528: \t\t\t\t}\n529: \t\t\t\tif (enemy.sprite != null) {\n530: \t\t\t\t\tenemy.sprite.showStatus(CharSprite.NEGATIVE, Messages.get(Preparation.class, \"assassinated\"));\n531: \t\t\t\t}\n532: \t\t\t}\n533: \n534: \t\t\tTalent.CombinedLethalityAbilityTracker combinedLethality = buff(Talent.CombinedLethalityAbilityTracker.class);\n535: \t\t\tif (combinedLethality != null && this instanceof Hero && ((Hero) this).belongings.attackingWeapon() instanceof MeleeWeapon && combinedLethality.weapon != ((Hero) this).belongings.attackingWeapon()){\n536: \t\t\t\tif ( enemy.isAlive() && enemy.alignment != alignment && !Char.hasProp(enemy, Property.BOSS)\n537: \t\t\t\t\t\t&& !Char.hasProp(enemy, Property.MINIBOSS) &&\n538: \t\t\t\t\t\t(enemy.HP/(float)enemy.HT) <= 0.4f*((Hero)this).pointsInTalent(Talent.COMBINED_LETHALITY)/3f) {\n539: \t\t\t\t\tenemy.HP = 0;\n540: \t\t\t\t\tfor (Buff b : enemy.buffs(Brute.BruteRage.class)){\n541: \t\t\t\t\t\tb.detach();\n542: \t\t\t\t\t}\n543: \t\t\t\t\tif (!enemy.isAlive()) {\n544: \t\t\t\t\t\tenemy.die(this);\n545: \t\t\t\t\t} else {\n546: \t\t\t\t\t\t//helps with triggering any on-damage effects that need to activate\n547: \t\t\t\t\t\tenemy.damage(-1, this);\n548: \t\t\t\t\t\tDeathMark.processFearTheReaper(enemy);\n549: \t\t\t\t\t}\n550: \t\t\t\t\tif (enemy.sprite != null) {\n551: \t\t\t\t\t\tenemy.sprite.showStatus(CharSprite.NEGATIVE, Messages.get(Talent.CombinedLethalityAbilityTracker.class, \"executed\"));\n552: \t\t\t\t\t}\n553: \t\t\t\t}\n554: \t\t\t\tcombinedLethality.detach();\n555: \t\t\t}"
+    },
+    {
+      "id": "viscosity",
+      "locator": "items/armor/glyphs/Viscosity.java:67–96",
+      "excerpt": "67: \t\tpublic int deferDamage(int dmg){\n68: \t\t\t//account for icon stomach (just skip the glyph)\n69: \t\t\tif (target.buff(Talent.WarriorFoodImmunity.class) != null){\n70: \t\t\t\treturn dmg;\n71: \t\t\t}\n72: \n73: \t\t\tint level = Math.max( 0, this.level );\n74: \n75: \t\t\tfloat percent = (level+1)/(float)(level+6);\n76: \t\t\tpercent *= genericProcChanceMultiplier(target);\n77: \n78: \t\t\tint amount;\n79: \t\t\tif (percent > 1f){\n80: \t\t\t\tdmg = Math.round(dmg / percent);\n81: \t\t\t\tamount = dmg;\n82: \t\t\t} else {\n83: \t\t\t\tamount = (int)Math.ceil(dmg * percent);\n84: \t\t\t}\n85: \n86: \t\t\tif (amount > 0){\n87: \t\t\t\tDeferedDamage deferred = Buff.affect( target, DeferedDamage.class );\n88: \t\t\t\tdeferred.extend( amount );\n89: \n90: \t\t\t\ttarget.sprite.showStatus( CharSprite.WARNING, Messages.get(Viscosity.class, \"deferred\", amount) );\n91: \t\t\t}\n92: \n93: \t\t\treturn dmg - amount;\n94: \t\t}\n95: \n96: \t\t@Override"
+    }
+  ],
+  "examples": [
+    {
+      "title": "普通短剑打螃蟹：实际掉8血",
+      "provenance": "教学演示，指定骰点；非运行测量",
+      "input": "+0短剑，tier=2，STR=12恰好达标，普通精炼，无戒指、增益、附魔、树肤和护盾；普通螃蟹15HP；设命中成功，武器骰11、DR骰3。",
+      "trace": [
+        "入口：动画回调 → attack(enemy,1,0,1)，无敌检查通过、命中通过。",
+        "armor-roll：螃蟹DR=0+R(0,4)，本例取3；飞升修正1。",
+        "weapon-roll：短剑范围2～15，本例取11；精炼×1；多余力量0；戒指加成0，D0=11。",
+        "prearmor-mod：1×11+0=11，无其他修正；defenseProc返回11。",
+        "subtract-armor：max(11−3,0)=8；无延迟、易伤；attackProc仍返回8。",
+        "target-rewrite/receive-mod：普通螃蟹与通用受伤不改值，无链接、免疫与护盾。",
+        "shield-hp：15−8=7，Grim和斩杀均无。"
+      ],
+      "result": "螃蟹HP 15→7，实际掉8，飘字8。"
+    },
+    {
+      "title": "易伤与护盾：主包10，掉血6，飘字10",
+      "provenance": "教学演示，状态与随机结果为设定值",
+      "input": "沿普通短剑主线，减甲前11、DR=3；目标易伤，通用护盾4，HP=15；无其他增减伤和特效。",
+      "trace": [
+        "前段同上：无敌和命中通过，D=11，defenseProc返回11。",
+        "subtract-armor：先11−3=8。",
+        "Vulnerable：int变量执行8×1.33f，截断为10，不能把易伤放到减甲前。",
+        "offense-hook：无天赋与附魔改值，E=10；怪物无重写，通用受伤仍是10。",
+        "shield-hp：盾吸收4，剩6；HP=15−6=9。",
+        "grim-hp：无Grim；显示6+4=10。"
+      ],
+      "result": "护盾4→0，HP15→9；飘字10，实际掉6血。"
+    },
+    {
+      "title": "史莱姆：传入10，经专属公式变6",
+      "provenance": "教学演示；史莱姆公式来自源码",
+      "input": "命中与攻击端处理完后E=10；普通飞升倍率1；史莱姆20HP，无链接、护盾、厄运及附加特效。",
+      "trace": [
+        "完成命中、伤害骰、defenseProc、减甲、attackProc 后，调用 Slime.damage(10,hero)。",
+        "x=10/1=10≥5；x=4+(sqrt(8×(10−4)+1)−1)/2=4+(7−1)/2=7。",
+        "按源码int(7×1)=7；注释也列出传入10对应7。",
+        "Mob.damage → Char.damage，所有通用修正为1，护盾0，20−7=13。"
+      ],
+      "result": "史莱姆HP20→13，实际掉7。怪物重写发生在通用受伤之前。"
+    },
+    {
+      "title": "护甲全挡住，仍能触发后置加伤",
+      "provenance": "教学演示；激怒天赋按源码",
+      "input": "已命中；减甲前3、DR=4；有1点PROVOKED_ANGER且Tracker存在；目标15HP，无易伤、护盾或其他特效。",
+      "trace": [
+        "defenseProc返回3，属于非负，所以继续。",
+        "subtract-armor：max(3−4,0)=0。",
+        "offense-hook：Talent.onAttackProc 激怒平加1+2×1=3，并移除Tracker。",
+        "主伤害E=3；接收端无修正、无护盾，HP15→12。"
+      ],
+      "result": "减甲时变0，最后仍掉3血：后置加伤不再减第二次普通护甲。"
+    }
+  ],
+  "connections": [
+    {
+      "a": "landed-hit",
+      "b": "armor-roll",
+      "label": "命中后先掷护甲"
+    },
+    {
+      "a": "offense-hook",
+      "b": "target-alive",
+      "label": "攻击特效已运行，主包待交付"
+    }
+  ]
+}

@@ -1,0 +1,505 @@
+{
+  "title": "火弹（1005）命中多个目标：当前每次有效伤害都是500",
+  "summary": "所给代码的实际结算：500、500、500……。描述与独立衰减方法表达的规则是500、400、300、200、200……，但倍率尚未接入当前伤害链。点击节点查看公式、证据与适用前提。",
+  "sources": [
+    {
+      "id": "asset",
+      "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1005.asset:24–105",
+      "excerpt": "24:     - Name: Effects\n25:       Entry: 7\n26:       Data: 0|System.Collections.Generic.List`1[[EGamePlay.Combat.Effect, Assembly-CSharp]],\n27:         mscorlib\n28:     - Name: \n29:       Entry: 12\n30:       Data: 1\n31:     - Name: \n32:       Entry: 7\n33:       Data: 1|EGamePlay.Combat.DamageEffect, Assembly-CSharp\n34:     - Name: IsSkillEffect\n35:       Entry: 5\n36:       Data: true\n37:     - Name: Enabled\n38:       Entry: 5\n39:       Data: true\n40:     - Name: Decorators\n41:       Entry: 7\n42:       Data: 2|System.Collections.Generic.List`1[[EGamePlay.Combat.EffectDecorator,\n43:         Assembly-CSharp]], mscorlib\n44:     - Name: \n45:       Entry: 12\n46:       Data: 1\n47:     - Name: \n48:       Entry: 7\n49:       Data: 3|EGamePlay.Combat.DamageReduceWithTargetCountDecorator, Assembly-CSharp\n50:     - Name: Enabled\n51:       Entry: 5\n52:       Data: true\n53:     - Name: ReducePercent\n54:       Entry: 4\n55:       Data: 20\n56:     - Name: MinPercent\n57:       Entry: 4\n58:       Data: 40\n59:     - Name: \n60:       Entry: 8\n61:       Data: \n62:     - Name: \n63:       Entry: 13\n64:       Data: \n65:     - Name: \n66:       Entry: 8\n67:       Data: \n68:     - Name: EffectTypeName\n69:       Entry: 1\n70:       Data: \"(\\u6DFB\\u52A0\\u6548\\u679C\\u4FEE\\u9970)\"\n71:     - Name: DamageType\n72:       Entry: 3\n73:       Data: 1\n74:     - Name: DamageValueFormula\n75:       Entry: 1\n76:       Data: 500\n77:     - Name: CanCrit\n78:       Entry: 5\n79:       Data: false\n80:     - Name: \n81:       Entry: 8\n82:       Data: \n83:     - Name: \n84:       Entry: 13\n85:       Data: \n86:     - Name: \n87:       Entry: 8\n88:       Data: \n89:   Id: 1005\n90:   SkillSpellType: 0\n91:   AffectTargetType: 2\n92:   TargetSelectType: 1\n93:   TriggerActions:\n94:   - Enabled: 1\n95:     TriggerType: 1\n96:     AutoTriggerType: 0\n97:     ActionPointType: 0\n98:     ConditionType: 0\n99:     ConditionParam: \n100:     AddSkillEffectTargetType: 0\n101:     StateCheckList: []\n102:     TriggerEffects:\n103:     - EffectApplyType: 0\n104:       Params: []\n105:   EffectTypeName: \"(\\u6DFB\\u52A0\\u6548\\u679C)\""
+    },
+    {
+      "id": "textconfig",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ThirdParty/Config/Texts/AbilityConfig.txt:8–8",
+      "excerpt": "8: \"1005\":{\"Id\":1005,\"Name\":\"火弹\",\"Type\":\"Skill\",\"TargetGroup\":\"敌方\",\"TargetSelect\":\"碰撞检测\",\"Cooldown\":0,\"Description\":\"每命中一个目标后下一次伤害会减少20%，最低减到40%\",\"BuffType\":\"None\"},"
+    },
+    {
+      "id": "load",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/CombatEntity/CombatEntitySystem.cs:78–101",
+      "excerpt": "78:             var allConfigs = AppStatic.Config.GetAll<AbilityConfig>().Values.ToArray();\n79:             for (int i = 0; i < allConfigs.Length; i++)\n80:             {\n81:                 var config = allConfigs[i];\n82:                 if (config.Type != \"Skill\")\n83:                 {\n84:                     continue;\n85:                 }\n86:                 var skilld = config.Id;\n87:                 if (skilld == 3001)\n88:                 {\n89:                     continue;\n90:                 }\n91:                 var configObj = GameUtils.AssetUtils.LoadObject<AbilityConfigObject>($\"{AbilityManagerObject.SkillResFolder}/Skill_{skilld}\");\n92:                 var ability = SkillSystem.Attach(entity, configObj);\n93:                 if (skilld == 1001) BindSkillInput(entity, ability, KeyCode.Q);\n94:                 if (skilld == 1002) BindSkillInput(entity, ability, KeyCode.W);\n95:                 if (skilld == 1003) BindSkillInput(entity, ability, KeyCode.Y);\n96:                 if (skilld == 1004) BindSkillInput(entity, ability, KeyCode.E);\n97:                 if (skilld == 1005) BindSkillInput(entity, ability, KeyCode.R);\n98:                 if (skilld == 1008) BindSkillInput(entity, ability, KeyCode.A);\n99:             }\n100: \n101:             SpellSystem.LoadExecutionObjects(entity);"
+    },
+    {
+      "id": "ability",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilitySystem.cs:18–39",
+      "excerpt": "18:     {\n19:         public void Awake(Ability entity)\n20:         {\n21:             entity.Config = AppStatic.Config.Get<AbilityConfig>(entity.ConfigObject.Id);\n22:             entity.Name = entity.Config.Name;\n23: \n24:             CheckAffectTargetType(entity);\n25:             CheckTargetSelectType(entity);\n26: \n27:             foreach (var item in entity.ConfigObject.Effects)\n28:             {\n29:                 var abilityEffect = AbilityEffectSystem.Create(entity, item);\n30:                 abilityEffect.Init();\n31:                 entity.AbilityEffects.Add(abilityEffect);\n32:             }\n33: \n34:             foreach (var item in entity.ConfigObject.TriggerActions)\n35:             {\n36:                 var abilityTrigger = AbilityTriggerSystem.Create(entity, item);\n37:                 abilityTrigger.Init();\n38:                 entity.AbilityTriggers.Add(abilityTrigger);\n39:             }"
+    },
+    {
+      "id": "effectcreate",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/AbilityEffectSystem.cs:37–74",
+      "excerpt": "37:         public static AbilityEffect Create(Ability ability, Effect effectConfig)\n38:         {\n39:             var abilityEffect = ability.AddChild<AbilityEffect>();\n40:             abilityEffect.EffectConfig = effectConfig;\n41:             abilityEffect.Name = effectConfig.GetType().Name;\n42: \n43:             /// 行动禁制\n44:             if (effectConfig is ActionControlEffect) abilityEffect.AddComponent<EffectActionControlComponent>();\n45:             /// 属性修饰\n46:             if (effectConfig is AttributeModifyEffect) abilityEffect.AddComponent<EffectAttributeModifyComponent>();\n47: \n48:             /// 伤害效果\n49:             if (effectConfig is DamageEffect) abilityEffect.AddComponent<EffectDamageComponent>();\n50:             /// 治疗效果\n51:             if (effectConfig is CureEffect) abilityEffect.AddComponent<EffectCureComponent>();\n52:             /// 光盾防御效果\n53:             if (effectConfig is ShieldDefenseEffect) abilityEffect.AddComponent<EffectShieldDefenseComponent>();\n54:             /// 施加状态效果\n55:             if (effectConfig is AddStatusEffect) abilityEffect.AddComponent<EffectAddBuffComponent>();\n56:             /// 效果修饰\n57:             var decorators = abilityEffect.EffectConfig.Decorators;\n58:             if (decorators != null && decorators.Count > 0) abilityEffect.AddComponent<EffectDecoratorComponent>();\n59:             return abilityEffect;\n60:         }\n61: \n62:         public static void TriggerApply(EffectAssignAction effectAssign)\n63:         {\n64:             //ConsoleLog.Debug(\"AbilityEffectSystem OnTriggerApplyEffect\");\n65:             var abilityEffect = effectAssign.AbilityEffect;\n66:             foreach (var item in effectAssign.AbilityEffect.Components.Values)\n67:             {\n68:                 if (item is EffectActionControlComponent) EffectActionControlSystem.TriggerApply(abilityEffect, effectAssign);\n69:                 if (item is EffectAddBuffComponent) EffectAddBuffSystem.TriggerApply(abilityEffect, effectAssign);\n70:                 if (item is EffectAttributeModifyComponent) EffectAttributeSystem.TriggerApply(abilityEffect, effectAssign);\n71:                 if (item is EffectCureComponent) EffectCureSystem.TriggerApply(abilityEffect, effectAssign);\n72:                 if (item is EffectDamageComponent) EffectDamageSystem.TriggerApply(abilityEffect, effectAssign);\n73:                 if (item is EffectShieldDefenseComponent) EffectShieldSystem.TriggerApply(abilityEffect, effectAssign);\n74:             }"
+    },
+    {
+      "id": "decorator",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDecoratorSystem.cs:13–24",
+      "excerpt": "13:         public void Awake(AbilityEffect entity, EffectDecoratorComponent component)\n14:         {\n15:             if (entity.EffectConfig.Decorators != null)\n16:             {\n17:                 foreach (var effectDecorator in entity.EffectConfig.Decorators)\n18:                 {\n19:                     if (effectDecorator is DamageReduceWithTargetCountDecorator reduceWithTargetCountDecorator)\n20:                     {\n21:                         entity.AddComponent<EffectDamageReduceWithTargetCountComponent>();\n22:                     }\n23:                 }\n24:             }"
+    },
+    {
+      "id": "iteminit",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/AbilityItem/AbilityItemSystem.cs:20–43",
+      "excerpt": "20:         public void Awake(AbilityItem entity)\n21:         {\n22:             entity.AbilityEntity = entity.AbilityExecution.AbilityEntity;\n23:             if (entity.AbilityEntity == null)\n24:             {\n25:                 Log.Error(\"AbilityItem AbilityEntity == null\");\n26:                 return;\n27:             }\n28: \n29:             var abilityEffects = entity.AbilityEntity.AbilityEffects;\n30:             foreach (var abilityEffect in abilityEffects)\n31:             {\n32:                 if (abilityEffect.EffectConfig.Decorators == null)\n33:                 {\n34:                     continue;\n35:                 }\n36:                 foreach (var effectDecorator in abilityEffect.EffectConfig.Decorators)\n37:                 {\n38:                     if (effectDecorator is DamageReduceWithTargetCountDecorator reduceWithTargetCountDecorator)\n39:                     {\n40:                         entity.AddComponent<AbilityItemTargetCounterComponent>();\n41:                     }\n42:                 }\n43:             }"
+    },
+    {
+      "id": "itemhit",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/AbilityItem/AbilityItemSystem.cs:110–174",
+      "excerpt": "110:         public static void OnTriggerEvent(AbilityItem abilityItem, EcsEntity otherEntity)\n111:         {\n112:             if (abilityItem.IsDisposed)\n113:             {\n114:                 return;\n115:             }\n116: \n117:             if (abilityItem.TargetEntity != null)\n118:             {\n119:                 var otherCombatEntity = otherEntity as CombatEntity;\n120:                 if (otherCombatEntity != null)\n121:                 {\n122:                     if (otherCombatEntity != abilityItem.TargetEntity)\n123:                     {\n124:                         return;\n125:                     }\n126:                 }\n127:                 else\n128:                 {\n129:                     var otherItem = otherEntity as AbilityItem;\n130:                 }\n131:             }\n132: \n133:             var actionEventData = AbilityItemCollisionExecuteSystem.GetActionEventData(abilityItem);\n134:             if (abilityItem.AbilityEntity != null)\n135:             {\n136:                 if (actionEventData.ActionEventType == FireEventType.AssignEffect)\n137:                 {\n138:                     var effects = abilityItem.AbilityEntity.AbilityTriggers;\n139:                     for (int i = 0; i < effects.Count; i++)\n140:                     {\n141:                         if (i == (int)abilityItem.ExecuteTriggerType - 1 || abilityItem.ExecuteTriggerType == ExecuteTriggerType.AllTriggers)\n142:                         {\n143:                             var effect = effects[i];\n144:                             var context = new TriggerContext()\n145:                             {\n146:                                 AbilityTrigger = effect,\n147:                                 TriggerSource = abilityItem,\n148:                                 AbilityItem = abilityItem,\n149:                                 Target = otherEntity,\n150:                             };\n151:                             AbilityTriggerSystem.OnTrigger(effect, context);\n152:                         }\n153:                     }\n154:                 }\n155:             }\n156: \n157:             if (abilityItem.AbilityExecution != null)\n158:             {\n159:                 if (actionEventData.ActionEventType == FireEventType.TriggerNewExecution)\n160:                 {\n161:                     OnTriggerNewExecution(abilityItem, actionEventData);\n162:                 }\n163:             }\n164: \n165:             if (abilityItem.GetComponent<AbilityItemTargetCounterComponent>() is { } targetCounterComponent)\n166:             {\n167:                 targetCounterComponent.TargetCounter++;\n168:             }\n169: \n170:             if (abilityItem.TargetEntity != null)\n171:             {\n172:                 EcsObject.Destroy(abilityItem);\n173:             }\n174:         }"
+    },
+    {
+      "id": "collision",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/CollisionActionSystem.cs:28–61",
+      "excerpt": "28:         public static void ApplyCollision(CollisionAction entity)\n29:         {\n30:             ActionSystem.ExecuteAction(entity, _ =>\n31:             {\n32:                 return true;\n33:             }, _ =>\n34:             {\n35:                 if (entity.Target != null)\n36:                 {\n37:                     if (entity.Target is CombatEntity combatEntity)\n38:                     {\n39:                         AbilityItemSystem.OnTriggerEvent(entity.CauseItem, combatEntity);\n40:                     }\n41:                     if (entity.Target is AbilityItem abilityItem)\n42:                     {\n43:                         var actionEvent = AbilityItemCollisionExecuteSystem.GetActionEventData(abilityItem).ActionEventType;\n44:                         if (entity.Target.GetComponent<AbilityItemShieldComponent>() != null)\n45:                         {\n46:                             if (entity.CauseItem.OwnerEntity.IsHero != abilityItem.OwnerEntity.IsHero)\n47:                             {\n48:                                 AbilityItemSystem.OnTriggerEvent(entity.CauseItem, entity.Target);\n49: \n50:                                 if (AbilityItemCollisionExecuteSystem.GetActionEventData(entity.CauseItem).FireType == FireType.CollisionTrigger)\n51:                                 {\n52:                                     HealthSystem.SetDie(entity.CauseItem);\n53:                                 }\n54:                             }\n55:                         }\n56:                     }\n57:                 }\n58:                 return true;\n59:             });\n60: \n61:             FinishAction(entity);"
+    },
+    {
+      "id": "trigger",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityTrigger/AbilityTriggerSystem.cs:75–124",
+      "excerpt": "75:         public static void OnTrigger(AbilityTrigger entity, TriggerContext context)\n76:         {\n77:             var newContext = context;\n78:             newContext.AbilityTrigger = entity;\n79:             context = newContext;\n80:             var abilityTrigger = entity;\n81: \n82:             var source = context.TriggerSource;\n83:             var target = context.Target;\n84:             if (target == null && source != null)\n85:             {\n86:                 target = source;\n87:             }\n88:             if (target == null)\n89:             {\n90:                 target = entity.ParentEntity;\n91:             }\n92: \n93:             var stateCheckResult = true;\n94: \n95:             /// 这里是状态判断，状态判断是判断目标的状态是否满足条件，满足才能触发效果\n96:             if (abilityTrigger.GetComponent<TriggerStateCheckComponent>() is { } component)\n97:             {\n98:                 stateCheckResult = TriggerStateCheckSystem.CheckTargetState(abilityTrigger, target);\n99:             }\n100: \n101:             /// 条件满足则触发效果\n102:             if (stateCheckResult)\n103:             {\n104:                 foreach (var item in entity.TriggerConfig.TriggerEffects)\n105:                 {\n106:                     var effects = entity.OwnerAbility.AbilityEffects;\n107:                     for (int i = 0; i < effects.Count; i++)\n108:                     {\n109:                         if (i == (int)item.EffectApplyType - 1 || item.EffectApplyType == EffectApplyType.AllEffects)\n110:                         {\n111:                             var abilityEffect = effects[i];\n112: \n113:                             if (entity.OwnerEntity.EffectAssignAbility.TryMakeAction(out var effectAssign))\n114:                             {\n115:                                 effectAssign.AbilityEffect = abilityEffect;\n116:                                 effectAssign.AssignTarget = target;\n117:                                 effectAssign.SourceAbility = entity.OwnerAbility;\n118:                                 effectAssign.TriggerContext = context;\n119:                                 AssignActionSystem.Execute(effectAssign);\n120:                             }\n121:                         }\n122:                     }\n123:                 }\n124:             }"
+    },
+    {
+      "id": "assign",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/AssignActionSystem.cs:28–48",
+      "excerpt": "28:         private static bool ActionCheckProcess(EffectAssignAction entity)\n29:         {\n30:             if (entity.Target == null)\n31:             {\n32:                 entity.Target = entity.AssignTarget;\n33:                 if (entity.AssignTarget is IActionExecute actionExecute) entity.Target = actionExecute.Target;\n34:                 if (entity.AssignTarget is AbilityExecution skillExecution) entity.Target = skillExecution.InputTarget;\n35:             }\n36:             return true;\n37:         }\n38: \n39:         public static void Execute(EffectAssignAction entity)\n40:         {\n41:             ActionSystem.ExecuteAction(entity, _ =>\n42:             {\n43:                 return ActionCheckProcess(entity);\n44:             }, _ =>\n45:             {\n46:                 AbilityEffectSystem.TriggerApply(entity);\n47:                 return true;\n48:             });"
+    },
+    {
+      "id": "damageeffect",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs:13–44",
+      "excerpt": "13:         public void Awake(AbilityEffect entity, EffectDamageComponent component)\n14:         {\n15:             component.DamageEffect = entity.EffectConfig as DamageEffect;\n16:             component.DamageValueFormula = component.DamageEffect.DamageValueFormula;\n17:         }\n18: \n19:         public static int GetDamageValue(AbilityEffect entity)\n20:         {\n21:             return ParseDamage(entity);\n22:         }\n23: \n24:         private static int ParseDamage(AbilityEffect entity)\n25:         {\n26:             var component = entity.GetComponent<EffectDamageComponent>();\n27:             var expression = ExpressionHelper.ExpressionParser.EvaluateExpression(component.DamageValueFormula);\n28:             if (expression.Parameters.ContainsKey(\"自身攻击力\"))\n29:             {\n30:                 expression.Parameters[\"自身攻击力\"].Value = entity.OwnerEntity.GetComponent<AttributeComponent>().Attack.Value;\n31:             }\n32:             return (int)System.Math.Ceiling((float)expression.Value);\n33:         }\n34: \n35:         public static void TriggerApply(AbilityEffect entity, EffectAssignAction effectAssign)\n36:         {\n37:             var component = entity.GetComponent<EffectDamageComponent>();\n38:             if (entity.OwnerEntity.DamageAbility.TryMakeAction(out var damageAction))\n39:             {\n40:                 damageAction.SourceAssignAction = effectAssign;\n41:                 damageAction.Target = effectAssign.Target;\n42:                 damageAction.DamageSource = DamageSource.Skill;\n43:                 DamageActionSystem.Execute(damageAction);\n44:             }"
+    },
+    {
+      "id": "damage",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs:28–80",
+      "excerpt": "28:         private static bool ActionCheckProcess(DamageAction entity)\n29:         {\n30:             if (entity.DamageSource == DamageSource.Attack)\n31:             {\n32:                 entity.IsCritical = (GameUtils.RandomHelper.RandomRate() / 100f) < entity.Creator.GetComponent<AttributeComponent>().CriticalProbability.Value;\n33:                 var Atk = entity.Creator.GetComponent<AttributeComponent>().Attack.Value;\n34:                 var Def = entity.Target.GetComponent<AttributeComponent>().Defense.Value;\n35:                 var coeff = Atk / (Atk + Def);\n36:                 var Dam1 = Atk * coeff;\n37: \n38:                 entity.DamageValue = Mathf.CeilToInt(Dam1);\n39:                 if (entity.IsCritical)\n40:                 {\n41:                     entity.DamageValue = Mathf.CeilToInt(entity.DamageValue * 1.5f);\n42:                 }\n43:             }\n44: \n45:             if (entity.DamageSource == DamageSource.Skill)\n46:             {\n47:                 if (entity.DamageEffect.CanCrit)\n48:                 {\n49:                     entity.IsCritical = (GameUtils.RandomHelper.RandomRate() / 100f) < entity.Creator.GetComponent<AttributeComponent>().CriticalProbability.Value;\n50:                 }\n51:                 entity.DamageValue = EffectDamageSystem.GetDamageValue(entity.SourceAssignAction.AbilityEffect);\n52:                 if (entity.IsCritical)\n53:                 {\n54:                     entity.DamageValue = Mathf.CeilToInt(entity.DamageValue * 1.5f);\n55:                 }\n56:             }\n57: \n58:             if (entity.DamageSource == DamageSource.Buff)\n59:             {\n60:                 if (entity.DamageEffect.CanCrit)\n61:                 {\n62:                     entity.IsCritical = (GameUtils.RandomHelper.RandomRate() / 100f) < entity.Creator.GetComponent<AttributeComponent>().CriticalProbability.Value;\n63:                 }\n64:                 entity.DamageValue = EffectDamageSystem.GetDamageValue(entity.SourceAssignAction.AbilityEffect);\n65:             }\n66: \n67:             return true;\n68:         }\n69: \n70:         public static void Execute(DamageAction entity)\n71:         {\n72:             ActionSystem.ExecuteAction(entity, _ =>\n73:             {\n74:                 return ActionCheckProcess(entity);\n75:             }, _ =>\n76:             {\n77:                 //伤害实际施效流程\n78:                 HealthSystem.ConsumeHealth(entity.Target, entity);\n79:                 return true;\n80:             });"
+    },
+    {
+      "id": "action",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/CombatEntity/ActionSystem.cs:55–80",
+      "excerpt": "55:     public class ActionSystem\n56:     {\n57:         public static void ExecuteAction<T>(T entity, Func<T, bool> actionProcess, Func<T, bool> actionApply) where T : EcsEntity, IActionExecute\n58:         {\n59:             ActionSystem.BeforeExecuteAction(entity.Creator, x => x.BeforeExecuteAction(entity.Creator, entity));\n60:             ActionSystem.BeforeSufferAction(entity.Target, x => x.BeforeSufferAction(entity.Target, entity));\n61: \n62:             var result = actionProcess.Invoke(entity);\n63: \n64:             if (result)\n65:             {\n66:                 ActionSystem.BeforeCauseApply(entity.Creator, x => x.BeforeCauseApply(entity.Creator, entity));\n67:                 ActionSystem.BeforeReceiveApply(entity.Target, x => x.BeforeReceiveApply(entity.Target, entity));\n68: \n69:                 var applyResult = actionApply.Invoke(entity);\n70: \n71:                 if (applyResult)\n72:                 {\n73:                     ActionSystem.AfterCauseApply(entity.Creator, x => x.AfterCauseApply(entity.Creator, entity));\n74:                     ActionSystem.AfterReceiveApply(entity.Target, x => x.AfterReceiveApply(entity.Target, entity));\n75:                 }\n76:             }\n77: \n78:             ActionSystem.AfterExecuteAction(entity.Creator, x => x.AfterExecuteAction(entity.Creator, entity));\n79:             ActionSystem.AfterSufferAction(entity.Target, x => x.AfterSufferAction(entity.Target, entity));\n80:         }"
+    },
+    {
+      "id": "health",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/HealthSystem.cs:34–38",
+      "excerpt": "34:         public static void Minus(EcsEntity entity, int value)\n35:         {\n36:             var component = entity.GetComponent<HealthPointComponent>();\n37:             NumericSystem.MinusBase(component.HealthPointNumeric, value);\n38:         }"
+    },
+    {
+      "id": "consume",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/HealthSystem.cs:75–80",
+      "excerpt": "75:         public static void ConsumeHealth(EcsEntity entity, IActionExecute combatAction)\n76:         {\n77:             var component = entity.GetComponent<HealthPointComponent>();\n78:             var damageAction = combatAction as DamageAction;\n79:             Minus(entity, damageAction.DamageValue);\n80:         }"
+    },
+    {
+      "id": "numeric",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/NumericSystem.cs:37–43",
+      "excerpt": "37: \n38:         public static float MinusBase(FloatNumeric entity, float value)\n39:         {\n40:             entity.baseValue -= value;\n41:             if (entity.baseValue < 0) entity.baseValue = 0;\n42:             Update(entity);\n43:             return entity.baseValue;"
+    },
+    {
+      "id": "reduce",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageReduceSystem.cs:13–29",
+      "excerpt": "13:         public void Awake(AbilityEffect entity, EffectDamageReduceWithTargetCountComponent component)\n14:         {\n15:             var damageEffect = entity.EffectConfig as DamageEffect;\n16:             foreach (var effectDecorator in damageEffect.Decorators)\n17:             {\n18:                 if (effectDecorator is DamageReduceWithTargetCountDecorator reduceWithTargetCountDecorator)\n19:                 {\n20:                     component.ReducePercent = reduceWithTargetCountDecorator.ReducePercent / 100;\n21:                     component.MinPercent = reduceWithTargetCountDecorator.MinPercent / 100;\n22:                 }\n23:             }\n24:         }\n25: \n26:         public static float GetDamagePercent(AbilityEffect entity, int TargetCounter)\n27:         {\n28:             var component = entity.GetComponent<EffectDamageReduceWithTargetCountComponent>();\n29:             return System.Math.Max(component.MinPercent, 1 - component.ReducePercent * TargetCounter);"
+    },
+    {
+      "id": "counter",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/AbilityItem/AbilityItemTargetCounterComponent.cs:13–16",
+      "excerpt": "13:     public class AbilityItemTargetCounterComponent : EcsComponent<AbilityItem>\n14:     {\n15:         public int TargetCounter { get; set; }\n16:     }"
+    },
+    {
+      "id": "decoratortype",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ConfigObject/AbilityConfig/EffectConfig/Components/DamageReduceWithTargetCountDecorator.cs:39–48",
+      "excerpt": "39:     [Serializable, EffectDecorate(\"按命中目标数递减百分比伤害\", 10)]\n40:     public class DamageReduceWithTargetCountDecorator : EffectDecorator\n41:     {\n42:         [HideInInspector]\n43:         public override string Label => \"按命中目标数递减百分比伤害\";\n44: \n45:         [ToggleGroup(\"Enabled\"), LabelText(\"递减百分比\")]\n46:         public float ReducePercent;\n47:         [ToggleGroup(\"Enabled\"), LabelText(\"伤害下限百分比\")]\n48:         public float MinPercent;"
+    },
+    {
+      "id": "executionload",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilitySystem.cs:149–156",
+      "excerpt": "149:         public static void LoadExecution(Ability entity)\n150:         {\n151:             entity.ExecutionObject = AssetUtils.LoadObject<ExecutionObject>($\"{AbilityManagerObject.ExecutionResFolder}/Execution_{entity.ConfigObject.Id}\");\n152:             if (entity.ExecutionObject == null)\n153:             {\n154:                 return;\n155:             }\n156:         }"
+    },
+    {
+      "id": "excel",
+      "locator": "Excel/AbilityConfig.xlsx · UnitProto!C12:K12（字段名 C4:K4）",
+      "excerpt": "C4 = Id\nD4 = KeyName\nE4 = Name\nF4 = Type\nG4 = TargetGroup\nH4 = TargetSelect\nI4 = Cooldown\nJ4 = Description\nK4 = BuffType\nL4 = StatusSlot\nM4 = CanStack\nC12 = 1005\nD12 = \nE12 = 火弹\nF12 = Skill\nG12 = 敌方\nH12 = 碰撞检测\nI12 = 0\nJ12 = 每命中一个目标后下一次伤害会减少20%，最低减到40%\nK12 = None"
+    },
+    {
+      "id": "callscan",
+      "locator": "只读检索范围：（313个文件）；检索 GetDamagePercent、TargetCounter、DamageValue、IBeforeCauseApply、IBeforeReceiveApply 和 Execution_1005",
+      "excerpt": "GetDamagePercent 仅在 EffectDamageReduceSystem.cs:26 发现定义，未找到调用点。TargetCounter 在物件组件中声明，在 AbilityItemSystem.cs:167 自增；GetDamagePercent 接收同名形参，但未发现读取物件计数并传入该方法的调用。DamageValue 的赋值位于 DamageActionSystem.cs；所给目录内未发现扣血前接口的实现。Execution_1005 资源和底层碰撞检测实现未在此目录找到。检索缺口不证明目录之外不存在实现。"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "runtimepath",
+      "title": "当前代码：一次有效命中的完整结算",
+      "source": "damage",
+      "position": {
+        "row": 0,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "skillconfig",
+          "title": "火弹1005：实际伤害配置",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "基础公式 500；CanCrit=false\n衰减参数20%，下限40%",
+          "detail": "原问题：火弹（1005）打中多个目标时，每个目标会受到多少伤害？本图解释所给代码目录内，同一个火弹物件逐次成功触发伤害时的数值，追到扣血与计数更新。范围不包含重建场景、实测碰撞或修改代码。HeroInit 按配置Id加载 Skill_1005，技能名与描述见 Excel 和导出文本。Asset的伤害效果与修饰器均启用，DamageValueFormula为常量500，不能暴击。Excel UnitProto!J12描述每次命中后下一次减少20%、最低40%；这是声明，需继续核对执行路径。",
+          "sources": [
+            "asset",
+            "excel",
+            "textconfig",
+            "load",
+            "ability"
+          ]
+        },
+        {
+          "id": "itemcounter",
+          "title": "每个技能物件建立计数器",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "发现递减修饰器 → 添加计数组件\nTargetCounter 初始为0",
+          "detail": "AbilityItemSystem.Awake 遍历效果修饰器，遇到 DamageReduceWithTargetCountDecorator 就为这个 AbilityItem 添加计数组件。组件的int属性未显式初始化，按C#默认值从0开始。计数属于单个物件，不是所有火弹共用的全局计数。新物件通常从0开始；底层对象池/生命周期实现未包含于当前目录，未做运行验证。",
+          "sources": [
+            "iteminit",
+            "counter"
+          ]
+        },
+        {
+          "id": "collisionhit",
+          "title": "收到战斗目标的碰撞行动",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "CollisionAction → OnTriggerEvent\n以每次有效触发为计算单位",
+          "detail": "CollisionActionSystem.ApplyCollision 在目标是 CombatEntity 时调用 AbilityItemSystem.OnTriggerEvent(CauseItem, combatEntity)。这里以题目给定的“已经打中多个目标”为前提。AbilitySystem.LoadExecution 会加载 Execution_1005，但所给目录没有该执行资源，也未提供底层碰撞检测/目标去重实现，因此不能确定穿透数量、目标先后、重复碰撞是否被过滤，或完整场景能否产生这些命中。",
+          "sources": [
+            "collision",
+            "executionload",
+            "callscan"
+          ]
+        },
+        {
+          "id": "rejecthit",
+          "title": "物件已销毁或指定目标不匹配？",
+          "row": 3,
+          "col": 0,
+          "kind": "decision",
+          "lines": "OnTriggerEvent 的提前退出条件",
+          "detail": "先检查 IsDisposed；然后若指定了 TargetEntity，且碰到的 CombatEntity 不等于指定目标，就提前return。这两类退出发生在效果触发和计数自增之前。本图只展开战斗实体目标的伤害路径，物件碰撞护盾等其他类型不在本问题范围内。",
+          "sources": [
+            "itemhit"
+          ]
+        },
+        {
+          "id": "ignoredhit",
+          "title": "本次退出",
+          "row": 3,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "不触发伤害；计数不增加",
+          "detail": "对应 OnTriggerEvent 中两个提前return。此处不代表所有可能的碰撞无效原因，只表示这两个已核实的保护条件。",
+          "sources": [
+            "itemhit"
+          ]
+        },
+        {
+          "id": "assignhit",
+          "title": "分发火弹的伤害效果",
+          "row": 4,
+          "col": 0,
+          "kind": "process",
+          "lines": "AssignEffect → Trigger → Assign\nEffectDamageSystem.TriggerApply",
+          "detail": "当物件的 ActionEventType 是 AssignEffect、ExecuteTriggerType 选中技能触发器时，构造含 AbilityItem 和当前Target的 TriggerContext。OnTrigger 再选中伤害效果并创建 EffectAssignAction；AssignActionSystem.Execute → AbilityEffectSystem.TriggerApply → EffectDamageSystem.TriggerApply。火弹asset只有一个伤害效果，状态检查列表为空，EffectApplyType=0对应AllEffects。DamageAbility.TryMakeAction 成功后创建 DamageAction，DamageSource 明确设为 Skill。执行事件配置缺失，因此 AssignEffect/触发器选择属于本节点入口前提。",
+          "sources": [
+            "itemhit",
+            "asset",
+            "trigger",
+            "assign",
+            "effectcreate",
+            "damageeffect"
+          ]
+        },
+        {
+          "id": "fixedhit",
+          "title": "计算本次技能伤害",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "lines": "DamageValue = ceil(500) = 500\n未乘命中序号对应的衰减倍率",
+          "detail": "DamageActionSystem 的 Skill 分支调用 EffectDamageSystem.GetDamageValue → ParseDamage，解析 DamageValueFormula 后向上取整。火弹公式是常量500，所以攻击力参数不会参与该常量计算，普攻分支的 Atk/(Atk+Def) 防御公式也不执行。CanCrit=false，不进入火弹暴击抽取。ParseDamage 未读取 TriggerContext.AbilityItem、TargetCounter 或 GetDamagePercent。全目录检索只找到 GetDamagePercent 定义；当前可见伤害链没有把它的返回值乘入DamageValue。ActionSystem有扣血前扩展接口，但所给目录未发现相关接口实现；目录外扩展不在证据范围内。",
+          "sources": [
+            "damageeffect",
+            "damage",
+            "asset",
+            "action",
+            "callscan"
+          ]
+        },
+        {
+          "id": "deducthit",
+          "title": "按500进入扣血",
+          "row": 6,
+          "col": 0,
+          "kind": "process",
+          "lines": "ConsumeHealth → Minus → MinusBase\n生命基础值 = max(0, 原值−500)",
+          "detail": "DamageActionSystem.Execute 调用 HealthSystem.ConsumeHealth，后者把 DamageValue 原样传给 Minus，再调用 NumericSystem.MinusBase。MinusBase 将生命基础值减500并截断到不小于0，随后Update重算数值。普通无生命修饰情形下，剩余生命不足500时只降到0；所以“500伤害值”与“血条实际减少500”需要区分。没有在这里应用命中衰减。",
+          "sources": [
+            "damage",
+            "consume",
+            "health",
+            "numeric"
+          ]
+        },
+        {
+          "id": "advancecounter",
+          "title": "本次触发结束后，计数加1",
+          "row": 7,
+          "col": 0,
+          "kind": "process",
+          "lines": "TargetCounter++ 在伤害结算之后\n下次触发仍读取常量500",
+          "detail": "OnTriggerEvent 调用 AbilityTriggerSystem.OnTrigger 返回后才在165–167行自增TargetCounter。若物件指定了TargetEntity，之后170–172行会销毁该物件。计数不是不同目标集合的大小：本函数每次走到这里都会+1，不负责目标去重；是否同一目标能再次触发取决于缺失的碰撞层。若该物件继续触发，重复上面的路径；用文字说明重复过程，避免画出不受支持的回环。",
+          "sources": [
+            "itemhit",
+            "counter"
+          ]
+        },
+        {
+          "id": "actualresult",
+          "title": "当前可见代码：每次有效伤害500",
+          "row": 8,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "第1/2/3/4/5次：500/500/500/500/500\n5次合计伤害值2500",
+          "detail": "这是按所给源码静态推导的伤害行动数值，不是运行日志或战斗实测。需要每次有效触发均进入AssignEffect、选中该伤害效果且成功创建伤害行动；不能据此断言任意场景都能命中5次。衰减声明与实际结算不一致的原因在于：有配置、有组件、有计数、有公式，但当前伤害路径未读取并应用衰减倍率。",
+          "sources": [
+            "damageeffect",
+            "damage",
+            "itemhit",
+            "callscan"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "skillconfig",
+          "b": "itemcounter",
+          "label": "创建技能物件时"
+        },
+        {
+          "a": "itemcounter",
+          "b": "collisionhit",
+          "label": "碰撞产生行动后"
+        },
+        {
+          "a": "collisionhit",
+          "b": "rejecthit",
+          "label": "进入触发处理"
+        },
+        {
+          "a": "rejecthit",
+          "b": "ignoredhit",
+          "label": "是"
+        },
+        {
+          "a": "rejecthit",
+          "b": "assignhit",
+          "label": "否"
+        },
+        {
+          "a": "assignhit",
+          "b": "fixedhit",
+          "label": "伤害行动创建成功"
+        },
+        {
+          "a": "fixedhit",
+          "b": "deducthit",
+          "label": "执行伤害行动"
+        },
+        {
+          "a": "deducthit",
+          "b": "advancecounter",
+          "label": "触发返回后"
+        },
+        {
+          "a": "advancecounter",
+          "b": "actualresult",
+          "label": "逐次相同路径"
+        }
+      ]
+    },
+    {
+      "id": "declaredrule",
+      "title": "独立公式与配置描述：当前未接入扣血",
+      "source": "reduce",
+      "position": {
+        "row": 0,
+        "col": 0
+      },
+      "nodes": [
+        {
+          "id": "reduceinit",
+          "title": "另一路：衰减参数确实被加载",
+          "row": 0,
+          "col": 2,
+          "kind": "process",
+          "lines": "ReducePercent=20/100=0.2\nMinPercent=40/100=0.4",
+          "detail": "AbilityEffectSystem.Create 为效果建立装饰组件；EffectDecoratorSystem.Awake 添加 EffectDamageReduceWithTargetCountComponent；EffectDamageReduceSystem.Awake 将修饰器的两个float参数分别除以100。这里不是整数除法。此分支表示初始化和独立方法的证据，不表示伤害已经按倍率递减。",
+          "sources": [
+            "effectcreate",
+            "decorator",
+            "reduce",
+            "decoratortype"
+          ]
+        },
+        {
+          "id": "reducemath",
+          "title": "独立方法：线性递减并设下限",
+          "row": 1,
+          "col": 2,
+          "kind": "process",
+          "lines": "p(k)=max(0.4, 1−0.2×k)\nk=本次之前已经完成的触发数",
+          "detail": "GetDamagePercent(entity, TargetCounter) 返回 max(MinPercent,1−ReducePercent×TargetCounter)。若调用方传入物件当前计数，因自增在本次伤害之后，第n次命中前k=n−1。每次减少基础伤害的20个百分点，不是每次乘0.8，也不是把500按目标数均摊。但是此目录没有找到这个方法的调用点。",
+          "sources": [
+            "reduce",
+            "itemhit",
+            "callscan"
+          ]
+        },
+        {
+          "id": "reducerange",
+          "title": "该倍率是否已到40%下限？",
+          "row": 2,
+          "col": 2,
+          "kind": "decision",
+          "lines": "1−0.2×k ≤ 0.4\n整数计数下：k≥3，即第4次起",
+          "detail": "这是对独立GetDamagePercent数学含义的展开，不是当前伤害路径上的运行分支。以常量500演示该规则时使用精确十进制百分比；未给出把该float倍率乘回伤害并取整的实际调用，因此此处不声称其逐位浮点结果或取整顺序已经实测。",
+          "sources": [
+            "reduce",
+            "asset"
+          ]
+        },
+        {
+          "id": "reducefloor",
+          "title": "是：保持40%",
+          "row": 3,
+          "col": 2,
+          "kind": "process",
+          "lines": "规则演示：500×40%=200\n第4次及以后均为200",
+          "detail": "按已声明公式推导：k=3、4、5…时取下限0.4。该倍率当前没有被接入DamageValue结算，此处是规则演示值。",
+          "sources": [
+            "reduce",
+            "asset"
+          ]
+        },
+        {
+          "id": "reducelinear",
+          "title": "否：100% / 80% / 60%",
+          "row": 3,
+          "col": 3,
+          "kind": "process",
+          "lines": "规则演示：500 / 400 / 300\n对应k=0 / 1 / 2",
+          "detail": "按已声明公式推导：前三次分别使用1、0.8、0.6倍率。这是一条线性序列；不产生500、400、320的连乘结果。该倍率当前没有被接入DamageValue结算。",
+          "sources": [
+            "reduce",
+            "asset"
+          ]
+        },
+        {
+          "id": "reduceunused",
+          "title": "现状：公式未接入伤害链",
+          "row": 4,
+          "col": 2,
+          "kind": "terminal",
+          "lines": "规则演示：500/400/300/200/200…\n实际可见路径：500/500/500/500/500…",
+          "detail": "全目录313个文件范围内，GetDamagePercent仅找到定义；TargetCounter在物件上声明、自增，但没有找到将其读出并传给衰减方法的调用；DamageActionSystem的Skill分支和EffectDamageSystem.ParseDamage也未应用该倍率。因而不能仅凭Excel描述或asset参数把递减序列作为当前实际结算。未取得目录外扩展、运行日志和Execution_1005资源；这些缺口限制结论范围。",
+          "sources": [
+            "reduce",
+            "damageeffect",
+            "damage",
+            "callscan"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "reduceinit",
+          "b": "reducemath",
+          "label": "参数供方法使用"
+        },
+        {
+          "a": "reducemath",
+          "b": "reducerange",
+          "label": "展开公式含义"
+        },
+        {
+          "a": "reducerange",
+          "b": "reducefloor",
+          "label": "是"
+        },
+        {
+          "a": "reducerange",
+          "b": "reducelinear",
+          "label": "否"
+        },
+        {
+          "a": "reducefloor",
+          "b": "reduceunused",
+          "label": "对照调用关系"
+        },
+        {
+          "a": "reducelinear",
+          "b": "reduceunused",
+          "label": "对照调用关系"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "演示：同一物件依次成功命中5个目标",
+      "provenance": "源码静态推演；教学演示，非运行实测",
+      "input": "固定公式500、不能暴击；同一物件连续5次进入该伤害效果；目标生命充足，无目录外伤害改写。",
+      "trace": [
+        "物件计数初始为0。第1次：技能分支解析ceil(500)=500，扣血500，然后计数变1。",
+        "第2次：计数虽为1，ParseDamage不读取它，仍扣血500；之后计数变2。",
+        "第3/4/5次同理，各伤害500，计数最终为5。"
+      ],
+      "result": "伤害行动数值500、500、500、500、500；合计2500。按现有代码不发生多目标衰减。"
+    },
+    {
+      "title": "演示：把独立衰减规则换算成伤害",
+      "provenance": "配置及独立方法的数学演示；不是当前执行结果",
+      "input": "基础500；递减0.2；下限0.4；假设将命中前计数k=n−1传入GetDamagePercent并应用倍率。",
+      "trace": [
+        "k=0：max(0.4,1)=1，对应500。",
+        "k=1：max(0.4,0.8)=0.8，对应400。",
+        "k=2：max(0.4,0.6)=0.6，对应300。",
+        "k=3：取下限0.4，对应200；以后继续200。"
+      ],
+      "result": "规则序列500、400、300、200、200；5次合计1700。使用精确百分比教学演示，未声称未实现调用的浮点取整细节。"
+    },
+    {
+      "title": "演示：目标仅剩350生命",
+      "provenance": "扣血代码静态推演；教学演示",
+      "input": "成功产生一次火弹伤害500；目标生命基础值350，假设无生命数值修饰。",
+      "trace": [
+        "伤害行动仍得到DamageValue=500。",
+        "ConsumeHealth把500传给MinusBase。",
+        "基础值350−500小于0，MinusBase将其截为0。",
+        "触发返回后计数增加1。"
+      ],
+      "result": "伤害行动值500，血条实际从350降到0；实际生命减少350。"
+    },
+    {
+      "title": "演示：物件已销毁",
+      "provenance": "提前退出代码静态推演；教学演示",
+      "input": "OnTriggerEvent被调用时IsDisposed=true。",
+      "trace": [
+        "进入触发处理，命中“物件已销毁或指定目标不匹配？”的是分支。",
+        "立即return，不进入效果分发和扣血。",
+        "返回发生在TargetCounter++之前。"
+      ],
+      "result": "该触发不产生伤害，计数不增加。"
+    }
+  ],
+  "connections": [
+    {
+      "a": "skillconfig",
+      "b": "reduceinit",
+      "label": "效果初始化时加载修饰器"
+    }
+  ]
+}

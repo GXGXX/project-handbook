@@ -19,7 +19,7 @@
     {"id": "damage-roll", "label": "掷基础伤害",
      "any": ["damageRoll", "基础伤害", "掷伤害"]},
     {"id": "multipliers", "label": "乘以攻击方和防守方的各种倍率",
-     "any": ["倍率", "Fury", "狂怒", "Weakness", "虚弱"]},
+     "any": ["倍率", "Fury", "狂怒", "Weakness", "虚弱", "× dmgMulti", "×dmgMulti", "* dmgMulti", "*dmgMulti", "减甲前"]},
     {"id": "round", "label": "四舍五入成整数",
      "any": ["Math.round", "四舍五入"]},
     {"id": "defense-proc", "label": "交给防守方的 defenseProc（护甲刻印等）",
@@ -31,7 +31,7 @@
     {"id": "attack-proc", "label": "攻击方的 attackProc（武器附魔等）",
      "any": ["attackProc", "攻击方触发", "攻击触发", "附魔"]},
     {"id": "apply-damage", "label": "对目标扣血",
-     "any": ["enemy.damage", "damage(", "扣血", "扣除生命"]}
+     "any": ["enemy.damage", "damage(", "扣血", "扣除生命", "承受这次伤害", "承受伤害"]}
   ],
   "decisions": ["invulnerable", "hit"],
   "order": [

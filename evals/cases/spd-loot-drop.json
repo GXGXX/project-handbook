@@ -23,7 +23,7 @@
     {"id": "chance-calc", "label": "掉落率 = 怪物基础掉落率 × 加成",
      "any": ["dropBonus", "dropChanceMultiplier", "掉落率加成", "赏金", "Bounty", "ShardOfOblivion"]},
     {"id": "chance-roll", "label": "按掉落率掷骰",
-     "any": ["lootChance", "掉落率", "掉落概率"]},
+     "any": ["lootChance", "掉落率", "掉落概率", "掉落判定"]},
     {"id": "create-loot", "label": "生成掉落物",
      "any": ["createLoot", "Generator", "生成掉落", "生成物品"]},
     {"id": "exotic", "label": "药水和卷轴有机会换成异种版本",
@@ -53,7 +53,7 @@
   "constants": [
     {"label": "等级上限 maxLvl + 2", "any": ["+ 2", "+2"]},
     {"label": "Boss 额外掷 15 次", "any": ["15 次", "15次"]},
-    {"label": "小 Boss 额外掷 5 次", "any": ["掷 5 次", "掷5次", "rolls = 5", "5 rolls", "Boss 5次", "Boss 5 次"]},
+    {"label": "小 Boss 额外掷 5 次", "any": ["掷 5 次", "掷5次", "rolls = 5", "5 rolls", "Boss 5次", "Boss 5 次", "MiniBoss 5", "MINIBOSS 5"]},
     {"label": "赏金猎人每级备战 2% 起", "any": ["0.02", "2%"]}
   ],
   "evidence_files": ["Mob.java"],

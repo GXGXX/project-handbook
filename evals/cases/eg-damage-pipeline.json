@@ -19,13 +19,13 @@
     {"id": "source-branch", "label": "按伤害来源分支",
      "any": ["DamageSource", "伤害来源"]},
     {"id": "before-hooks", "label": "行动前的触发点",
-     "any": ["BeforeExecuteAction", "BeforeSufferAction", "行动前"]},
+     "any": ["BeforeExecute", "BeforeSuffer", "行动前"]},
     {"id": "can-crit", "label": "技能伤害先看能否暴击",
      "any": ["CanCrit", "能否暴击", "可暴击"]},
     {"id": "crit-roll", "label": "按暴击率掷暴击",
      "any": ["CriticalProbability", "暴击率", "暴击概率", "RandomRate"]},
     {"id": "formula", "label": "解析配置的伤害公式，代入自身攻击力",
-     "any": ["DamageValueFormula", "伤害公式", "自身攻击力", "ParseDamage"]},
+     "any": ["DamageValueFormula", "伤害公式", "自身攻击力", "ParseDamage", "表达式"]},
     {"id": "ceil", "label": "公式结果向上取整",
      "any": ["Ceiling", "CeilToInt", "向上取整"]},
     {"id": "crit-mult", "label": "暴击时 ×1.5 再向上取整",
@@ -39,9 +39,9 @@
     {"id": "attack-formula", "label": "普攻公式 Atk×Atk/(Atk+Def)",
      "any": ["Atk + Def", "Atk+Def", "攻击+防御", "攻击力+防御力", "攻击力 + 防御力", "Atk / (Atk"]},
     {"id": "only-skill", "label": "当前代码只会走技能分支：普攻和 Buff 分支走不到", "trap": true,
-     "any": ["走不到", "不可达", "不会走到", "不会被走到", "从未被赋值", "没有地方赋值", "没有代码创建", "只赋值 Skill", "只赋 Skill", "只会是 Skill", "总是 Skill", "始终是 Skill", "固定为 Skill", "固定写 Skill", "永远是 Skill", "unreachable", "never assigned"]},
+     "any": ["走不到", "不可达", "不会走到", "不会被走到", "从未被赋值", "没有地方赋值", "没有代码创建", "只赋值 Skill", "只赋 Skill", "只会是 Skill", "总是 Skill", "始终是 Skill", "固定为 Skill", "固定写 Skill", "永远是 Skill", "unreachable", "never assigned", "re:(硬编码|固定写入|固定写|固定为|固定设为|写死|总是|始终|永远).{0,12}Skill", "re:(普攻|attack|buff).{0,40}(没有搜到|没找到|未找到|找不到)"]},
     {"id": "buff-no-mult", "label": "Buff 分支掷了暴击却不乘 1.5", "trap": true,
-     "any": ["不乘 1.5", "不乘1.5", "不会乘 1.5", "不会乘1.5", "没有乘 1.5", "没有乘1.5", "没有 ×1.5", "不放大", "暴击不生效", "暴击没有效果", "只标记暴击"]}
+     "any": ["不乘 1.5", "不乘1.5", "不会乘 1.5", "不会乘1.5", "没有乘 1.5", "没有乘1.5", "没有 ×1.5", "不放大", "暴击不生效", "暴击没有效果", "只标记暴击", "re:(没有|未|不会|不).{0,30}乘以?\\s*1\\.5"]}
   ],
   "decisions": ["source-branch", "can-crit"],
   "order": [

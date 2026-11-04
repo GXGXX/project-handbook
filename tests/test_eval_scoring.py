@@ -164,7 +164,9 @@ class RealRunTests(unittest.TestCase):
     """
 
     def test_first_baseline_keeps_its_traps_and_scores(self):
-        expected = {'spd-hit-check': 100.0, 'spd-loot-drop': 94.5, 'spd-melee-damage': 98.6}
+        # Melee writes "Viscosity → Vulnerable ×1.33 → attackProc" in one node,
+        # which counts as showing the order since in-node order was added.
+        expected = {'spd-hit-check': 100.0, 'spd-loot-drop': 94.5, 'spd-melee-damage': 100.0}
         for case_id, value in expected.items():
             with self.subTest(case=case_id):
                 flow = load(ROOT / 'evals/runs' / case_id / '2026-11-04-codex-v1.5.0.flow.json')
@@ -172,6 +174,54 @@ class RealRunTests(unittest.TestCase):
                 result = score(load(ROOT / 'evals/cases' / (case_id + '.json')), flow)
                 self.assertEqual(result['traps_passed'], result['traps'], failed(result))
                 self.assertEqual(result['score'], value, failed(result))
+
+
+def _strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, list):
+        for item in value:
+            yield from _strings(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _strings(item)
+
+
+class SecondBaselineTests(unittest.TestCase):
+    """Two Codex runs per case on skill 2.0.0, checked by hand against the source.
+
+    Every answer is right on its traps. The one trap the scorer fails
+    (spd-hit-check a) is a scorer limit: the three priority checks sit in one
+    switch node, written in the right order. Scores are pinned so key edits
+    that move them get noticed.
+    """
+
+    expected = {
+        ('eg-burn-dot', 'a'): 96.2, ('eg-burn-dot', 'b'): 100.0,
+        ('eg-damage-pipeline', 'a'): 95.7, ('eg-damage-pipeline', 'b'): 90.7,
+        ('eg-fireball-falloff', 'a'): 100.0, ('eg-fireball-falloff', 'b'): 100.0,
+        ('spd-hit-check', 'a'): 93.3, ('spd-hit-check', 'b'): 96.7,
+        ('spd-loot-drop', 'a'): 91.0, ('spd-loot-drop', 'b'): 93.5,
+        ('spd-melee-damage', 'a'): 100.0, ('spd-melee-damage', 'b'): 93.3,
+    }
+
+    def test_scores_and_traps(self):
+        for (case_id, run), value in self.expected.items():
+            with self.subTest(case=case_id, run=run):
+                flow = load(ROOT / 'evals/runs' / case_id / f'2026-11-04-codex-v2.0.0-{run}.flow.json')
+                validate(flow)
+                result = score(load(ROOT / 'evals/cases' / (case_id + '.json')), flow)
+                self.assertEqual(result['score'], value, failed(result))
+                if (case_id, run) != ('spd-hit-check', 'a'):
+                    self.assertEqual(result['traps_passed'], result['traps'], failed(result))
+
+    def test_runs_name_no_local_paths(self):
+        import re
+        for path in (ROOT / 'evals/runs').glob('*/*.json'):
+            with self.subTest(run=path.name):
+                # Check decoded strings: an escaped newline after "Name:" is not a path.
+                text = ' '.join(_strings(load(path)))
+                self.assertIsNone(re.search(r'(?<![A-Za-z0-9_])[A-Za-z]:[\\/]|/Users/|/home/', text))
 
 
 class RunsTests(unittest.TestCase):
@@ -204,11 +254,22 @@ class ScoringRuleTests(unittest.TestCase):
                 'graphs': [{'id': 'g', 'source': 's', 'nodes': nodes, 'edges': edges}],
                 'examples': [{'input': '', 'trace': ['1', '2'], 'result': ''}]}
 
-    def test_steps_in_one_node_get_half_credit_for_order(self):
-        nodes = [{'id': 'n', 'kind': 'process', 'title': 'alpha then beta ×1.5'},
-                 {'id': 'g', 'kind': 'decision', 'title': 'gate?'}]
-        result = score(self.case, self.flow(nodes, [{'a': 'n', 'b': 'g'}]))
-        self.assertEqual(result['checks']['order'][0]['score'], 0.5)
+    def test_steps_in_one_node_need_the_order_written_in_it(self):
+        for title, expected in (('alpha then beta ×1.5', 1.0), ('beta after alpha ×1.5', 0.5)):
+            with self.subTest(title=title):
+                nodes = [{'id': 'n', 'kind': 'process', 'title': title},
+                         {'id': 'g', 'kind': 'decision', 'title': 'gate?'}]
+                result = score(self.case, self.flow(nodes, [{'a': 'n', 'b': 'g'}]))
+                self.assertEqual(result['checks']['order'][0]['score'], expected)
+
+    def test_regex_keywords_match_statements(self):
+        case = {**self.case, 'concepts': [{'id': 'a', 'label': 'A', 'any': ['re:(未|没有)(被)?调用']},
+                                          {'id': 'b', 'label': 'B', 'any': ['beta']},
+                                          {'id': 'd', 'label': 'D', 'any': ['gate']}]}
+        for text, expected in (('衰减方法没有被调用', 1.0), ('衰减方法被调用了', 0.0)):
+            with self.subTest(text=text):
+                result = score(case, self.flow([{'id': 'n', 'kind': 'process', 'title': text}], []))
+                self.assertEqual(result['checks']['concepts'][0]['score'], expected)
 
     def test_reverse_order_and_missing_decision_fail(self):
         nodes = [{'id': 'b', 'kind': 'process', 'title': 'beta'}, {'id': 'a', 'kind': 'process', 'title': 'alpha'},
