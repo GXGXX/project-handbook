@@ -6,17 +6,20 @@
 
 - `title/summary`：直接回答用户问题，交代必要前提。
 - `graphs` 仅为作者组织流程段的数据结构，所有流程段同时显示。
-- 每段含 `id/title/source/nodes/edges`。`source` 引用来源条目。
-- 节点含 `id/title/row/col/kind/lines/detail`；段内行从0开始，列为0或1；类型为 process、decision、terminal、merge。
+- 每段含 `id/title/source/nodes/edges`。`source` 是这段默认的来源条目。
+- 节点含 `id/title/row/col/kind/lines/detail`；段内行从 0 开始，列 0～3；类型为 process、decision、switch、terminal、merge。
+- 节点可选 `sources: ["来源id", …]`：这一步的依据和所在段不同时就写上，比如公式在另一个文件、数值在配置表。点开节点、追问这个节点时只用这里列出的来源；不写就用段的 `source`。
 - 可选 `position: {row, col}` 定义流程段在全局画布的位置；不写时依次向下排。可用列偏移把多入口并排，公共段只画一次。
-- 段内连线含 `a/b/label/route`。route 可省略，也可用 outer 或 bypass。判断必须恰有“是”“否”两条出口。
+- 段内连线含 `a/b/label/route`。route 可省略，也可用 outer 或 bypass。
+- 分支：`decision` 恰有“是”“否”两条出口；三种及以上结果（如 普攻 / 技能 / Buff）用 `switch`，2～6 条出口，每条写不同的标签。不要把多路分支拆成一串是否判断。
+- ID 以字母开头，只用字母、数字、`-`、`_`，全图唯一。页面自己占用了一些 ID（如 `source`、`next`、`detail`、`search`、`canvas`），用了会被拒绝并提示换名。
 - 顶层 `connections` 明确给出跨段连线，含 `a/b/label`，引用实际节点 ID。不要由段顺序、名字或 `common` 字段猜测业务连线。条件和触发事件写在线上。
 - `sources` 含 id、locator、excerpt。每个节点保留所属来源；不同段的节点不能错误共用第一段的证据。
 - `examples` 含 title、provenance、input、trace（字符串数组）、result。区分演示与实测。
 
-生成：`python scripts/build_flow.py flow.json NEW_OUTPUT`，输出目录必须不存在。
+生成：`python scripts/build_flow.py flow.json NEW_OUTPUT`，输出目录必须不存在。校验失败时，报错会写明位置（如 `graphs[0].nodes[3] (crit)`）和改法。
 
-布局使用向下的主线、同排向右的判断侧线、侧线向下汇合。直线被节点遮挡时，渲染器会尝试沿网格行间和列间的空白绕行；不能把不同入口画成经过彼此。需要循环时画明确的独立说明节点，当前直角路由不支持任意回环。较复杂的多列图必须检查每条连线避让与标签可读性，不能仅凭结构验证宣称布局正确。
+布局使用向下的主线、同排向右的判断侧线、侧线向下汇合。`switch` 的各个出口放在它下一行的不同列（0、1、2…），每条出口的标签会画在各自那段竖线旁边。直线被节点遮挡时，渲染器会尝试沿网格行间和列间的空白绕行；不能把不同入口画成经过彼此。需要循环时画明确的独立说明节点，当前直角路由不支持任意回环。较复杂的多列图必须检查每条连线避让与标签可读性，不能仅凭结构验证宣称布局正确。
 
 浏览器验收：所有节点无需切换就存在；跨段箭头完整；全图、缩放、拖动、搜索定位有效；每个节点显示正确依据；移动端仅画布滚动；无外部请求。数值例子、条件、互斥、覆盖和执行顺序仍需对照源码或文档复核。
 

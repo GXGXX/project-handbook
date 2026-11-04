@@ -183,6 +183,15 @@ class FlowServerTests(unittest.TestCase):
         finally:
             self.server.operation_lock.release()
 
+    def test_context_sends_the_selected_nodes_own_sources(self):
+        data = json.loads(json.dumps(self.data))
+        data['sources'].append({'id': 'override', 'locator': 'Override.cs:3', 'excerpt': 'OVERRIDE-EVIDENCE'})
+        node = data['graphs'][0]['nodes'][1]
+        node['sources'] = ['override']
+        prompt = make_context(data, node['id'], 'Why?', [])
+        self.assertIn('OVERRIDE-EVIDENCE', prompt)
+        self.assertNotIn(data['sources'][0]['excerpt'][:30], prompt)
+
     def test_read_roots_and_context_are_bounded(self):
         roots = validate_source_roots([self.book, self.book])
         self.assertEqual(len(roots), 1)

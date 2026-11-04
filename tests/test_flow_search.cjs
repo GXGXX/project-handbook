@@ -281,7 +281,7 @@ test('builder rejects search control IDs used by authored graphs or nodes', () =
     '   d["graphs"][0]["edges"][0]["a"]=ident',
     '  try: validate(d)',
     '  except ValueError as e:',
-    '   if "Invalid or duplicate ID" in str(e): rejected.append(ident+":"+target)',
+    '   if "used by the page itself" in str(e): rejected.append(ident+":"+target)',
     'print(json.dumps(rejected))'
   ].join('\n'), manifest);
   assert.equal(result.status, 0, result.stderr);

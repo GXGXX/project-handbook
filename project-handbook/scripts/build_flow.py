@@ -9,74 +9,148 @@ from pathlib import Path
 ASSETS = Path(__file__).resolve().parents[1] / 'assets'
 
 
+# Element IDs the page already uses; a node with one of these IDs would break it.
+RESERVED_IDS = {'data', 'nodes', 'edges', 'canvas', 'diagram', 'examples', 'detail',
+                'detail-title', 'detail-text', 'detail-formula', 'source', 'next',
+                'search', 'graph-title', 'graph-note', 'arrow', 'amber-arrow',
+                'viewport', 'stage', 'zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit',
+                'zoom-value', 'search-prev', 'search-next', 'search-count'}
+KINDS = ('process', 'decision', 'switch', 'terminal', 'merge')
+MAX_COLUMNS = 4
+MAX_SWITCH_EXITS = 6
+
+
+def _fail(where, message):
+    raise ValueError(f'{where}: {message}')
+
+
+def _field(item, key, kind, where):
+    """Return item[key] after checking it exists and has the expected type."""
+    if not isinstance(item, dict):
+        _fail(where, 'must be an object')
+    if key not in item:
+        _fail(where, f'missing "{key}"')
+    value = item[key]
+    if kind is int and (type(value) is not int):
+        _fail(f'{where}.{key}', 'must be a whole number')
+    if kind is not int and not isinstance(value, kind):
+        _fail(f'{where}.{key}', 'must be ' + {str: 'text', list: 'a list', dict: 'an object'}[kind])
+    return value
+
+
 def validate(data):
-    graphs = data['graphs']
+    """Check an authored flow and explain the first problem in plain terms."""
+    if not isinstance(data, dict):
+        _fail('flow', 'must be an object')
+    _field(data, 'title', str, 'flow')
+    graphs = _field(data, 'graphs', list, 'flow')
     if not graphs:
-        raise ValueError('At least one graph is required')
-    used = {'data', 'nodes', 'edges', 'canvas', 'diagram', 'examples', 'detail',
-            'detail-title', 'detail-text', 'detail-formula', 'source', 'next',
-            'search', 'graph-title', 'graph-note', 'arrow', 'amber-arrow',
-            'viewport', 'stage', 'zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit',
-            'zoom-value', 'search-prev', 'search-next', 'search-count'}
-    def identifier(value):
-        if not isinstance(value, str) or not re.fullmatch(r'[a-zA-Z][a-zA-Z0-9_-]*', value) or value in used or value.startswith('flow-qa-'):
-            raise ValueError('Invalid or duplicate ID: ' + str(value))
+        _fail('graphs', 'needs at least one section')
+    sources = _field(data, 'sources', list, 'flow')
+    source_ids = set()
+    for index, source in enumerate(sources):
+        where = f'sources[{index}]'
+        source_id = _field(source, 'id', str, where)
+        _field(source, 'locator', str, where)
+        if source_id in source_ids:
+            _fail(where, f'duplicate source id "{source_id}"')
+        source_ids.add(source_id)
+    used = set()
+
+    def identifier(value, where):
+        if not isinstance(value, str) or not re.fullmatch(r'[a-zA-Z][a-zA-Z0-9_-]*', value):
+            _fail(where, f'id {value!r} must start with a letter and use only letters, digits, - and _')
+        if value in RESERVED_IDS or value.startswith('flow-qa-'):
+            _fail(where, f'id "{value}" is used by the page itself; choose another, such as "{value}-step"')
+        if value in used:
+            _fail(where, f'id "{value}" is already used by another section or node')
         used.add(value)
-    source_ids = {s['id'] for s in data.get('sources', [])}
+
+    def cited(value, where):
+        if value not in source_ids:
+            _fail(where, f'source "{value}" is not listed in sources')
+
     graph_ids = set()
-    for graph in graphs:
-        identifier(graph['id'])
+    for g_index, graph in enumerate(graphs):
+        gwhere = f'graphs[{g_index}]'
+        identifier(_field(graph, 'id', str, gwhere), gwhere + '.id')
         graph_ids.add(graph['id'])
-        if graph.get('source') not in source_ids:
-            raise ValueError('Missing graph source')
-        nodes = graph['nodes']
+        cited(_field(graph, 'source', str, gwhere), gwhere + '.source')
+        nodes = _field(graph, 'nodes', list, gwhere)
         if not nodes:
-            raise ValueError('Empty graph')
-        occupied = set()
-        for n in nodes:
-            identifier(n['id'])
-            if type(n['row']) is not int or n['row'] < 0 or n['col'] not in (0, 1):
-                raise ValueError('Invalid node position')
-            pos = n['row'], n['col']
-            if pos in occupied:
-                raise ValueError('Overlapping node positions')
-            occupied.add(pos)
-            if n['kind'] not in ('process', 'decision', 'terminal', 'merge'):
-                raise ValueError('Invalid node kind')
-            for field in ('title', 'lines', 'detail'):
-                if not isinstance(n[field], str):
-                    raise ValueError('Node text must be a string')
+            _fail(gwhere, 'section has no nodes')
+        occupied = {}
+        for n_index, n in enumerate(nodes):
+            where = f'{gwhere}.nodes[{n_index}]'
+            identifier(_field(n, 'id', str, where), where + '.id')
+            where = f'{gwhere}.nodes[{n_index}] ({n["id"]})'
+            row, col = _field(n, 'row', int, where), _field(n, 'col', int, where)
+            if row < 0 or not 0 <= col < MAX_COLUMNS:
+                _fail(where, f'row must be 0 or more and col 0 to {MAX_COLUMNS - 1}')
+            if (row, col) in occupied:
+                _fail(where, f'same row and col as node "{occupied[(row, col)]}"')
+            occupied[(row, col)] = n['id']
+            if _field(n, 'kind', str, where) not in KINDS:
+                _fail(where, 'kind must be one of ' + ', '.join(KINDS))
+            for key in ('title', 'lines', 'detail'):
+                _field(n, key, str, where)
+            if 'sources' in n:
+                if not isinstance(n['sources'], list) or not n['sources']:
+                    _fail(where + '.sources', 'must be a non-empty list of source ids')
+                for source in n['sources']:
+                    cited(source, where + '.sources')
         ids = {n['id'] for n in nodes}
         seen = set()
-        for edge in graph['edges']:
-            if edge['a'] not in ids or edge['b'] not in ids:
-                raise ValueError('Unknown edge endpoint')
-            pair = edge['a'], edge['b']
-            if pair in seen or edge['a'] == edge['b']:
-                raise ValueError('Duplicate edge or self-loop')
-            seen.add(pair)
+        for e_index, edge in enumerate(_field(graph, 'edges', list, gwhere)):
+            where = f'{gwhere}.edges[{e_index}]'
+            a, b = _field(edge, 'a', str, where), _field(edge, 'b', str, where)
+            for end in (a, b):
+                if end not in ids:
+                    _fail(where, f'"{end}" is not a node in this section; link sections with connections')
+            if (a, b) in seen or a == b:
+                _fail(where, 'duplicate edge or an edge to itself')
+            seen.add((a, b))
             if edge.get('route', 'normal') not in ('normal', 'outer', 'bypass'):
-                raise ValueError('Invalid route')
+                _fail(where + '.route', 'must be normal, outer or bypass')
+            if 'label' in edge and not isinstance(edge['label'], str):
+                _fail(where + '.label', 'must be text')
         for n in nodes:
+            where = f'{gwhere} node "{n["id"]}"'
+            exits = [e for e in graph['edges'] if e['a'] == n['id']]
             if n['kind'] == 'decision':
-                labels = [e.get('label', '').split(' ')[0] for e in graph['edges'] if e['a'] == n['id']]
-                if sorted(labels) != ['否', '是']:
-                    raise ValueError('Decision requires exactly one 是 and one 否 branch')
+                labels = sorted(e.get('label', '').split(' ')[0] for e in exits)
+                if labels != ['否', '是']:
+                    _fail(where, 'a decision needs exactly one 是 edge and one 否 edge; '
+                                 'use kind "switch" for three or more named outcomes')
+            if n['kind'] == 'switch':
+                labels = [e.get('label', '').strip() for e in exits]
+                if not 2 <= len(exits) <= MAX_SWITCH_EXITS or not all(labels) or len(set(labels)) != len(labels):
+                    _fail(where, f'a switch needs 2 to {MAX_SWITCH_EXITS} edges, each with its own label')
         reached = {nodes[0]['id']}
         for _ in nodes:
             reached.update(e['b'] for e in graph['edges'] if e['a'] in reached)
         if reached != ids:
-            raise ValueError('Unreachable nodes')
+            missing = ', '.join(sorted(ids - reached))
+            _fail(gwhere, f'not reachable from the first node: {missing}')
     if data.get('common') and data['common'] not in graph_ids:
-        raise ValueError('Unknown common graph')
+        _fail('common', 'is not a section id')
     all_nodes = {n['id']: n for g in graphs for n in g['nodes']}
-    for edge in data.get('connections', []):
-        if edge['a'] not in all_nodes or edge['b'] not in all_nodes or edge['a'] == edge['b']:
-            raise ValueError('Invalid cross-section connection')
-        if all_nodes[edge['a']]['kind'] == 'decision':
-            raise ValueError('Keep decision branches within their authored section')
+    for index, edge in enumerate(data.get('connections', [])):
+        where = f'connections[{index}]'
+        a, b = _field(edge, 'a', str, where), _field(edge, 'b', str, where)
+        if a not in all_nodes or b not in all_nodes or a == b:
+            _fail(where, 'must join two different existing nodes')
+        if all_nodes[a]['kind'] in ('decision', 'switch'):
+            _fail(where, 'keep branch edges inside the section that owns the branch')
         if not edge.get('label'):
-            raise ValueError('Cross-section connections require explicit meaning')
+            _fail(where, 'needs a label saying when the flow crosses sections')
+    for index, example in enumerate(data.get('examples', [])):
+        where = f'examples[{index}]'
+        for key in ('title', 'provenance', 'input', 'result'):
+            _field(example, key, str, where)
+        trace = _field(example, 'trace', list, where)
+        if not all(isinstance(step, str) for step in trace):
+            _fail(where + '.trace', 'must be a list of text steps')
 
 
 def canvas_data(data):
@@ -91,7 +165,8 @@ def canvas_data(data):
         for node in graph['nodes']:
             node['row'] += offset['row']
             node['col'] += offset['col']
-            node['source'] = graph['source']
+            node['sources'] = list(node.get('sources') or [graph['source']])
+            node['source'] = node['sources'][0]
             pos = node['row'], node['col']
             if pos in occupied:
                 raise ValueError('Sections overlap on canvas')

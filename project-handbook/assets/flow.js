@@ -4,7 +4,7 @@ const $=id=>document.getElementById(id), ns='http://www.w3.org/2000/svg';
 const current=data.canvas, viewport=$('viewport');
 let scale=1, width=1040, height=1;
 function svg(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v]of Object.entries(attrs))e.setAttribute(k,v);if(text)e.textContent=text;return e;}
-function showDetail(n){$('detail-title').textContent=n.title;$('detail-formula').textContent=n.lines;$('detail-text').textContent=n.detail;const source=data.sources.find(s=>s.id===n.source);$('source').textContent=source?source.locator+'\n\n'+(source.excerpt||'分享副本未附原始摘录。'):'未附来源';document.dispatchEvent(new CustomEvent('flow:node-selected',{detail:{id:n.id}}));$('detail').showModal();}
+function showDetail(n){$('detail-title').textContent=n.title;$('detail-formula').textContent=n.lines;$('detail-text').textContent=n.detail;const cited=(n.sources||[n.source]).map(id=>data.sources.find(s=>s.id===id)).filter(Boolean);$('source').textContent=cited.length?cited.map(s=>s.locator+'\n\n'+(s.excerpt||'分享副本未附原始摘录。')).join('\n\n———\n\n'):'未附来源';document.dispatchEvent(new CustomEvent('flow:node-selected',{detail:{id:n.id}}));$('detail').showModal();}
 function zoom(value,center=true){const old=scale, x=(viewport.scrollLeft+viewport.clientWidth/2)/old,y=(viewport.scrollTop+viewport.clientHeight/2)/old;const minimum=Math.min(.1,(viewport.clientWidth-24)/width,(viewport.clientHeight-24)/height);scale=Math.max(minimum,Math.min(2,value));$('canvas').style.transform=`scale(${scale})`;$('stage').style.width=width*scale+'px';$('stage').style.height=height*scale+'px';$('zoom-value').textContent=(scale<.01?(scale*100).toFixed(2):Math.round(scale*100))+'%';if(center){viewport.scrollLeft=x*scale-viewport.clientWidth/2;viewport.scrollTop=y*scale-viewport.clientHeight/2;}}
 function fit(){matchPinned=false;zoom(Math.min(1,(viewport.clientWidth-24)/width,(viewport.clientHeight-24)/height),false);viewport.scrollLeft=0;viewport.scrollTop=0;}
 viewport.addEventListener('wheel',event=>{
@@ -42,8 +42,10 @@ function draw(){
  for(const e of current.edges){const a=rects.find(r=>r.id===e.a),b=rects.find(r=>r.id===e.b);let points,lx,ly,anchor=e.route==='bypass'||e.route==='outer'?'end':'middle';const ax=a.x+a.w/2,ay=a.y+a.h,bx=b.x+b.w/2;
   if(e.route==='bypass'||e.route==='outer'){const x=width-(e.route==='bypass'?35:70);points=[[a.x+a.w,a.y+a.h/2],[x,a.y+a.h/2],[x,b.y+b.h/2],[b.x+b.w+2,b.y+b.h/2]];lx=x-8;ly=a.y+a.h/2-13;
   }else if(a.row===b.row&&b.x>a.x){points=[[a.x+a.w,a.y+a.h/2],[b.x-2,b.y+b.h/2]];lx=(a.x+a.w+b.x)/2;ly=a.y+a.h/2-10;
-  }else if(Math.abs(a.x-b.x)<1&&b.y>ay){points=[[ax,ay],[ax,b.y-2]];lx=ax+16;ly=(ay+b.y)/2+4;
-  }else{const mid=(ay+b.y)/2;points=[[ax,ay],[ax,mid],[bx,mid],[bx,b.y-2]];lx=ax+20;ly=ay+22;}
+  }else if(Math.abs(a.x-b.x)<1&&b.y>ay){points=[[ax,ay],[ax,b.y-2]];lx=ax+8;ly=b.y-12;anchor='start';
+  }else{const mid=(ay+b.y)/2;points=[[ax,ay],[ax,mid],[bx,mid],[bx,b.y-2]];
+   // Branches that fan out downward share the first segment; label each one on its own drop.
+   lx=bx+8;ly=(mid+b.y)/2+4;anchor='start';}
   const obstacles=rects.filter(r=>r.id!==e.a&&r.id!==e.b);
   if(!clearRoute(points,obstacles)){
    points=detour(a,b,rects,obstacles);
