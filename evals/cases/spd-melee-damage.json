@@ -31,7 +31,7 @@
     {"id": "attack-proc", "label": "攻击方的 attackProc（武器附魔等）",
      "any": ["attackProc", "攻击方触发", "攻击触发", "附魔"]},
     {"id": "apply-damage", "label": "对目标扣血",
-     "any": ["enemy.damage", "damage(", "扣血", "扣除生命"]}
+     "any": ["enemy.damage", "damage(", "扣血", "扣除生命", "承受这次伤害", "承受伤害"]}
   ],
   "decisions": ["invulnerable", "hit"],
   "order": [

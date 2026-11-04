@@ -1,0 +1,335 @@
+{
+  "title": "血红激光炮（1004）的灼烧每跳扣多少血？",
+  "summary": "按当前项目配置与执行代码：普通灼烧每 0.3 秒触发一次，名义伤害 260，持续 4 秒；灼烧伤害不可暴击。通常约 13 跳。点击节点查看配置和扣血调用依据。",
+  "sources": [
+    {
+      "id": "skill_config",
+      "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1004.asset；Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ThirdParty/Config/Texts/AbilityConfig.txt",
+      "excerpt": "Skill_1004 的效果列表先有技能伤害，再有 AddStatusEffect；后者 Duration=4，Params 将“伤害取值”设为 260、“间隔时间”设为 0.3。AbilityConfig.txt 将 1004 命名为血红激光炮，10041 命名为普通灼烧，且 CanStack=否。"
+    },
+    {
+      "id": "burn_config",
+      "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Buff/Buff_10041.asset；Assets/GameResources.RpgExample/Resources/AbilityObjects/Buff/Buff_10041.asset.meta",
+      "excerpt": "Buff_10041 的 GUID 与 Skill_1004.asset 引用一致。灼烧包含一个 DamageEffect：DamageValueFormula 为“伤害取值”，CanCrit=false。触发器为 AutoTrigger/Condition，ConditionType=WhenIntervalTime，ConditionParam 为“间隔时间”，触发效果指向该伤害效果。"
+    },
+    {
+      "id": "buff_apply",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/AddBuffActionSystem.cs:41-76,83-123",
+      "excerpt": "读取施加的状态配置。CanStack=false 且目标已有同类 Buff 时，不新建层数，而是把现有持续计时器 MaxTime 改为本次 Duration 并 Reset。否则挂载 Buff，替换触发 ConditionParam 与 DamageValueFormula 中的参数，然后按 Duration 激活 Buff。"
+    },
+    {
+      "id": "dot_timer",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityTrigger/AbilityTriggerSystem.cs:23-55；Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityTrigger/TriggerObserver/TimeStateObserveSystem.cs:24-61；Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ThirdParty/Helper/GameTimer.cs:22-35,67-93",
+      "excerpt": "激活条件触发器时，以替换后的间隔数值创建 GameTimer，并注册 WhenIntervalTime 的重复回调。每帧累加时间，计时达到 MaxTime 就触发并减去间隔，因而按间隔循环，不在激活时立即跳伤害。"
+    },
+    {
+      "id": "damage_path",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs:13-33,35-44；Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs:45-79；Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/HealthSystem.cs:75-80",
+      "excerpt": "AddBuffActionSystem 将“伤害取值”替换为 260。EffectDamageSystem 解析该表达式并向上取整；定时触发调用伤害效果后，EffectDamageSystem 将 DamageSource 设为 Skill。DamageActionSystem 读取 DamageEffect.CanCrit，仅为 true 时才抽暴击；随后将 DamageValue 交给 HealthSystem.ConsumeHealth 从目标生命值扣除。"
+    },
+    {
+      "id": "duration",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityDurationSystem.cs:15-40；Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ThirdParty/Helper/GameTimer.cs:22-50",
+      "excerpt": "Buff 激活时按 4 秒创建独立持续计时器。计时结束时 BuffSystem.Remove 移除灼烧；每 0.3 秒跳伤害使用的是另一只重复计时器。理想计时节点为 0.3 至 3.9 秒，共 13 跳；精确边界受逐帧更新与持续计时器先后顺序影响。"
+    },
+    {
+      "id": "trigger_mapping",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/Ability/SkillDefine.cs:175-204；Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/Ability/AbilityTrigger/TimeStateObserveComponent.cs:9-18",
+      "excerpt": "EffectTriggerType.AutoTrigger=2，EffectAutoTriggerType.Condition=3，TimeStateEventType.WhenIntervalTime=4。Skill_1004 的灼烧参数将“间隔时间”替换为 0.3，触发器据此重复计时。"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "burn_application",
+      "title": "施加灼烧",
+      "source": "skill_config",
+      "nodes": [
+        {
+          "id": "laser_hit",
+          "title": "1004 命中目标",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "血红激光炮：技能伤害后施加 10041",
+          "detail": "资源中的效果顺序是先 DamageEffect（DamageValueFormula=10000，CanCrit=false），再 AddStatusEffect（AddStatusId=10041）。技能表将 1004 标为敌方碰撞检测技能。",
+          "sources": [
+            "skill_config"
+          ]
+        },
+        {
+          "id": "burn_values",
+          "title": "灼烧参数",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "持续 4 秒 · 间隔 0.3 秒 · 每跳输入值 260",
+          "detail": "Skill_1004.asset 的 AddStatusEffect 明确引用普通灼烧 10041；Duration=4，Params 中“间隔时间”=0.3，“伤害取值”=260。这些值会由 AddBuffActionSystem 替换灼烧计时触发器的 ConditionParamValue 与伤害公式。",
+          "sources": [
+            "skill_config",
+            "buff_apply"
+          ]
+        },
+        {
+          "id": "already_burning",
+          "title": "目标已有同类灼烧？",
+          "row": 2,
+          "col": 0,
+          "kind": "decision",
+          "lines": "CanStack=否",
+          "detail": "AbilityConfig.txt 中普通灼烧 CanStack=否。AddBuffActionSystem 检查到同类 Buff 时不增加层数，而是把该 Buff 的持续计时器 MaxTime 改为本次持续时间并重置；首次施加则挂载、填入参数并激活。",
+          "sources": [
+            "buff_apply",
+            "skill_config"
+          ]
+        },
+        {
+          "id": "refresh_burn",
+          "title": "刷新已有灼烧",
+          "row": 2,
+          "col": 1,
+          "kind": "process",
+          "lines": "不叠层；持续计时重置为 4 秒",
+          "detail": "已有非叠加 Buff 分支重置的是生命周期计时器；代码没有在此重置灼烧的重复间隔计时器。因此再次命中会刷新持续时间，下一跳沿已有间隔计时器继续。",
+          "sources": [
+            "buff_apply"
+          ]
+        },
+        {
+          "id": "attach_burn",
+          "title": "挂载并激活灼烧",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "lines": "绑定施加者；注入 260 与 0.3 秒",
+          "detail": "AddBuffActionSystem 挂载 10041，令 OwnerEntity 为施加者，将施加技能等级复制到 Buff，替换伤害公式与触发间隔参数，为 Buff 创建 4 秒 AbilityDurationComponent，最后激活它。",
+          "sources": [
+            "buff_apply",
+            "skill_config"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "laser_hit",
+          "b": "burn_values",
+          "label": "技能效果随后施加状态"
+        },
+        {
+          "a": "burn_values",
+          "b": "already_burning",
+          "label": "检查目标 Buff"
+        },
+        {
+          "a": "already_burning",
+          "b": "refresh_burn",
+          "label": "是"
+        },
+        {
+          "a": "already_burning",
+          "b": "attach_burn",
+          "label": "否"
+        }
+      ]
+    },
+    {
+      "id": "tick_damage",
+      "title": "计时、扣血与暴击",
+      "source": "dot_timer",
+      "position": {
+        "row": 0,
+        "col": 2
+      },
+      "nodes": [
+        {
+          "id": "start_repeat_timer",
+          "title": "启动 0.3 秒重复计时",
+          "row": 0,
+          "col": 0,
+          "kind": "process",
+          "lines": "启用灼烧的 WhenIntervalTime 触发器",
+          "detail": "AbilityTriggerSystem 在 Buff 启用时读取已经替换的 ConditionParamValue=0.3，创建 GameTimer 并把触发类型交给 TimeStateObserveSystem.StartListen。该计时器与 4 秒 Buff 生命周期计时器独立。",
+          "sources": [
+            "dot_timer",
+            "trigger_mapping",
+            "buff_apply"
+          ]
+        },
+        {
+          "id": "tick_due",
+          "title": "0.3 秒间隔已到？",
+          "row": 1,
+          "col": 0,
+          "kind": "decision",
+          "lines": "尚未达到则等下一帧",
+          "detail": "每帧把 deltaTime 累加到重复计时器；累计达到 0.3 秒才调用 OnTimeState。激活时不会立刻触发。达到后从计时中扣除一个间隔，继续等待下一跳。",
+          "sources": [
+            "dot_timer"
+          ]
+        },
+        {
+          "id": "wait_tick",
+          "title": "继续等待",
+          "row": 1,
+          "col": 1,
+          "kind": "process",
+          "lines": "累计后续帧的 deltaTime",
+          "detail": "GameTimer.UpdateAsRepeat 会保留不足 0.3 秒的剩余时间，下一帧继续累计。",
+          "sources": [
+            "dot_timer"
+          ]
+        },
+        {
+          "id": "evaluate_tick",
+          "title": "计算一次灼烧伤害",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "ceil(“伤害取值”=260) = 260",
+          "detail": "定时触发器再次触发灼烧的 DamageEffect。施加时参数替换已将 DamageValueFormula 中的“伤害取值”替为 260。EffectDamageSystem 求值并向上取整，所以配置伤害值为 260；该伤害公式没有加入攻击力或防御力。此路径的通用伤害执行器将 DamageSource 标成 Skill。",
+          "sources": [
+            "damage_path",
+            "buff_apply",
+            "burn_config"
+          ]
+        },
+        {
+          "id": "crit_check",
+          "title": "能否暴击？",
+          "row": 3,
+          "col": 0,
+          "kind": "decision",
+          "lines": "Buff_10041 DamageEffect.CanCrit=false",
+          "detail": "灼烧的定时 DamageEffect 经 EffectDamageSystem.TriggerApply 执行，该公共入口把 DamageSource 设为 Skill。DamageActionSystem 只有在 CanCrit=true 时才按施加者暴击率抽取暴击。普通灼烧资源中 CanCrit=false，DamageAction 的 IsCritical 保持默认 false，因此不会进入暴击倍率。",
+          "sources": [
+            "burn_config",
+            "damage_path"
+          ]
+        },
+        {
+          "id": "critical_damage",
+          "title": "暴击路径",
+          "row": 3,
+          "col": 1,
+          "kind": "process",
+          "lines": "通用技能暴击会乘 1.5",
+          "detail": "这是执行代码对 CanCrit=true 技能伤害的通用分支；当前灼烧的 CanCrit=false，因此此演示分支不会被灼烧走到。不要把此倍率套到本 Buff。",
+          "sources": [
+            "damage_path"
+          ]
+        },
+        {
+          "id": "consume_hp",
+          "title": "目标扣除 260 点生命",
+          "row": 4,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "名义每跳 260 HP，不暴击",
+          "detail": "DamageActionSystem 将求出的 DamageValue 交给 HealthSystem.ConsumeHealth，后者从目标生命基值扣除 DamageValue。以资源中每跳 260 的表达式值为准；这里回答的是代码配置的伤害量。",
+          "sources": [
+            "damage_path"
+          ]
+        },
+        {
+          "id": "tick_count",
+          "title": "4 秒内跳几次？",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "lines": "0.3、0.6、…、3.9 秒：通常 13 跳",
+          "detail": "按 0 秒开始计时、首跳在 0.3 秒、4 秒到期移除 Buff 的名义时间线，4/0.3=13.33，4 秒内完整间隔有 13 次，合计名义伤害 13×260=3380。实际逐帧更新时，4 秒到期与恰在 4.0 秒的重复回调可能存在同帧顺序边界；此项目片段未展示该调度顺序，因此把 13 跳称为名义通常值。",
+          "sources": [
+            "duration",
+            "dot_timer",
+            "damage_path"
+          ]
+        },
+        {
+          "id": "burn_expires",
+          "title": "4 秒到期移除灼烧",
+          "row": 6,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "移除 Buff，停止后续计时伤害",
+          "detail": "AbilityDurationSystem 为 Buff 的生命周期计时器累加时间；到期根据配置类型调用 BuffSystem.Remove。该计时器独立于 0.3 秒重复触发计时器。",
+          "sources": [
+            "duration"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "start_repeat_timer",
+          "b": "tick_due",
+          "label": "激活后"
+        },
+        {
+          "a": "tick_due",
+          "b": "wait_tick",
+          "label": "否"
+        },
+        {
+          "a": "tick_due",
+          "b": "evaluate_tick",
+          "label": "是"
+        },
+        {
+          "a": "evaluate_tick",
+          "b": "crit_check",
+          "label": "伤害值 260"
+        },
+        {
+          "a": "crit_check",
+          "b": "critical_damage",
+          "label": "是"
+        },
+        {
+          "a": "crit_check",
+          "b": "consume_hp",
+          "label": "否"
+        },
+        {
+          "a": "consume_hp",
+          "b": "tick_count",
+          "label": "一次跳伤完成"
+        },
+        {
+          "a": "tick_count",
+          "b": "burn_expires",
+          "label": "达到 4 秒"
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "a": "attach_burn",
+      "b": "start_repeat_timer",
+      "label": "Buff 激活后启用间隔触发器"
+    },
+    {
+      "a": "wait_tick",
+      "b": "tick_due",
+      "label": "下一帧重新检查"
+    },
+    {
+      "a": "burn_expires",
+      "b": "start_repeat_timer",
+      "label": "持续时间结束后不再更新 Buff"
+    }
+  ],
+  "examples": [
+    {
+      "title": "一次完整灼烧的名义计算",
+      "provenance": "按资源配置和计时规则计算；不是战斗日志实测",
+      "input": "目标首次被 1004 命中并挂上 10041；忽略逐帧更新的 4.0 秒同帧边界。",
+      "trace": [
+        "1004 把普通灼烧参数设为：持续 4 秒、伤害取值 260、间隔 0.3 秒。",
+        "激活后不立即跳伤害；计时到 0.3 秒时触发第一次 DamageEffect。",
+        "公式替换与求值为 ceil(260)=260；CanCrit=false，所以直接扣 260 HP。",
+        "名义跳点为 0.3 至 3.9 秒，共 13 跳；13×260=3380 点名义总伤害。",
+        "4 秒持续计时结束，Buff 被移除。"
+      ],
+      "result": "每跳 260 HP，0.3 秒一跳，持续 4 秒，不能暴击；名义通常为 13 跳、3380 HP。精确 4.0 秒边界受帧更新顺序影响。"
+    }
+  ]
+}

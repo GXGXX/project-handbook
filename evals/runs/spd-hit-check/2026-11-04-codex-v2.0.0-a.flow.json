@@ -119,7 +119,7 @@
     },
     {
       "id": "random-uniform",
-      "locator": "D:/eval/src/shattered-pixel-dungeon/SPD-classes/src/main/java/com/watabou/utils/Random.java · L76–94",
+      "locator": "SPD-classes/src/main/java/com/watabou/utils/Random.java · L76–94",
       "excerpt": "76: \t//returns a uniformly distributed float in the range [0, 1)\n77: \tpublic static synchronized float Float() {\n78: \t\treturn Float(true);\n79: \t}\n80: \n81: \tpublic static synchronized float Float( boolean useGeneratorStack ) {\n82: \t\tif (useGeneratorStack)  return generators.peekFirst().nextFloat();\n83: \t\telse                    return generators.peekLast().nextFloat();\n84: \t}\n85: \n86: \t//returns a uniformly distributed float in the range [0, max)\n87: \tpublic static float Float( float max ) {\n88: \t\treturn Float() * max;\n89: \t}\n90: \n91: \t//returns a uniformly distributed float in the range [min, max)\n92: \tpublic static float Float( float min, float max ) {\n93: \t\treturn min + Float(max - min);\n94: \t}"
     }
   ],

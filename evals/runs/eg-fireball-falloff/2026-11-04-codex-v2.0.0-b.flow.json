@@ -1,0 +1,308 @@
+{
+  "title": "火弹（1005）命中多个目标时，每个目标受多少伤害？",
+  "summary": "按当前配置和伤害结算代码，每个被火弹命中的目标都受到 500 点伤害（不暴击）；多目标衰减规则虽有配置和比例计算函数，但没有接入伤害值结算。若目标剩余生命不足 500，实际扣血只到 0。",
+  "sources": [
+    {
+      "id": "skill",
+      "locator": "Assets/GameResources.RpgExample/Resources/AbilityObjects/Skill/Skill_1005.asset:24-58,68-79,89-92",
+      "excerpt": "技能1005有一个 DamageEffect；伤害公式为常数500，CanCrit=false。配置了 DamageReduceWithTargetCountDecorator，ReducePercent=20，MinPercent=40。"
+    },
+    {
+      "id": "damage",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Action/DamageActionSystem.cs:45-55,70-80",
+      "excerpt": "技能伤害赋值为 EffectDamageSystem.GetDamageValue(effect)，可暴击时才乘1.5。计算之后执行 HealthSystem.ConsumeHealth。"
+    },
+    {
+      "id": "formula",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageSystem.cs:19-32",
+      "excerpt": "读取 DamageValueFormula 并计算表达式，将结果向上取整为 int；火弹公式是常数500。"
+    },
+    {
+      "id": "falloff",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Ability/AbilityEffect/EffectDamageReduceSystem.cs:13-30",
+      "excerpt": "读取修饰器参数为 ReducePercent=20/100、MinPercent=40/100；GetDamagePercent 返回 max(最低比例, 1 - ReducePercent × TargetCounter)。"
+    },
+    {
+      "id": "counter",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/AbilityItem/AbilityItemSystem.cs:110-172",
+      "excerpt": "命中触发效果后，若投射物带目标计数组件则 TargetCounter 加 1。此文件没有把该计数传给伤害比例函数。"
+    },
+    {
+      "id": "health",
+      "locator": "Assets/App.System/Game.System/base-module.thirdparty.system/com.system.egameplay/Attribute/HealthSystem.cs:34-38,75-80",
+      "excerpt": "扣血操作从基础血量减去 DamageValue，并将基础血量下限限制为0。"
+    },
+    {
+      "id": "declaration",
+      "locator": "Assets/App.Model/Game.Model/base-module.thirdparty.model/com.model.egameplay/ThirdParty/Config/Texts/AbilityConfig.txt:8",
+      "excerpt": "技能说明称每命中一个目标后，下一次伤害减少20%，最低减到40%；这与当前技能结算代码未接入衰减计算的现状不同。"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "actual",
+      "title": "当前实际伤害路径",
+      "source": "skill",
+      "nodes": [
+        {
+          "id": "hit",
+          "title": "火弹碰撞命中目标",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "技能 1005 · 碰撞选敌",
+          "detail": "技能配置的目标选择类型为碰撞检测。此处按一次命中成功的目标追踪伤害，不推断碰撞范围、过滤规则或命中上限。"
+        },
+        {
+          "id": "effect",
+          "title": "取技能伤害效果",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "DamageEffect\nCanCrit = false",
+          "detail": "Skill_1005 资源包含一个 DamageEffect，CanCrit=false，所以该技能伤害不会走暴击乘算。",
+          "sources": [
+            "skill"
+          ]
+        },
+        {
+          "id": "base",
+          "title": "计算火弹基础伤害",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "DamageValueFormula = 500\n向上取整 → 500",
+          "detail": "EffectDamageSystem 解析伤害公式并向上取整。火弹公式是常数 500，因此每次触发得到 500。",
+          "sources": [
+            "skill",
+            "formula"
+          ]
+        },
+        {
+          "id": "assign",
+          "title": "写入伤害行动",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "lines": "技能伤害值 = 500\n不执行暴击乘算",
+          "detail": "DamageActionSystem 的技能分支先调用 EffectDamageSystem.GetDamageValue；之后仅当 CanCrit 允许并已暴击才将伤害乘 1.5。火弹 CanCrit=false，故保留 500。",
+          "sources": [
+            "damage",
+            "skill"
+          ]
+        },
+        {
+          "id": "subtract",
+          "title": "从目标生命扣除伤害",
+          "row": 4,
+          "col": 0,
+          "kind": "process",
+          "lines": "目标基础生命 − 500\n最低为 0",
+          "detail": "HealthSystem 对伤害值执行扣血并将基础生命限制在 0 以上。若目标命中前有至少 500 点生命，则实际扣 500；若不足 500，则只扣剩余生命至 0。",
+          "sources": [
+            "health"
+          ]
+        },
+        {
+          "id": "result",
+          "title": "每个命中目标：500 点",
+          "row": 5,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "多目标之间不递减（当前结算）",
+          "detail": "公式在每次伤害触发时独立计算为 500，伤害赋值处没有将命中目标计数或衰减比例应用到 DamageValue。多目标实际扣血相同，前提是每个目标剩余生命不少于 500。",
+          "sources": [
+            "skill",
+            "damage",
+            "health"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "hit",
+          "b": "effect",
+          "label": "命中触发"
+        },
+        {
+          "a": "effect",
+          "b": "base",
+          "label": "伤害公式"
+        },
+        {
+          "a": "base",
+          "b": "assign",
+          "label": "计算结果"
+        },
+        {
+          "a": "assign",
+          "b": "subtract",
+          "label": "执行伤害行动"
+        },
+        {
+          "a": "subtract",
+          "b": "result",
+          "label": "扣血后"
+        }
+      ]
+    },
+    {
+      "id": "configured",
+      "title": "递减规则配置与代码断点",
+      "source": "declaration",
+      "position": {
+        "row": 0,
+        "col": 1
+      },
+      "nodes": [
+        {
+          "id": "configured_rule",
+          "title": "配置与说明都声明递减",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "每次命中后减20%\n下限40%",
+          "detail": "文本配置说明写明每命中一个目标后，下次伤害减少20%、最低40%。技能资源也启用了对应修饰器，ReducePercent=20，MinPercent=40。"
+        },
+        {
+          "id": "percent",
+          "title": "比例函数可算出预期档位",
+          "row": 1,
+          "col": 0,
+          "kind": "process",
+          "lines": "比例 = max(0.40, 1 − 0.20 × 计数)",
+          "detail": "函数按 TargetCounter 线性递减比例并施加 40% 下限。若把它用于 500 点基础值，对应序列为计数0：500，计数1：400，计数2：300，计数3及以后：200。此序列只是配置意图的演算，并非当前实际结算。",
+          "sources": [
+            "falloff",
+            "skill"
+          ]
+        },
+        {
+          "id": "increments",
+          "title": "命中计数在效果触发后增加",
+          "row": 2,
+          "col": 0,
+          "kind": "process",
+          "lines": "TargetCounter++",
+          "detail": "AbilityItemSystem.OnTriggerEvent 先调用 AbilityTriggerSystem.OnTrigger 执行配置效果，然后才增加投射物 TargetCounter。技能带递减修饰器时会尝试为投射物附加计数组件。但该计数是否代表首次命中前为0、以及与同一投射物多次碰撞的关系，不改变当前结论：计数没有用于伤害结算。",
+          "sources": [
+            "counter"
+          ]
+        },
+        {
+          "id": "disconnected",
+          "title": "衰减没有接入伤害值",
+          "row": 3,
+          "col": 0,
+          "kind": "switch",
+          "lines": "所有代码中没有 GetDamagePercent 调用点",
+          "detail": "全项目 C# 搜索只找到 GetDamagePercent 的定义，没有任何调用者。DamageActionSystem 在技能分支直接把固定公式结果写入 DamageValue，AbilityItemSystem 的目标计数也未传给衰减函数。因此文字规则和可用函数不代表当前多目标伤害已经衰减。",
+          "sources": [
+            "falloff",
+            "damage",
+            "counter"
+          ]
+        },
+        {
+          "id": "current_fixed",
+          "title": "当前结果仍为每目标500",
+          "row": 4,
+          "col": 0,
+          "kind": "terminal",
+          "lines": "真实伤害：固定500 / 命中",
+          "detail": "现有代码的可证实结果是每次火弹命中伤害行动赋值 500，而非按目标顺序递减。",
+          "sources": [
+            "damage",
+            "skill"
+          ]
+        },
+        {
+          "id": "intended_values",
+          "title": "仅作对照：若衰减被调用",
+          "row": 2,
+          "col": 1,
+          "kind": "terminal",
+          "lines": "500、400、300、200、…",
+          "detail": "按衰减函数的输入计数0、1、2、3演算，理论比例分别为100%、80%、60%、40%，之后受40%下限约束。当前代码路径不应用这些比例。",
+          "sources": [
+            "falloff",
+            "skill"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "a": "configured_rule",
+          "b": "percent",
+          "label": "按配置代入"
+        },
+        {
+          "a": "percent",
+          "b": "increments",
+          "label": "需要命中计数"
+        },
+        {
+          "a": "increments",
+          "b": "disconnected",
+          "label": "检查是否被伤害流程使用"
+        },
+        {
+          "a": "disconnected",
+          "b": "current_fixed",
+          "label": "当前代码：未接入"
+        },
+        {
+          "a": "disconnected",
+          "b": "intended_values",
+          "label": "假设接入时（演算）"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "演示：火弹连续命中三个满血目标",
+      "provenance": "按当前源码演算，非战斗日志",
+      "input": "火弹公式500，CanCrit=false；3个目标的剩余生命均至少500。",
+      "trace": [
+        "第1个目标碰撞后触发技能伤害效果。",
+        "伤害公式计算为500；CanCrit=false，因此不乘暴击倍率。",
+        "HealthSystem 扣除500，目标生命减少500。",
+        "第2、第3个目标走相同的固定公式与伤害赋值，未应用命中计数衰减。"
+      ],
+      "result": "当前逻辑：第1、第2、第3个目标各受500点伤害。"
+    },
+    {
+      "title": "演示：目标生命不足500",
+      "provenance": "按当前源码演算，非战斗日志",
+      "input": "命中目标当前剩余生命为120，火弹DamageValue为500。",
+      "trace": [
+        "火弹伤害行动产生500点伤害值。",
+        "HealthSystem 扣除后将生命下限限制在0。"
+      ],
+      "result": "实际损失120点生命，剩余生命为0；伤害行动的DamageValue仍是500。"
+    }
+  ],
+  "connections": [
+    {
+      "a": "hit",
+      "b": "configured_rule",
+      "label": "同时存在说明与修饰器配置"
+    },
+    {
+      "a": "configured_rule",
+      "b": "base",
+      "label": "与固定伤害公式对照"
+    },
+    {
+      "a": "percent",
+      "b": "disconnected",
+      "label": "比例函数定义不等于调用"
+    },
+    {
+      "a": "increments",
+      "b": "assign",
+      "label": "命中计数未传入伤害赋值"
+    }
+  ]
+}
