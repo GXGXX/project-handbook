@@ -146,6 +146,38 @@ class SourceLookupTests(unittest.TestCase):
             self.assertIn('技能表!1: A=crit, B=暴击倍率', result)
             self.assertIn('技能表!7: A=101, B=1.5', result)
 
+    def test_spreadsheet_hit_keeps_multi_row_header_and_beats_column_names(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+            rel = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+            rows = ['<row r="1"><c r="A1" t="inlineStr"><is><t>名字</t></is></c><c r="B1" t="inlineStr"><is><t>技能描述</t></is></c></row>',
+                    '<row r="2"><c r="A2" t="inlineStr"><is><t>Name</t></is></c><c r="B2" t="inlineStr"><is><t>Description</t></is></c></row>',
+                    '<row r="3"><c r="A3" t="inlineStr"><is><t>string</t></is></c><c r="B3" t="inlineStr"><is><t>string</t></is></c></row>']
+            rows += [f'<row r="{n}"><c r="A{n}" t="inlineStr"><is><t>技能{n}</t></is></c></row>' for n in range(4, 14)]
+            rows.append('<row r="14"><c r="A14" t="inlineStr"><is><t>火弹</t></is></c>'
+                        '<c r="B14" t="inlineStr"><is><t>每命中一个目标伤害减少20%</t></is></c></row>')
+            with zipfile.ZipFile(root / 'ability.xlsx', 'w') as book:
+                book.writestr('xl/workbook.xml', f'<workbook {ns} {rel}><sheets>'
+                              '<sheet name="技能" sheetId="1" r:id="rId1"/></sheets></workbook>')
+                book.writestr('xl/_rels/workbook.xml.rels',
+                              '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                              '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>')
+                book.writestr('xl/worksheets/sheet1.xml', f'<worksheet {ns}><sheetData>{"".join(rows)}</sheetData></worksheet>')
+            result = lookup_sources([root], '火弹 技能描述 减少', threading.Event())
+            for text in ('技能!1: A=名字, B=技能描述', '技能!2: A=Name', '技能!3: A=string',
+                         '技能!14: A=火弹, B=每命中一个目标伤害减少20%'):
+                self.assertIn(text, result)
+
+    def test_unity_asset_escapes_are_decoded_for_search(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Buff_1.asset').write_text('  - Name: DamageValueFormula\n    Data: "\\u4F24\\u5BB3\\u53D6\\u503C"\n',
+                                               encoding='utf-8')
+            result = lookup_sources([root], '伤害取值', threading.Event())
+            self.assertIn('Data: "伤害取值"', result)
+
 
 if __name__ == '__main__':
     unittest.main()
