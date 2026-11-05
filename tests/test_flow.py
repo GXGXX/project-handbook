@@ -140,6 +140,43 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(nodes[other]['sources'], [self.data['graphs'][0]['source']])
         self.assertNotIn('sources', self.data['graphs'][0]['nodes'][1])
 
+    def test_example_route_follows_drawn_edges(self):
+        page = flow.render(self.data)
+        self.assertEqual(page.count('class="show-route"'), 3)
+        canvas = flow.canvas_data(self.data)['canvas']
+        self.assertEqual([(s['id'], s['title']) for s in canvas['sections']],
+                         [(g['id'], g['title']) for g in self.data['graphs']])
+        self.assertEqual(canvas['sections'][1]['nodes'], [n['id'] for n in self.data['graphs'][1]['nodes']])
+        cases = [(['submit'], 'at least two node ids'),
+                 (['submit', 'missing'], '"missing" is not a node'),
+                 (['submit', 'created'], 'no edge from "submit" to "created"'),
+                 (['stock', 'submit'], 'no edge from "stock" to "submit"'),
+                 ('submit', 'at least two node ids')]
+        for path, message in cases:
+            with self.subTest(path=path):
+                data = copy.deepcopy(self.data)
+                data['examples'][0]['path'] = path
+                with self.assertRaisesRegex(ValueError, r'examples\[0\]\.path: .*' + message.replace('(', r'\(')):
+                    flow.validate(data)
+        # Crossing sections is fine when an authored connection joins them.
+        data = copy.deepcopy(self.data)
+        data['examples'][0]['path'] = ['created', 'pay', 'callback']
+        flow.validate(data)
+        data['examples'][0].pop('path')
+        self.assertNotIn('data-example="0"', flow.render(data))
+
+    def test_sections_need_a_title_and_page_ids_stay_reserved(self):
+        data = copy.deepcopy(self.data)
+        del data['graphs'][1]['title']
+        with self.assertRaisesRegex(ValueError, r'graphs\[1\]: missing "title"'):
+            flow.validate(data)
+        for reserved in ('section-jump', 'route-bar', 'route-clear', 'detail-from', 'detail-to'):
+            with self.subTest(id=reserved):
+                data = copy.deepcopy(self.data)
+                data['graphs'][0]['nodes'][0]['id'] = reserved
+                with self.assertRaisesRegex(ValueError, 'used by the page itself'):
+                    flow.validate(data)
+
     def test_canvas_rejects_overlapping_sections(self):
         self.data['graphs'][1]['position'] = {'row':0, 'col':0}
         with self.assertRaises(ValueError):

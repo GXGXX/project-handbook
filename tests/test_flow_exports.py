@@ -287,6 +287,15 @@ class FlowExportTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 exports.share_data(self.data, [], redact=value)
 
+    def test_example_route_survives_share_and_revision(self):
+        self.data['examples'][0]['path'] = ['start', 'finish']
+        self.assertEqual(exports.share_data(self.data, [])['examples'][0]['path'], ['start', 'finish'])
+        revised = exports.apply_revision(self.data, {'examples': copy.deepcopy(self.data['examples'])}, [])
+        self.assertEqual(revised['examples'][0]['path'], ['start', 'finish'])
+        self.data['examples'][0]['path'] = ['finish', 'start']
+        with self.assertRaisesRegex(ValueError, 'no edge from "finish" to "start"'):
+            exports.apply_revision(self.data, {'examples': copy.deepcopy(self.data['examples'])}, [])
+
     def test_only_selected_completed_entries_are_exported(self):
         self.data['qa'] = [completed('unselected', answer='UNSELECTED-DRAFT')]
         entries = [completed(), completed('pending', status='pending', answer='PENDING-DRAFT'),
@@ -346,6 +355,8 @@ class FlowExportTests(unittest.TestCase):
                    lambda d: d['graphs'][0]['nodes'][0].update(col=True),
                    lambda d: d['graphs'][0]['edges'][0].update(label={'config': 'secret'}),
                    lambda d: d['examples'][0].update(trace=[{'sessions': 'secret'}]),
+                   lambda d: d['examples'][0].update(path=['start', {'x': 1}]),
+                   lambda d: d['examples'][0].update(path='start'),
                    lambda d: d['sources'][0].update(locator={'runtime': 'secret'}),
                    lambda d: d.update(sources=[d['sources'][0], d['sources'][0]]),
                    lambda d: d['sources'][0].update(id='../outside'),

@@ -14,7 +14,9 @@ RESERVED_IDS = {'data', 'nodes', 'edges', 'canvas', 'diagram', 'examples', 'deta
                 'detail-title', 'detail-text', 'detail-formula', 'source', 'next',
                 'search', 'graph-title', 'graph-note', 'arrow', 'amber-arrow',
                 'viewport', 'stage', 'zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit',
-                'zoom-value', 'search-prev', 'search-next', 'search-count'}
+                'zoom-value', 'search-prev', 'search-next', 'search-count',
+                'section-jump', 'route-bar', 'route-title', 'route-clear',
+                'detail-links', 'detail-from', 'detail-to'}
 KINDS = ('process', 'decision', 'switch', 'terminal', 'merge')
 MAX_COLUMNS = 4
 MAX_SWITCH_EXITS = 6
@@ -75,6 +77,7 @@ def validate(data):
         gwhere = f'graphs[{g_index}]'
         identifier(_field(graph, 'id', str, gwhere), gwhere + '.id')
         graph_ids.add(graph['id'])
+        _field(graph, 'title', str, gwhere)
         cited(_field(graph, 'source', str, gwhere), gwhere + '.source')
         nodes = _field(graph, 'nodes', list, gwhere)
         if not nodes:
@@ -135,6 +138,8 @@ def validate(data):
     if data.get('common') and data['common'] not in graph_ids:
         _fail('common', 'is not a section id')
     all_nodes = {n['id']: n for g in graphs for n in g['nodes']}
+    linked = {(e['a'], e['b']) for g in graphs for e in g['edges']}
+    linked |= {(e.get('a'), e.get('b')) for e in data.get('connections', []) if isinstance(e, dict)}
     for index, edge in enumerate(data.get('connections', [])):
         where = f'connections[{index}]'
         a, b = _field(edge, 'a', str, where), _field(edge, 'b', str, where)
@@ -151,12 +156,26 @@ def validate(data):
         trace = _field(example, 'trace', list, where)
         if not all(isinstance(step, str) for step in trace):
             _fail(where + '.trace', 'must be a list of text steps')
+        if 'path' in example:
+            _check_path(example['path'], all_nodes, linked, where + '.path')
+
+
+def _check_path(path, nodes, linked, where):
+    """An example route must follow drawn edges; the page never invents one."""
+    if not isinstance(path, list) or len(path) < 2 or not all(isinstance(i, str) for i in path):
+        _fail(where, 'must list at least two node ids in the order the example walks them')
+    for node_id in path:
+        if node_id not in nodes:
+            _fail(where, f'"{node_id}" is not a node')
+    for a, b in zip(path, path[1:]):
+        if (a, b) not in linked:
+            _fail(where, f'no edge from "{a}" to "{b}"; list every node the example passes, in order')
 
 
 def canvas_data(data):
     """Place all authored sections on one canvas; never infer connections."""
     result = copy.deepcopy(data)
-    nodes, edges, occupied = [], [], set()
+    nodes, edges, occupied, sections = [], [], set(), []
     next_row = 0
     for graph in result['graphs']:
         offset = graph.get('position', {'row': next_row, 'col': 0})
@@ -173,9 +192,11 @@ def canvas_data(data):
             occupied.add(pos)
             nodes.append(node)
         edges.extend(graph['edges'])
+        sections.append({'id': graph['id'], 'title': graph['title'],
+                         'nodes': [node['id'] for node in graph['nodes']]})
         next_row = max(n['row'] for n in nodes) + 2
     edges.extend(result.get('connections', []))
-    result['canvas'] = {'nodes': nodes, 'edges': edges}
+    result['canvas'] = {'nodes': nodes, 'edges': edges, 'sections': sections}
     return result
 
 
@@ -186,8 +207,10 @@ def render(data):
     header = '<header><span class="eyebrow">流程图解</span><h1>' + esc(data['title']) + '</h1><p>' + esc(data.get('summary', '')) + '</p></header>'
     nav = '<nav aria-label="阅读导航"><a href="#diagram" class="nav-active" aria-current="location">整体流程</a><a href="#examples">数值走一遍</a></nav>'
     examples = ''
-    for ex in data.get('examples', []):
-        examples += '<details class="example"><summary>' + esc(ex['title']) + '</summary><p>' + esc(ex['provenance']) + ' · ' + esc(ex['input']) + '</p><ol>'
+    for index, ex in enumerate(data.get('examples', [])):
+        route = ('<button type="button" class="show-route" data-example="' + str(index) + '">在图上看这条路线</button>'
+                 if ex.get('path') else '')
+        examples += '<details class="example"><summary>' + esc(ex['title']) + '</summary><p>' + esc(ex['provenance']) + ' · ' + esc(ex['input']) + '</p>' + route + '<ol>'
         examples += ''.join('<li>' + esc(step) + '</li>' for step in ex['trace'])
         examples += '</ol><strong>' + esc(ex['result']) + '</strong></details>'
     replacements = {
