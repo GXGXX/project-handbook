@@ -1,0 +1,254 @@
+{
+  "title": "7 日签到活动：奖励是怎么判断和发放的？",
+  "summary": "合成示例。每天限签 1 次；连续天数决定奖励，第 7 天是 100 金币 + 抽奖券；新用户首签多 20 金币；发放失败会补发。",
+  "sources": [
+    {
+      "id": "plan",
+      "locator": "7 日签到活动方案（合成示例）",
+      "excerpt": "每天可签到 1 次…第 7 天发 100 金币和 1 张抽奖券…新用户首次签到额外 +20 金币…发放失败进入补发队列"
+    }
+  ],
+  "graphs": [
+    {
+      "id": "checkin",
+      "title": "签到到发奖",
+      "source": "plan",
+      "nodes": [
+        {
+          "id": "tap",
+          "row": 0,
+          "col": 0,
+          "kind": "terminal",
+          "title": "用户点「签到」",
+          "lines": "活动时间内",
+          "detail": "入口：活动页签到按钮。"
+        },
+        {
+          "id": "today",
+          "row": 1,
+          "col": 0,
+          "kind": "decision",
+          "title": "今天已经签过？",
+          "lines": "每天限 1 次",
+          "detail": "签过就提示“今天已签到”，不发奖励。"
+        },
+        {
+          "id": "already",
+          "row": 1,
+          "col": 1,
+          "kind": "terminal",
+          "title": "提示今天已签到",
+          "lines": "不发奖励",
+          "detail": "同一天第二次点击直接结束。"
+        },
+        {
+          "id": "streak",
+          "row": 2,
+          "col": 0,
+          "kind": "decision",
+          "title": "昨天签到过？",
+          "lines": "连续天数 +1 或重置为 1",
+          "detail": "断签后从第 1 天重新算。"
+        },
+        {
+          "id": "plus",
+          "row": 3,
+          "col": 0,
+          "kind": "process",
+          "title": "连续天数 +1",
+          "lines": "day = day + 1",
+          "detail": "接着昨天的天数往下数。"
+        },
+        {
+          "id": "reset",
+          "row": 3,
+          "col": 1,
+          "kind": "process",
+          "title": "连续天数重置为 1",
+          "lines": "day = 1",
+          "detail": "昨天没签就重新开始。"
+        },
+        {
+          "id": "which",
+          "row": 4,
+          "col": 0,
+          "kind": "switch",
+          "title": "今天是第几天？",
+          "lines": "第 1–6 天 / 第 7 天",
+          "detail": "第 7 天是大奖。"
+        },
+        {
+          "id": "small",
+          "row": 5,
+          "col": 0,
+          "kind": "process",
+          "title": "发 10 金币",
+          "lines": "第 1–6 天",
+          "detail": "每天固定 10 金币。"
+        },
+        {
+          "id": "big",
+          "row": 5,
+          "col": 1,
+          "kind": "process",
+          "title": "发 100 金币 + 1 张抽奖券",
+          "lines": "第 7 天；之后天数归 0",
+          "detail": "领完第 7 天的大奖，连续天数重置为 0。"
+        },
+        {
+          "id": "newbie",
+          "row": 6,
+          "col": 0,
+          "kind": "decision",
+          "title": "注册 7 天内的首次签到？",
+          "lines": "额外 +20 金币",
+          "detail": "只在首次签到时判断一次。"
+        },
+        {
+          "id": "bonus",
+          "row": 6,
+          "col": 1,
+          "kind": "process",
+          "title": "再发 20 金币",
+          "lines": "新用户首签加成",
+          "detail": "和当天奖励一起发。"
+        },
+        {
+          "id": "send",
+          "row": 7,
+          "col": 0,
+          "kind": "decision",
+          "title": "奖励发放成功？",
+          "lines": "失败进补发队列",
+          "detail": "发放失败不会丢，24 小时内重试。"
+        },
+        {
+          "id": "retry",
+          "row": 7,
+          "col": 1,
+          "kind": "terminal",
+          "title": "进入补发队列",
+          "lines": "24 小时内重试",
+          "detail": "用户稍后会收到。"
+        },
+        {
+          "id": "done",
+          "row": 8,
+          "col": 0,
+          "kind": "terminal",
+          "title": "签到完成",
+          "lines": "展示今日奖励",
+          "detail": "页面展示今天拿到了什么。"
+        }
+      ],
+      "edges": [
+        {
+          "a": "tap",
+          "b": "today",
+          "label": ""
+        },
+        {
+          "a": "today",
+          "b": "already",
+          "label": "是"
+        },
+        {
+          "a": "today",
+          "b": "streak",
+          "label": "否"
+        },
+        {
+          "a": "streak",
+          "b": "plus",
+          "label": "是"
+        },
+        {
+          "a": "streak",
+          "b": "reset",
+          "label": "否"
+        },
+        {
+          "a": "plus",
+          "b": "which",
+          "label": ""
+        },
+        {
+          "a": "reset",
+          "b": "which",
+          "label": ""
+        },
+        {
+          "a": "which",
+          "b": "small",
+          "label": "第 1–6 天"
+        },
+        {
+          "a": "which",
+          "b": "big",
+          "label": "第 7 天"
+        },
+        {
+          "a": "small",
+          "b": "newbie",
+          "label": ""
+        },
+        {
+          "a": "big",
+          "b": "newbie",
+          "label": ""
+        },
+        {
+          "a": "newbie",
+          "b": "bonus",
+          "label": "是"
+        },
+        {
+          "a": "newbie",
+          "b": "send",
+          "label": "否"
+        },
+        {
+          "a": "bonus",
+          "b": "send",
+          "label": ""
+        },
+        {
+          "a": "send",
+          "b": "done",
+          "label": "是"
+        },
+        {
+          "a": "send",
+          "b": "retry",
+          "label": "否"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "演示：新用户连续签到第 7 天",
+      "provenance": "演示",
+      "input": "注册第 3 天的新用户，昨天是连续第 6 天",
+      "trace": [
+        "今天还没签 → 继续",
+        "昨天签过 → 连续天数 6+1=7",
+        "第 7 天 → 100 金币 + 1 张抽奖券",
+        "注册 7 天内但不是首次签到 → 不加成",
+        "发放成功"
+      ],
+      "result": "得到 100 金币 + 1 张抽奖券",
+      "path": [
+        "tap",
+        "today",
+        "streak",
+        "plus",
+        "which",
+        "big",
+        "newbie",
+        "send",
+        "done"
+      ]
+    }
+  ]
+}
