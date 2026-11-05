@@ -183,3 +183,31 @@ test('answers written by hand in the documented form are shown', async t => {
   const doc = fs.readFileSync(path.join(root, 'project-handbook/references/answers.md'), 'utf8');
   assert(doc.includes('window.HANDBOOK_ANSWERS = ['), 'the documented form is the one tested here');
 });
+
+test('several questions go to the AI in one paste', async t => {
+  const dir = noPythonBook('batch', 'window.HANDBOOK_DATA = ' + example + ';');
+  const page = await open(t, dir);
+  await page.locator('#stock').click();
+  await page.getByRole('button', {name: '追问这个节点', exact: true}).click();
+  await page.locator('.flow-qa-draft').fill('库存不足时订单会保留多久？');
+  await page.locator('.flow-qa-send').click();
+  await page.locator('.flow-qa-clear-context').click();
+  await page.locator('.flow-qa-draft').fill('整个流程最长要多久？');
+  await page.locator('.flow-qa-send').click();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  const lines = copied.split('\n');
+  assert.equal(lines[0], '请用 project-handbook 技能回答我在流程手册里的这 2 个问题，并把回答存回手册。');
+  const ids = [...copied.matchAll(/问题编号：(\S+)/g)].map(m => m[1]);
+  assert.equal(ids.length, 2);
+  assert.match(copied, /\n\n1\. 问题编号：q-\S+\n针对：库存充足？（节点 stock）\n问题：库存不足时订单会保留多久？\n\n2\. 问题编号：q-\S+\n针对：整个流程\n问题：整个流程最长要多久？$/);
+  assert.match(await page.locator('.flow-qa-status').textContent(), /已复制 2 个问题/);
+  assert.deepEqual(await page.locator('.flow-qa-entry-state').allTextContents(), ['等 AI 回答', '等 AI 回答']);
+
+  // The AI saves the first answer; the next copy carries only the one still waiting.
+  fs.writeFileSync(path.join(dir, 'answers.js'), 'window.HANDBOOK_ANSWERS = [' + JSON.stringify({id: ids[0], node: 'stock', question: 'x', answer: '不保留。'}) + '];');
+  await page.waitForFunction(() => document.querySelectorAll('.flow-qa-entry-state').length === 1, null, {timeout: 10000});
+  await page.locator('.flow-qa-copy-again').click();
+  const again = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(again, /^请用 project-handbook 技能回答我在流程手册里的这个问题/);
+  assert(again.includes(ids[1]) && !again.includes(ids[0]));
+});

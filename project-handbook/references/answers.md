@@ -13,6 +13,11 @@ it copies a message like this for them to paste to you:
 
 `针对` is `整个流程` when the question is about the whole chart.
 
+Readers may ask several questions before pasting. Then the message says
+「这 N 个问题」 and lists numbered blocks, each with its own 问题编号, 针对 and
+问题. Every copy carries all questions not yet answered, so a question you
+already saved may appear again: skip any 问题编号 already in `answers.js`.
+
 ## Answer
 
 1. Open the folder that holds that `handbook.html`. If it is not on this
@@ -25,7 +30,8 @@ it copies a message like this for them to paste to you:
    reader: the direct answer first, then the reason, with real numbers.
    Say what you could not confirm. Markdown is fine: short lists, **bold**,
    tables. Links and images are not shown.
-4. Save the answer, then reply in the chat with the same answer and:
+4. Save each answer, then reply in the chat with the same answers (numbered
+   when there are several) and:
    「已存回手册，回到网页几秒后会自动显示；没出现就刷新一下。」
 
 ## Save

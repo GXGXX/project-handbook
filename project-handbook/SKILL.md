@@ -96,8 +96,8 @@ Most readers are product, operations or design people, not programmers.
 
 ## Answer a Question From the Page
 
-A message starting 「请用 project-handbook 技能回答我在流程手册里的这个问题」
-carries the page path, a 问题编号 and the question. Follow
+A message starting 「请用 project-handbook 技能回答我在流程手册里的」 carries
+the page path and one or more questions, each with a 问题编号. Follow
 [references/answers.md](references/answers.md): read the flow beside that
 page, answer from it and the project folders, save the answer to the page,
 then give the same answer in the chat. A message asking to 「整理进流程图，生成新版本」

@@ -793,7 +793,7 @@ window.addEventListener('resize',layout);layout();document.fonts.ready.then(()=>
       return '';
     }
     function relayHint() {
-      return '点「复制给 AI」，粘贴到 AI 对话框发送；回答会自动出现在这里。';
+      return '可以先多问几个，再一次粘贴给 AI：每次复制都带上所有还没回答的问题。回答会自动出现在这里。';
     }
     function updateControls() {
       const busy = !!active || externalBusy;
@@ -867,9 +867,9 @@ window.addEventListener('resize',layout);layout();document.fonts.ready.then(()=>
         if (entry.status === 'streaming') assistantMessage.append(renderAnswer(entry.answer || '正在思考…'));
         else if (entry.status === 'waiting') {
           const waiting = element('div', 'flow-qa-answer flow-qa-answer-waiting');
-          waiting.append(element('p', '', '已复制给 AI。到 AI 对话框里粘贴发送；它把回答存回手册后，这里会自动显示。'));
-          const again = button('flow-qa-copy-again', '再复制一次', 'refresh', true);
-          again.addEventListener('click', async () => { setStatus(await copyText(relayMessage(entry)) ? '已复制，去 AI 对话框粘贴发送' : '没能自动复制，请在下方选中文字手动复制', false); showRelayText(relayMessage(entry)); });
+          waiting.append(element('p', '', '等 AI 回答。粘贴发送过就不用管，回答存回手册后会自动显示；还有别的疑问可以接着问，之后一起粘贴。'));
+          const again = button('flow-qa-copy-again', '复制全部待回答', 'refresh', true);
+          again.addEventListener('click', async () => { const text = relayMessage(); showRelayText(text); setStatus(copiedStatus(await copyText(text)), false); });
           const drop = button('flow-qa-drop', '不问了', 'close', true);
           drop.addEventListener('click', () => { writePending(readPending().filter(item => item.id !== entry.id)); entries = entries.filter(item => item !== entry); renderEntries(); });
           waiting.append(again, drop); assistantMessage.append(waiting);
@@ -1044,12 +1044,21 @@ window.addEventListener('resize',layout);layout();document.fonts.ready.then(()=>
       updateControls();
       await refreshState(true, true);
     }
-    function relayMessage(entry) {
-      const node = authoredNodes.find(item => item.id === entry.node_id);
-      return ['请用 project-handbook 技能回答我在流程手册里的这个问题，并把回答存回手册。',
-        '手册：' + pagePath(), '问题编号：' + entry.id,
-        '针对：' + (node ? node.title + '（节点 ' + node.id + '）' : '整个流程'),
-        '问题：' + entry.question].join('\n');
+    // Every copy carries all questions still waiting, so several can be pasted at once.
+    function relayMessage() {
+      const waiting = entries.filter(entry => entry.status === 'waiting');
+      const block = entry => {
+        const node = authoredNodes.find(item => item.id === entry.node_id);
+        return ['问题编号：' + entry.id, '针对：' + (node ? node.title + '（节点 ' + node.id + '）' : '整个流程'), '问题：' + entry.question];
+      };
+      if (waiting.length === 1) return ['请用 project-handbook 技能回答我在流程手册里的这个问题，并把回答存回手册。', '手册：' + pagePath(), ...block(waiting[0])].join('\n');
+      return ['请用 project-handbook 技能回答我在流程手册里的这 ' + waiting.length + ' 个问题，并把回答存回手册。', '手册：' + pagePath(),
+        ...waiting.map((entry, index) => '\n' + (index + 1) + '. ' + block(entry).join('\n'))].join('\n');
+    }
+    function copiedStatus(ok) {
+      const count = entries.filter(entry => entry.status === 'waiting').length;
+      if (!ok) return '没能自动复制，请在下方选中文字手动复制。';
+      return count > 1 ? '已复制 ' + count + ' 个问题。到 AI 对话框里粘贴一次，它会全部回答。' : '已复制。到 WorkBuddy、Codex 等 AI 的对话框里粘贴发送。';
     }
     function showRelayText(text) {
       const box = element('pre', 'flow-qa-relay', text);
@@ -1061,9 +1070,9 @@ window.addEventListener('resize',layout);layout();document.fonts.ready.then(()=>
       const entry = {id: 'q-' + stamp + '-' + Math.random().toString(36).slice(2, 6), node_id: nodeId, question, answer: '', status: 'waiting', error: '', created_at: now.toISOString()};
       writePending([...readPending(), {id: entry.id, node_id: entry.node_id, question, created_at: entry.created_at}]);
       entries.push(entry); renderEntries(true);
-      const text = relayMessage(entry);
+      const text = relayMessage();
       showRelayText(text);
-      setStatus(await copyText(text) ? '已复制。到 WorkBuddy、Codex 等 AI 的对话框里粘贴发送。' : '没能自动复制，请在下方选中文字手动复制。');
+      setStatus(copiedStatus(await copyText(text)));
       watchAnswers();
     }
     // Re-read answers.js while questions wait, so answers appear without a refresh.
