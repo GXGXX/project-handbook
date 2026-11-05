@@ -303,7 +303,7 @@
         assistantMessage.append(element('span', 'flow-qa-role flow-qa-role-assistant', live ? 'Codex · AI' : 'AI'));
         if (entry.status === 'streaming') assistantMessage.append(renderAnswer(entry.answer || '正在思考…'));
         else if (entry.status === 'waiting') {
-          const waiting = element('div', 'flow-qa-answer flow-qa-answer-empty');
+          const waiting = element('div', 'flow-qa-answer flow-qa-answer-waiting');
           waiting.append(element('p', '', '已复制给 AI。到 AI 对话框里粘贴发送；它把回答存回手册后，这里会自动显示。'));
           const again = button('flow-qa-copy-again', '再复制一次', 'refresh', true);
           again.addEventListener('click', async () => { setStatus(await copyText(relayMessage(entry)) ? '已复制，去 AI 对话框粘贴发送' : '没能自动复制，请在下方选中文字手动复制', false); showRelayText(relayMessage(entry)); });
