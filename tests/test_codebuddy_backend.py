@@ -43,8 +43,9 @@ elif mode == 'whole':
     say({'type': 'assistant', 'message': {'content': [{'type': 'text', 'text': '第一段。第二段。'}]}})
     say({'type': 'result', 'subtype': 'success', 'result': '第一段。第二段。'})
 elif mode == 'login':
-    print('Error: not logged in. Run codebuddy to log in.', file=sys.stderr)
-    sys.exit(1)
+    # What codebuddy 2.100.0 printed when not signed in.
+    say({'type': 'assistant', 'message': {'content': [{'type': 'text', 'text': 'Authentication required. Please use /login command to sign in to your account'}], 'role': 'assistant'}})
+    say({'type': 'result', 'subtype': 'error_during_execution', 'is_error': True, 'num_turns': 2})
 elif mode == 'error-result':
     say({'type': 'result', 'subtype': 'error_during_execution', 'is_error': True, 'result': 'quota exceeded'})
 elif mode == 'slow':
@@ -80,8 +81,9 @@ class CodeBuddyBackendTests(unittest.TestCase):
         answer, parts, call = self.ask('stream')
         self.assertEqual(answer, '算第 1 天。')
         self.assertEqual(''.join(parts), '算第 1 天。', 'whole messages do not repeat streamed text')
-        self.assertEqual(call['argv'], ['-p', '--output-format', 'stream-json', '--model', 'glm-4.6'])
-        self.assertNotIn('-y', call['argv'], 'without -y the CLI blocks files, commands and network')
+        self.assertEqual(call['argv'], ['-p', '--output-format', 'stream-json', '--include-partial-messages',
+                                        '--tools', '', '--strict-mcp-config', '--model', 'glm-4.6'])
+        self.assertNotIn('-y', call['argv'], 'no permission is granted to anything left')
         self.assertEqual(call['prompt'], '第 8 天算第几天？', 'the prompt goes on stdin, not the command line')
         self.assertEqual(call['files'], [], 'it runs in an empty folder')
         self.assertTrue(self.backend.status()['connected'])

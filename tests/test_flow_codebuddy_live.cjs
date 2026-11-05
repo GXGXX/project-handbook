@@ -63,7 +63,7 @@ test('a question is answered in the page by the CodeBuddy CLI', async () => {
   assert.equal(await page.locator('.flow-qa-role-assistant').last().textContent(), 'CodeBuddy · AI');
   assert.equal(await page.locator('.flow-qa-badge').textContent(), '已连接');
   const calls = fs.readFileSync(logFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
-  assert.deepEqual(calls[0].argv, ['-p', '--output-format', 'stream-json']);
+  assert.deepEqual(calls[0].argv, ['-p', '--output-format', 'stream-json', '--include-partial-messages', '--tools', '', '--strict-mcp-config']);
   assert.match(calls[0].prompt, /库存不足时订单会保留多久？/);
   assert.match(calls[0].prompt, /库存充足？/, 'the selected step is in the prompt');
   assert.deepEqual(errors, []);

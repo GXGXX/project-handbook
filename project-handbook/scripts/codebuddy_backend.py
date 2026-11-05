@@ -1,9 +1,10 @@
 """Answer page questions through the CodeBuddy CLI (WorkBuddy's command line).
 
 Each question runs one `codebuddy -p --output-format stream-json` with the
-prompt on stdin, in an empty temporary folder, without `-y`. In headless mode
-the CLI blocks file access, commands and network tools unless `-y` is given,
-so the model only sees the prompt; source lookup stays with the bounded host
+prompt on stdin, in an empty temporary folder: `--tools ""` turns off every
+built-in tool, `--strict-mcp-config` with no config loads no MCP server, and
+without `-y` anything left would still need a permission nobody can give. The
+model only sees the prompt; source lookup stays with the bounded host
 retriever, as with Codex. Sign-in stays with the CLI (browser login with the
 user's own account); no key or credential passes through here.
 """
@@ -71,7 +72,8 @@ class CodeBuddyBackend:
                 'model': self._model, 'message': self._message, 'name': self.name}
 
     def _command(self):
-        command = [self._binary, '-p', '--output-format', 'stream-json']
+        command = [self._binary, '-p', '--output-format', 'stream-json', '--include-partial-messages',
+                   '--tools', '', '--strict-mcp-config']
         if self._model:
             command += ['--model', self._model]
         return command
@@ -155,7 +157,8 @@ class CodeBuddyBackend:
                 elif kind == 'result':
                     if event.get('is_error') or str(event.get('subtype', 'success')) != 'success':
                         failed = str(event.get('result') or event.get('error') or event.get('subtype') or 'failed')
-                    elif isinstance(event.get('result'), str):
+                        break
+                    if isinstance(event.get('result'), str):
                         final = event['result']
                     break
                 if isinstance(text, str) and text:
@@ -176,7 +179,8 @@ class CodeBuddyBackend:
                 except OSError:
                     pass
             self._process = None
-        detail = (failed or '') + ' ' + ' '.join(errors)
+        # A sign-in problem arrives as ordinary assistant text before an error result.
+        detail = (failed or '') + ' ' + shown + ' ' + ' '.join(errors)
         if failed or (final is None and not shown):
             if re.search(r'log.?in|sign.?in|auth|unauthori[sz]ed|登录|未登录', detail, re.I):
                 self._signed_in = False
