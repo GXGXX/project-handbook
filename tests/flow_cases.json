@@ -1,0 +1,707 @@
+[
+ {
+  "name": "valid example",
+  "ops": [],
+  "error": null
+ },
+ {
+  "name": "title missing",
+  "ops": [
+   {
+    "delete": [
+     "title"
+    ]
+   }
+  ],
+  "error": "flow: missing \"title\""
+ },
+ {
+  "name": "no sections",
+  "ops": [
+   {
+    "set": [
+     "graphs"
+    ],
+    "value": []
+   }
+  ],
+  "error": "graphs: needs at least one section"
+ },
+ {
+  "name": "sources not a list",
+  "ops": [
+   {
+    "set": [
+     "sources"
+    ],
+    "value": {}
+   }
+  ],
+  "error": "flow.sources: must be a list"
+ },
+ {
+  "name": "duplicate source",
+  "ops": [
+   {
+    "set": [
+     "sources",
+     1
+    ],
+    "value": {
+     "id": "demo",
+     "locator": "x"
+    }
+   }
+  ],
+  "error": "sources[1]: duplicate source id \"demo\""
+ },
+ {
+  "name": "bad id",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     0,
+     "id"
+    ],
+    "value": "1st"
+   }
+  ],
+  "error": "graphs[0].nodes[0].id: id \"1st\" must start with a letter and use only letters, digits, - and _"
+ },
+ {
+  "name": "id not text",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     0,
+     "id"
+    ],
+    "value": 5
+   }
+  ],
+  "error": "graphs[0].nodes[0].id: must be text"
+ },
+ {
+  "name": "reserved id",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     0,
+     "id"
+    ],
+    "value": "source"
+   }
+  ],
+  "error": "graphs[0].nodes[0].id: id \"source\" is used by the page itself; choose another, such as \"source-step\""
+ },
+ {
+  "name": "assistant id prefix",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     0,
+     "id"
+    ],
+    "value": "flow-qa-x"
+   }
+  ],
+  "error": "graphs[0].nodes[0].id: id \"flow-qa-x\" is used by the page itself; choose another, such as \"flow-qa-x-step\""
+ },
+ {
+  "name": "duplicate id",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     1,
+     "nodes",
+     0,
+     "id"
+    ],
+    "value": "submit"
+   }
+  ],
+  "error": "graphs[1].nodes[0].id: id \"submit\" is already used by another section or node"
+ },
+ {
+  "name": "section title missing",
+  "ops": [
+   {
+    "delete": [
+     "graphs",
+     1,
+     "title"
+    ]
+   }
+  ],
+  "error": "graphs[1]: missing \"title\""
+ },
+ {
+  "name": "section source unknown",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "source"
+    ],
+    "value": "nope"
+   }
+  ],
+  "error": "graphs[0].source: source \"nope\" is not listed in sources"
+ },
+ {
+  "name": "empty section",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     1,
+     "nodes"
+    ],
+    "value": []
+   }
+  ],
+  "error": "graphs[1]: section has no nodes"
+ },
+ {
+  "name": "row missing",
+  "ops": [
+   {
+    "delete": [
+     "graphs",
+     0,
+     "nodes",
+     1,
+     "row"
+    ]
+   }
+  ],
+  "error": "graphs[0].nodes[1] (stock): missing \"row\""
+ },
+ {
+  "name": "row not whole",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     1,
+     "row"
+    ],
+    "value": 1.5
+   }
+  ],
+  "error": "graphs[0].nodes[1] (stock).row: must be a whole number"
+ },
+ {
+  "name": "row boolean",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     1,
+     "row"
+    ],
+    "value": true
+   }
+  ],
+  "error": "graphs[0].nodes[1] (stock).row: must be a whole number"
+ },
+ {
+  "name": "negative row",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     1,
+     "row"
+    ],
+    "value": -1
+   }
+  ],
+  "error": "graphs[0].nodes[1] (stock): row must be 0 or more and col 0 to 3"
+ },
+ {
+  "name": "col too far",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     2,
+     "col"
+    ],
+    "value": 4
+   }
+  ],
+  "error": "graphs[0].nodes[2] (soldout): row must be 0 or more and col 0 to 3"
+ },
+ {
+  "name": "same cell",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     2,
+     "col"
+    ],
+    "value": 0
+   }
+  ],
+  "error": "graphs[0].nodes[2] (soldout): same row and col as node \"stock\""
+ },
+ {
+  "name": "bad kind",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     3,
+     "kind"
+    ],
+    "value": "step"
+   }
+  ],
+  "error": "graphs[0].nodes[3] (created): kind must be one of process, decision, switch, terminal, merge"
+ },
+ {
+  "name": "lines missing",
+  "ops": [
+   {
+    "delete": [
+     "graphs",
+     0,
+     "nodes",
+     3,
+     "lines"
+    ]
+   }
+  ],
+  "error": "graphs[0].nodes[3] (created): missing \"lines\""
+ },
+ {
+  "name": "detail not text",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     3,
+     "detail"
+    ],
+    "value": [
+     "a"
+    ]
+   }
+  ],
+  "error": "graphs[0].nodes[3] (created).detail: must be text"
+ },
+ {
+  "name": "node sources empty",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     3,
+     "sources"
+    ],
+    "value": []
+   }
+  ],
+  "error": "graphs[0].nodes[3] (created).sources: must be a non-empty list of source ids"
+ },
+ {
+  "name": "node source unknown",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     3,
+     "sources"
+    ],
+    "value": [
+     "demo",
+     "other"
+    ]
+   }
+  ],
+  "error": "graphs[0].nodes[3] (created).sources: source \"other\" is not listed in sources"
+ },
+ {
+  "name": "edge leaves section",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "edges",
+     3,
+     "b"
+    ],
+    "value": "callback"
+   }
+  ],
+  "error": "graphs[0].edges[3]: \"callback\" is not a node in this section; link sections with connections"
+ },
+ {
+  "name": "duplicate edge",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "edges",
+     4
+    ],
+    "value": {
+     "a": "created",
+     "b": "pay"
+    }
+   }
+  ],
+  "error": "graphs[0].edges[4]: duplicate edge or an edge to itself"
+ },
+ {
+  "name": "self edge",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "edges",
+     3,
+     "b"
+    ],
+    "value": "created"
+   }
+  ],
+  "error": "graphs[0].edges[3]: duplicate edge or an edge to itself"
+ },
+ {
+  "name": "bad route",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "edges",
+     3,
+     "route"
+    ],
+    "value": "around"
+   }
+  ],
+  "error": "graphs[0].edges[3].route: must be normal, outer or bypass"
+ },
+ {
+  "name": "label not text",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "edges",
+     3,
+     "label"
+    ],
+    "value": 1
+   }
+  ],
+  "error": "graphs[0].edges[3].label: must be text"
+ },
+ {
+  "name": "decision labels",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "edges",
+     1,
+     "label"
+    ],
+    "value": "可能"
+   }
+  ],
+  "error": "graphs[0] node \"stock\": a decision needs exactly one 是 edge and one 否 edge; use kind \"switch\" for three or more named outcomes"
+ },
+ {
+  "name": "switch one exit",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     1,
+     "kind"
+    ],
+    "value": "switch"
+   },
+   {
+    "set": [
+     "graphs",
+     0,
+     "edges",
+     1,
+     "label"
+    ],
+    "value": "有"
+   },
+   {
+    "set": [
+     "graphs",
+     0,
+     "edges",
+     2,
+     "label"
+    ],
+    "value": "有"
+   }
+  ],
+  "error": "graphs[0] node \"stock\": a switch needs 2 to 6 edges, each with its own label"
+ },
+ {
+  "name": "valid switch",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "nodes",
+     1,
+     "kind"
+    ],
+    "value": "switch"
+   }
+  ],
+  "error": null
+ },
+ {
+  "name": "unreachable",
+  "ops": [
+   {
+    "set": [
+     "graphs",
+     0,
+     "edges",
+     3
+    ],
+    "value": {
+     "a": "pay",
+     "b": "soldout"
+    }
+   }
+  ],
+  "error": "graphs[0]: not reachable from the first node: pay"
+ },
+ {
+  "name": "common unknown",
+  "ops": [
+   {
+    "set": [
+     "common"
+    ],
+    "value": "nope"
+   }
+  ],
+  "error": "common: is not a section id"
+ },
+ {
+  "name": "connections not list",
+  "ops": [
+   {
+    "set": [
+     "connections"
+    ],
+    "value": {
+     "a": "pay"
+    }
+   }
+  ],
+  "error": "flow.connections: must be a list"
+ },
+ {
+  "name": "connection unknown node",
+  "ops": [
+   {
+    "set": [
+     "connections",
+     0,
+     "b"
+    ],
+    "value": "nope"
+   }
+  ],
+  "error": "connections[0]: must join two different existing nodes"
+ },
+ {
+  "name": "connection from branch",
+  "ops": [
+   {
+    "set": [
+     "connections",
+     0,
+     "a"
+    ],
+    "value": "stock"
+   }
+  ],
+  "error": "connections[0]: keep branch edges inside the section that owns the branch"
+ },
+ {
+  "name": "connection without label",
+  "ops": [
+   {
+    "set": [
+     "connections",
+     0,
+     "label"
+    ],
+    "value": ""
+   }
+  ],
+  "error": "connections[0]: needs a label saying when the flow crosses sections"
+ },
+ {
+  "name": "examples not list",
+  "ops": [
+   {
+    "set": [
+     "examples"
+    ],
+    "value": {}
+   }
+  ],
+  "error": "flow.examples: must be a list"
+ },
+ {
+  "name": "example result missing",
+  "ops": [
+   {
+    "delete": [
+     "examples",
+     0,
+     "result"
+    ]
+   }
+  ],
+  "error": "examples[0]: missing \"result\""
+ },
+ {
+  "name": "trace not text",
+  "ops": [
+   {
+    "set": [
+     "examples",
+     0,
+     "trace"
+    ],
+    "value": [
+     "a",
+     {
+      "b": 1
+     }
+    ]
+   }
+  ],
+  "error": "examples[0].trace: must be a list of text steps"
+ },
+ {
+  "name": "path too short",
+  "ops": [
+   {
+    "set": [
+     "examples",
+     0,
+     "path"
+    ],
+    "value": [
+     "submit"
+    ]
+   }
+  ],
+  "error": "examples[0].path: must list at least two node ids in the order the example walks them"
+ },
+ {
+  "name": "path unknown node",
+  "ops": [
+   {
+    "set": [
+     "examples",
+     0,
+     "path"
+    ],
+    "value": [
+     "submit",
+     "nope"
+    ]
+   }
+  ],
+  "error": "examples[0].path: \"nope\" is not a node"
+ },
+ {
+  "name": "path skips a node",
+  "ops": [
+   {
+    "set": [
+     "examples",
+     0,
+     "path"
+    ],
+    "value": [
+     "submit",
+     "created"
+    ]
+   }
+  ],
+  "error": "examples[0].path: no edge from \"submit\" to \"created\"; list every node the example passes, in order"
+ },
+ {
+  "name": "path crosses connection",
+  "ops": [
+   {
+    "set": [
+     "examples",
+     0,
+     "path"
+    ],
+    "value": [
+     "created",
+     "pay",
+     "callback",
+     "duplicate"
+    ]
+   }
+  ],
+  "error": null
+ }
+]

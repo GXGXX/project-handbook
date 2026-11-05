@@ -120,3 +120,5 @@
   .flow-qa-button{transition:background-color .12s,border-color .12s}
 }
 @media print{.flow-qa-panel,.flow-qa-tools,.flow-qa-ask-node{display:none!important}.flow-qa-shell.flow-qa-open{display:block}}
+.flow-qa-relay{white-space:pre-wrap;word-break:break-all;user-select:all;background:#f6f8fa;border:1px solid #d3e0e6;border-radius:6px;padding:10px;font-size:13px;line-height:1.6;max-height:220px;overflow:auto;margin:6px 0 0}
+.flow-qa-copy-again,.flow-qa-drop{margin:8px 8px 0 0}

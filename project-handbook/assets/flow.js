@@ -1,6 +1,26 @@
 'use strict';
-const data=JSON.parse(document.getElementById('data').textContent);
 const $=id=>document.getElementById(id), ns='http://www.w3.org/2000/svg';
+// Where this page lives on disk, so an agent can find the flow beside it.
+function pagePath(){let p=decodeURIComponent(location.pathname);if(/^\/[A-Za-z]:\//.test(p))p=p.slice(1);return location.protocol==='file:'?p:location.href;}
+async function copyText(text){try{await navigator.clipboard.writeText(text);return true;}catch(_){const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.opacity='0';document.body.append(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(_){}t.remove();return ok;}}
+// The flow is inside the page (built with Python) or in flow-data.js beside it
+// (built without Python). Either way the page checks it before drawing.
+const data=(()=>{const el=$('data'),raw=el.textContent.trim();let value;
+ const stop=message=>{const box=$('flow-error');box.hidden=false;document.querySelector('main').hidden=true;document.querySelector('nav').hidden=true;
+  box.querySelector('pre').textContent=message;const button=box.querySelector('button');
+  button.onclick=async()=>{button.textContent=await copyText('这份流程图页面打不开，请用 project-handbook 技能修好数据后重新生成。\n页面文件：'+pagePath()+'\n问题：'+message)?'已复制，去 AI 对话框粘贴发送':'复制失败，请手动选中上面的文字复制';};
+  throw new Error('Flow data problem: '+message);};
+ try{value=raw?JSON.parse(raw):window.HANDBOOK_DATA;}catch(e){stop('页面里的流程数据不是有效的 JSON：'+e.message);}
+ if(!value||typeof value!=='object')stop('没有找到流程数据。同一文件夹里应有 flow-data.js（内容以 window.HANDBOOK_DATA = 开头）。');
+ if(Array.isArray(value.graphs)){try{FlowModel.validate(value);const runtime=value.runtime,qa=value.qa;value=FlowModel.prepare(value);if(runtime)value.runtime=runtime;if(qa)value.qa=qa;}catch(e){stop(e.message);}}
+ else if(!value.canvas||!Array.isArray(value.canvas.nodes))stop('流程数据缺少 graphs。');
+ el.textContent=JSON.stringify(value).replace(/</g,'\\u003c');
+ return value;})();
+document.title=data.title;$('flow-title').textContent=data.title;$('flow-summary').textContent=data.summary||'';
+(()=>{const list=$('example-list'),make=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};list.replaceChildren();
+ for(const ex of data.examples||[]){const d=make('details','example');d.append(make('summary','',ex.title),make('p','',ex.provenance+' · '+ex.input));
+  if(Array.isArray(ex.path)&&ex.path.length){const b=make('button','show-route','在图上看这条路线');b.type='button';d.append(b);}
+  const ol=make('ol');for(const step of ex.trace||[])ol.append(make('li','',step));d.append(ol,make('strong','',ex.result));list.append(d);}})();
 const current=data.canvas, viewport=$('viewport');
 let scale=1, width=1040, height=1;
 function svg(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v]of Object.entries(attrs))e.setAttribute(k,v);if(text)e.textContent=text;return e;}
