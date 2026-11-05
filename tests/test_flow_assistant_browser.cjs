@@ -19,16 +19,16 @@ const nodes = [
 ];
 const edges = [{a: 'entry', b: 'finish', label: '通过'}];
 
-function fixture(runtime, qa = [saved, failed]) {
+function fixture(runtime, qa = [saved, failed], extra = {}) {
   const manifest = {
     title: '订单流程', summary: '合成问答测试', sources: [{id: 'demo', locator: 'C:\\private\\orders.py', excerpt: 'RAW-PRIVATE-SOURCE'}],
     graphs: [{id: 'order', title: '订单', source: 'demo', nodes, edges}], canvas: {nodes, edges}, examples: [], qa,
-    filesystem: {root: 'C:\\private\\root'}, credentials: {password: 'hidden-password'}, runtime: runtime ? {...runtime, book_id: 'test-book'} : undefined
+    filesystem: {root: 'C:\\private\\root'}, credentials: {password: 'hidden-password'}, runtime: runtime ? {...runtime, book_id: 'test-book'} : undefined, ...extra
   };
   const replacements = {
     TITLE: manifest.title, HEADER: '<header><h1>订单流程</h1></header>', NAV: '<nav><a href="#diagram">整体流程</a><a href="#examples">例子</a></nav>', EXAMPLES: '',
     DATA: JSON.stringify(manifest).replace(/</g, '\\u003c'), CSS: read('flow.css') + '\n' + read('flow-assistant.css'),
-    JS: [read('vendor/html2canvas.min.js'), read('vendor/markdown-it.min.js'), read('flow.js'), read('flow-assistant.js')].join('\n;\n').replace(/<\/script/g, '<\\/script')
+    JS: [read('vendor/html2canvas.min.js'), read('vendor/markdown-it.min.js'), read('flow-model.js'), read('flow.js'), read('flow-assistant.js')].join('\n;\n').replace(/<\/script/g, '<\\/script')
   };
   return read('flow-template.html').replace(/@@([A-Z]+)@@/g, (_, key) => replacements[key] || '');
 }
@@ -127,13 +127,14 @@ async function until(check, message) {
   }
   try {
     const offlinePath = path.join(temp, 'offline.html');
-    fs.writeFileSync(offlinePath, fixture(undefined));
+    // A received copy: read-only. (A page opened from its own folder hands questions to the AI instead.)
+    fs.writeFileSync(offlinePath, fixture(undefined, undefined, {shared: true}));
     const offline = await pageFor(pathToFileURL(offlinePath).href);
     const requests = offline.httpRequests;
     assert.equal(await offline.getByRole('button', {name: '问答', exact: true}).count(), 1, 'assistant toolbar must be injected');
     await offline.getByRole('button', {name: '问答', exact: true}).click();
     assert(await offline.locator('#flow-qa-panel').isVisible());
-    assert.match(await offline.locator('.flow-qa-status').textContent(), /离线/);
+    assert.match(await offline.locator('.flow-qa-status').textContent(), /分享副本/);
     assert.match(await offline.locator('.flow-qa-form .flow-qa-hint').textContent(), /不能继续追问/);
     assert(await offline.locator('.flow-qa-send').isDisabled());
     assert.equal(await offline.locator('.flow-qa-entry').count(), 2, 'all saved conversation, including incomplete answers, stays readable');

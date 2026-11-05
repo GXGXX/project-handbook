@@ -141,8 +141,6 @@ class FlowTests(unittest.TestCase):
         self.assertNotIn('sources', self.data['graphs'][0]['nodes'][1])
 
     def test_example_route_follows_drawn_edges(self):
-        page = flow.render(self.data)
-        self.assertEqual(page.count('class="show-route"'), 3)
         canvas = flow.canvas_data(self.data)['canvas']
         self.assertEqual([(s['id'], s['title']) for s in canvas['sections']],
                          [(g['id'], g['title']) for g in self.data['graphs']])
@@ -162,8 +160,41 @@ class FlowTests(unittest.TestCase):
         data = copy.deepcopy(self.data)
         data['examples'][0]['path'] = ['created', 'pay', 'callback']
         flow.validate(data)
-        data['examples'][0].pop('path')
-        self.assertNotIn('data-example="0"', flow.render(data))
+
+    def test_shared_cases_match_the_page_checks(self):
+        """tests/flow_cases.json is also run against flow-model.js in the browser code."""
+        cases = json.loads((ROOT / 'tests/flow_cases.json').read_text(encoding='utf-8'))
+        for case in cases:
+            with self.subTest(case=case['name']):
+                data = copy.deepcopy(self.data)
+                for op in case['ops']:
+                    keys = op.get('set') or op.get('delete')
+                    target = data
+                    for key in keys[:-1]:
+                        target = target[key]
+                    if 'delete' in op:
+                        del target[keys[-1]]
+                    elif isinstance(target, list) and keys[-1] == len(target):
+                        target.append(op['value'])
+                    else:
+                        target[keys[-1]] = op['value']
+                try:
+                    flow.validate(data)
+                    error = None
+                except ValueError as exc:
+                    error = str(exc)
+                self.assertEqual(error, case['error'])
+
+    def test_page_without_python_is_current_and_reads_beside_itself(self):
+        viewer = (ROOT / 'project-handbook/assets/viewer/handbook.html').read_text(encoding='utf-8')
+        self.assertEqual(viewer, flow.render_viewer(),
+                         'run: python project-handbook/scripts/build_flow.py --viewer')
+        self.assertIn('<script src="flow-data.js"></script><script src="answers.js"></script>', viewer)
+        self.assertIn('id="data"></script>', viewer)
+        page = flow.render(dict(self.data, project='D:/work/demo'))
+        self.assertIn('<script src="answers.js"></script>', page)
+        self.assertNotIn('flow-data.js"', page)
+        self.assertNotIn('D:/work/demo', page, 'the project folder stays out of the page')
 
     def test_sections_need_a_title_and_page_ids_stay_reserved(self):
         data = copy.deepcopy(self.data)

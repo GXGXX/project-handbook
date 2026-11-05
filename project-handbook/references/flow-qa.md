@@ -1,6 +1,9 @@
-# In-Page Follow-Ups
+# Live In-Page Answers (Codex only)
 
-Use after building and reviewing a flow handbook. Start the connection yourself;
+Optional. Every page already handles questions by copying them back to the
+agent ([answers.md](answers.md)); this adds answers that appear directly in the
+page, through the local Codex app server. It needs Python and Codex. Use after
+building and reviewing a flow handbook. Start the connection yourself;
 the reader should not need to run commands or paste credentials into a page.
 
 ## Launch

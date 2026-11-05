@@ -287,6 +287,11 @@ class FlowExportTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 exports.share_data(self.data, [], redact=value)
 
+    def test_exported_page_is_marked_shared(self):
+        page = exports.export_html(self.data, [])
+        data = json.loads(page.split('id="data">', 1)[1].split('</script>', 1)[0])
+        self.assertIs(data['shared'], True, 'a received copy cannot hand questions to an AI')
+
     def test_example_route_survives_share_and_revision(self):
         self.data['examples'][0]['path'] = ['start', 'finish']
         self.assertEqual(exports.share_data(self.data, [])['examples'][0]['path'], ['start', 'finish'])

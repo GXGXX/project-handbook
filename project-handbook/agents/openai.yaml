@@ -1,5 +1,5 @@
 interface:
-  display_name: "Project Handbook"
-  short_description: "Explain code and docs with interactive offline flowcharts"
+  display_name: "Project Handbook 流程手册"
+  short_description: "把流程、规则和数值讲成可点击、可追问的流程图网页"
   brand_color: "#4A5D6B"
-  default_prompt: "Use $project-handbook to answer my project question with an offline HTML flowchart, explicit branches, clickable evidence and worked examples."
+  default_prompt: "用 $project-handbook 帮我梳理一下。资料在：<文件夹路径>。问题：<想弄明白的流程或数值>"

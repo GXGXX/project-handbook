@@ -203,8 +203,14 @@ def share_data(data, entries, redact=True):
 
 
 def export_html(data, entries, redact=True):
-    """Render a portable page with safely escaped, node-linked Q&A JSON."""
-    return _render(share_data(data, entries, redact))
+    """Render a portable page with safely escaped, node-linked Q&A JSON.
+
+    Marked shared: whoever receives it has neither the project nor the AI that
+    made it, so the page offers reading only, not new questions.
+    """
+    shared = share_data(data, entries, redact)
+    shared['shared'] = True
+    return _render(shared)
 
 
 def write_revision(book_dir, data, patch, selected, redact=False, cancel_event=None):

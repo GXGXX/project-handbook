@@ -16,7 +16,8 @@ RESERVED_IDS = {'data', 'nodes', 'edges', 'canvas', 'diagram', 'examples', 'deta
                 'viewport', 'stage', 'zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit',
                 'zoom-value', 'search-prev', 'search-next', 'search-count',
                 'section-jump', 'route-bar', 'route-title', 'route-clear',
-                'detail-links', 'detail-from', 'detail-to'}
+                'detail-links', 'detail-from', 'detail-to', 'detail-answers',
+                'flow-title', 'flow-summary', 'example-list', 'flow-error', 'active-arrow', 'route-arrow'}
 KINDS = ('process', 'decision', 'switch', 'terminal', 'merge')
 MAX_COLUMNS = 4
 MAX_SWITCH_EXITS = 6
@@ -61,7 +62,7 @@ def validate(data):
 
     def identifier(value, where):
         if not isinstance(value, str) or not re.fullmatch(r'[a-zA-Z][a-zA-Z0-9_-]*', value):
-            _fail(where, f'id {value!r} must start with a letter and use only letters, digits, - and _')
+            _fail(where, f'id {json.dumps(value, ensure_ascii=False)} must start with a letter and use only letters, digits, - and _')
         if value in RESERVED_IDS or value.startswith('flow-qa-'):
             _fail(where, f'id "{value}" is used by the page itself; choose another, such as "{value}-step"')
         if value in used:
@@ -137,6 +138,9 @@ def validate(data):
             _fail(gwhere, f'not reachable from the first node: {missing}')
     if data.get('common') and data['common'] not in graph_ids:
         _fail('common', 'is not a section id')
+    for key in ('connections', 'examples'):
+        if key in data and not isinstance(data[key], list):
+            _fail('flow.' + key, 'must be a list')
     all_nodes = {n['id']: n for g in graphs for n in g['nodes']}
     linked = {(e['a'], e['b']) for g in graphs for e in g['edges']}
     linked |= {(e.get('a'), e.get('b')) for e in data.get('connections', []) if isinstance(e, dict)}
@@ -181,9 +185,9 @@ def canvas_data(data):
         offset = graph.get('position', {'row': next_row, 'col': 0})
         if any(type(offset.get(k)) is not int or offset[k] < 0 for k in ('row', 'col')):
             raise ValueError('Invalid section position')
-        for node in graph['nodes']:
-            node['row'] += offset['row']
-            node['col'] += offset['col']
+        for authored in graph['nodes']:
+            # A copy, so graphs keep their own coordinates and can be placed again.
+            node = dict(authored, row=authored['row'] + offset['row'], col=authored['col'] + offset['col'])
             node['sources'] = list(node.get('sources') or [graph['source']])
             node['source'] = node['sources'][0]
             pos = node['row'], node['col']
@@ -200,28 +204,42 @@ def canvas_data(data):
     return result
 
 
-def render(data):
-    validate(data)
-    data = canvas_data(data)
+# Scripts the page loads from beside itself, when present. answers.js holds
+# answers an agent saved for questions copied from the page.
+ANSWERS_SCRIPT = '<script src="answers.js"></script>'
+DATA_SCRIPT = '<script src="flow-data.js"></script>'
+VIEWER = ASSETS / 'viewer' / 'handbook.html'
+
+
+def _page(title, data_json, external):
     esc = lambda value: html.escape(str(value), quote=True)
-    header = '<header><span class="eyebrow">流程图解</span><h1>' + esc(data['title']) + '</h1><p>' + esc(data.get('summary', '')) + '</p></header>'
-    nav = '<nav aria-label="阅读导航"><a href="#diagram" class="nav-active" aria-current="location">整体流程</a><a href="#examples">数值走一遍</a></nav>'
-    examples = ''
-    for index, ex in enumerate(data.get('examples', [])):
-        route = ('<button type="button" class="show-route" data-example="' + str(index) + '">在图上看这条路线</button>'
-                 if ex.get('path') else '')
-        examples += '<details class="example"><summary>' + esc(ex['title']) + '</summary><p>' + esc(ex['provenance']) + ' · ' + esc(ex['input']) + '</p>' + route + '<ol>'
-        examples += ''.join('<li>' + esc(step) + '</li>' for step in ex['trace'])
-        examples += '</ol><strong>' + esc(ex['result']) + '</strong></details>'
     replacements = {
-        'TITLE': esc(data['title']), 'HEADER': header, 'NAV': nav, 'EXAMPLES': examples,
+        'TITLE': esc(title), 'EXTERNAL': external,
         'CSS': '\n'.join((ASSETS / name).read_text(encoding='utf-8') for name in ('flow.css', 'flow-assistant.css')),
         'JS': '\n;\n'.join((ASSETS / name).read_text(encoding='utf-8').replace('</script', '<\\/script')
-                            for name in ('vendor/html2canvas.min.js', 'vendor/markdown-it.min.js', 'flow.js', 'flow-assistant.js')),
-        'DATA': json.dumps(data, ensure_ascii=False).replace('<', '\\u003c'),
+                            for name in ('vendor/html2canvas.min.js', 'vendor/markdown-it.min.js',
+                                         'flow-model.js', 'flow.js', 'flow-assistant.js')),
+        'DATA': data_json,
     }
     template = (ASSETS / 'flow-template.html').read_text(encoding='utf-8')
     return re.sub(r'@@([A-Z]+)@@', lambda m: replacements[m[1]], template)
+
+
+def render(data):
+    """One self-contained page with the flow inside it."""
+    validate(data)
+    data = canvas_data(data)
+    data.pop('project', None)
+    return _page(data['title'], json.dumps(data, ensure_ascii=False).replace('<', '\\u003c'), ANSWERS_SCRIPT)
+
+
+def render_viewer():
+    """The same page without a flow: it reads flow-data.js from its own folder.
+
+    Lets an agent with no Python build a page by copying this file and writing
+    flow-data.js next to it. The page checks the flow itself.
+    """
+    return _page('流程图解', '', DATA_SCRIPT + ANSWERS_SCRIPT)
 
 
 def build(data, output):
@@ -236,7 +254,14 @@ def build(data, output):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('manifest', type=Path)
-    parser.add_argument('output', type=Path)
+    parser.add_argument('manifest', type=Path, nargs='?')
+    parser.add_argument('output', type=Path, nargs='?')
+    parser.add_argument('--viewer', action='store_true', help='Regenerate assets/viewer/handbook.html (maintainers)')
     args = parser.parse_args()
-    build(json.loads(args.manifest.read_text(encoding='utf-8')), args.output)
+    if args.viewer:
+        VIEWER.parent.mkdir(exist_ok=True)
+        VIEWER.write_text(render_viewer(), encoding='utf-8', newline='\n')
+    elif args.manifest and args.output:
+        build(json.loads(args.manifest.read_text(encoding='utf-8')), args.output)
+    else:
+        parser.error('give a manifest and a new output directory')

@@ -23,6 +23,11 @@
     const live = location.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)
       && runtime && runtime.api === '/api' && typeof runtime.token === 'string' && runtime.token.length > 0;
     const authoredNodes = book.canvas?.nodes || (book.graphs || []).flatMap(graph => graph.nodes || []);
+    // Without the Codex connection, questions are handed to whichever AI made this
+    // page: copy the question there, the AI saves its answer to answers.js beside
+    // this file, and the page picks it up. A shared copy is read-only.
+    const relay = !live && book.shared !== true && location.protocol === 'file:';
+    const pendingKey = 'handbook-pending:' + (typeof pagePath === 'function' ? pagePath() : location.pathname);
     let entries = normalizeEntries(book.qa, true), nodeId = null, active = null, externalBusy = false;
     const selected = new Set(entries.filter(entry => entry.status === 'complete').map(entry => entry.id));
     let available = !!live, loading = !!live, exporting = false, polling = null, refreshing = false;
@@ -64,6 +69,32 @@
       if (text) result.append(element('span', '', label));
       return result;
     }
+    function agentAnswers() {
+      const values = Array.isArray(window.HANDBOOK_ANSWERS) ? window.HANDBOOK_ANSWERS : [];
+      return normalizeEntries(values.filter(value => value && typeof value === 'object').map(value => ({
+        id: value.id, question: value.question, answer: value.answer, status: 'complete',
+        node_id: typeof value.node_id === 'string' ? value.node_id : typeof value.node === 'string' ? value.node : null,
+        created_at: typeof value.time === 'string' ? value.time : value.created_at
+      })), true).map(entry => ({...entry, by: 'agent'}));
+    }
+    function readPending() {
+      try { const value = JSON.parse(localStorage.getItem(pendingKey) || '[]'); return Array.isArray(value) ? value : []; } catch (_) { return []; }
+    }
+    function writePending(list) {
+      try { if (list.length) localStorage.setItem(pendingKey, JSON.stringify(list)); else localStorage.removeItem(pendingKey); } catch (_) { /* Storage can be off; the copied text still works. */ }
+    }
+    // Merge saved answers and questions still waiting for one.
+    function mergeRelay() {
+      const answered = agentAnswers(), done = new Set(answered.map(entry => entry.id));
+      entries = entries.filter(entry => entry.status !== 'waiting' || !done.has(entry.id));
+      const known = new Set(entries.map(entry => entry.id));
+      for (const entry of answered) if (!known.has(entry.id)) { entries.push(entry); selected.add(entry.id); known.add(entry.id); }
+      const waiting = readPending().filter(item => item && typeof item.id === 'string' && typeof item.question === 'string' && !done.has(item.id));
+      writePending(waiting);
+      for (const item of waiting) if (!entries.some(entry => entry.id === item.id))
+        entries.push({id: item.id, node_id: typeof item.node_id === 'string' ? item.node_id : null, question: item.question, answer: '', status: 'waiting', error: '', created_at: item.created_at || ''});
+      return waiting.length;
+    }
     function normalizeEntries(values, authored = false) {
       const found = new Set();
       return (Array.isArray(values) ? values : []).filter(value => value && typeof value.question === 'string' && typeof value.answer === 'string').map((value, index) => ({
@@ -94,7 +125,7 @@
     const topHandle = button('flow-qa-resize-top', '拖动调整问答高度', 'grip');
     const head = element('div', 'flow-qa-header');
     const heading = element('div', 'flow-qa-heading');
-    const badge = element('span', 'flow-qa-badge', live ? '检查中' : '离线副本');
+    const badge = element('span', 'flow-qa-badge', live ? '检查中' : relay ? '交给 AI 回答' : '分享副本');
     heading.append(element('h3', '', '流程问答'), badge);
     const refresh = button('flow-qa-refresh', '刷新连接与历史', 'refresh'); refresh.hidden = !live;
     const close = button('flow-qa-close', '关闭问答', 'close');
@@ -110,17 +141,17 @@
     const status = element('p', 'flow-qa-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const form = element('form', 'flow-qa-form');
     const draft = element('textarea', 'flow-qa-draft');
-    draft.rows = 3; draft.maxLength = 4000; draft.placeholder = live ? '有什么疑问？Enter 发送，Shift+Enter 换行' : '这是离线副本，不能继续追问'; draft.setAttribute('aria-label', '问题');
-    const composerHint = element('p', 'flow-qa-hint', live ? '请用本机预览地址提问。Enter 发送，Shift+Enter 换行。' : '离线副本只能阅读和导出，不能继续追问。');
+    draft.rows = 3; draft.maxLength = 4000; draft.placeholder = live ? '有什么疑问？Enter 发送，Shift+Enter 换行' : relay ? '写下你的疑问，然后点「复制给 AI」' : '这是分享副本，不能继续追问'; draft.setAttribute('aria-label', '问题');
+    const composerHint = element('p', 'flow-qa-hint', live ? '请用本机预览地址提问。Enter 发送，Shift+Enter 换行。' : relay ? relayHint() : '分享副本只能阅读和导出，不能继续追问。');
     const actions = element('div', 'flow-qa-actions');
-    const send = button('flow-qa-send flow-qa-primary', '发送', 'send', true); send.type = 'submit';
+    const send = button('flow-qa-send flow-qa-primary', relay ? '复制给 AI' : '发送', 'send', true); send.type = 'submit';
     const cancel = button('flow-qa-cancel', '停止', 'stop', true); cancel.hidden = true;
     actions.append(cancel, send); form.append(draft, composerHint, actions);
     const footer = element('div', 'flow-qa-footer');
     const count = element('span', 'flow-qa-selection');
     const exportButton = button('flow-qa-export', '离线 HTML', 'download', true);
     exportButton.title = '导出当前流程图和已加入整理的回答';
-    const compile = button('flow-qa-compile', '整理新版本', 'compile', true);
+    const compile = button('flow-qa-compile', relay ? '让 AI 整理新版本' : '整理新版本', 'compile', true);
     compile.title = '将已加入的回答整理成新版本，原版保留';
     const footerHint = element('p', 'flow-qa-hint', '打开回答末尾的开关后，再整理新版本或导出离线 HTML。整理会生成新文件，原版不动。');
     const footerActions = element('div', 'flow-qa-footer-actions'); footerActions.append(exportButton, compile);
@@ -198,11 +229,14 @@
       if (/timed out|unexpectedly|failed|rejected/i.test(backendMessage)) return 'Codex 连接暂时失败，请稍后重试。已有内容仍可阅读和导出。';
       return '';
     }
+    function relayHint() {
+      return (nodeId ? '只问这一步；问整张图时先点上面的取消。' : '') + '点「复制给 AI」后，到 WorkBuddy、Codex 等 AI 的对话框里粘贴发送。AI 回答后会存回这份手册，这里会自动显示。';
+    }
     function updateControls() {
       const busy = !!active || externalBusy;
-      send.disabled = !live || !reachable || !available || loading || busy || !draft.value.trim();
-      compile.disabled = !live || !reachable || !available || loading || busy || !selected.size;
-      compile.title = !live ? '离线副本不能整理新版本' : !selected.size ? '打开回答末尾的开关，把要用的内容加入整理' : '把已加入的回答整理进新版本，原版保留';
+      send.disabled = relay ? !draft.value.trim() : !live || !reachable || !available || loading || busy || !draft.value.trim();
+      compile.disabled = relay ? !selected.size : !live || !reachable || !available || loading || busy || !selected.size;
+      compile.title = relay ? '复制一段话给 AI，让它把已加入的回答整理进新版本，原版保留' : !live ? '分享副本不能整理新版本' : !selected.size ? '打开回答末尾的开关，把要用的内容加入整理' : '把已加入的回答整理进新版本，原版保留';
       transcript.querySelectorAll('.flow-qa-retry').forEach(button => {button.disabled = !reachable || !available || loading || busy;});
       cancel.hidden = !live || !busy;
       cancel.disabled = !!active?.cancelling;
@@ -211,8 +245,8 @@
       pngFull.disabled = exporting;
       const completeCount = entries.filter(entry => entry.status === 'complete').length;
       count.textContent = selected.size ? `将整理 ${selected.size} / ${completeCount} 条完整回答` : completeCount ? '打开回答末尾的开关后，才能整理或导出选中内容' : '有完整回答后，才能整理新版本';
-      footerHint.textContent = !live ? '离线副本不能整理新版本，但仍可导出已加入的回答。' : selected.size ? `将把 ${selected.size} 条已加入的回答编进新版本或离线 HTML；不想用的先关掉开关。整理会生成新文件，原版不动。` : completeCount ? '打开回答末尾的开关后，再整理新版本或导出离线 HTML。' : '先得到完整回答，再整理新版本或导出。';
-      composerHint.textContent = live ? (nodeId ? '当前只问这个节点。问整张图时，先点上面的取消节点限定。Enter 发送，Shift+Enter 换行。' : '请用本机预览地址提问。Enter 发送，Shift+Enter 换行。') : '离线副本只能阅读和导出，不能继续追问。';
+      footerHint.textContent = relay ? '打开回答末尾的开关选好内容，可导出离线 HTML 分享，或让 AI 整理成新版本（原版保留）。' : !live ? '分享副本不能整理新版本，但仍可导出已加入的回答。' : selected.size ? `将把 ${selected.size} 条已加入的回答编进新版本或离线 HTML；不想用的先关掉开关。整理会生成新文件，原版不动。` : completeCount ? '打开回答末尾的开关后，再整理新版本或导出离线 HTML。' : '先得到完整回答，再整理新版本或导出。';
+      composerHint.textContent = live ? (nodeId ? '当前只问这个节点。问整张图时，先点上面的取消节点限定。Enter 发送，Shift+Enter 换行。' : '请用本机预览地址提问。Enter 发送，Shift+Enter 换行。') : relay ? relayHint() : '分享副本只能阅读和导出，不能继续追问。';
       contextHint.hidden = !nodeId;
       transcript.setAttribute('aria-busy', active?.kind === 'ask' ? 'true' : 'false');
     }
@@ -261,13 +295,22 @@
         const node = authoredNodes.find(item => item.id === entry.node_id);
         meta.append(element('span', '', node ? node.title : '整个流程'));
         if (entry.status !== 'complete') {
-          meta.append(element('span', 'flow-qa-entry-state', entry.status === 'streaming' ? '回答中' : entry.status === 'cancelled' ? '已停止' : '未完成'));
+          meta.append(element('span', 'flow-qa-entry-state', entry.status === 'streaming' ? '回答中' : entry.status === 'waiting' ? '等 AI 回答' : entry.status === 'cancelled' ? '已停止' : '未完成'));
         }
         const userMessage = element('div', 'flow-qa-message flow-qa-message-user');
         userMessage.append(element('span', 'flow-qa-role flow-qa-role-user', '你'), element('h4', 'flow-qa-question', entry.question));
         const assistantMessage = element('div', 'flow-qa-message flow-qa-message-assistant');
-        assistantMessage.append(element('span', 'flow-qa-role flow-qa-role-assistant', 'Codex · AI'));
+        assistantMessage.append(element('span', 'flow-qa-role flow-qa-role-assistant', live ? 'Codex · AI' : 'AI'));
         if (entry.status === 'streaming') assistantMessage.append(renderAnswer(entry.answer || '正在思考…'));
+        else if (entry.status === 'waiting') {
+          const waiting = element('div', 'flow-qa-answer flow-qa-answer-empty');
+          waiting.append(element('p', '', '已复制给 AI。到 AI 对话框里粘贴发送；它把回答存回手册后，这里会自动显示。'));
+          const again = button('flow-qa-copy-again', '再复制一次', 'refresh', true);
+          again.addEventListener('click', async () => { setStatus(await copyText(relayMessage(entry)) ? '已复制，去 AI 对话框粘贴发送' : '没能自动复制，请在下方选中文字手动复制', false); showRelayText(relayMessage(entry)); });
+          const drop = button('flow-qa-drop', '不问了', 'close', true);
+          drop.addEventListener('click', () => { writePending(readPending().filter(item => item.id !== entry.id)); entries = entries.filter(item => item !== entry); renderEntries(); });
+          waiting.append(again, drop); assistantMessage.append(waiting);
+        }
         else if (entry.status === 'complete') {
           const chosen = selected.has(entry.id);
           const togglePick = element('button', 'flow-qa-pick' + (chosen ? ' flow-qa-pick-on' : ''));
@@ -438,8 +481,61 @@
       updateControls();
       await refreshState(true, true);
     }
+    function relayMessage(entry) {
+      const node = authoredNodes.find(item => item.id === entry.node_id);
+      return ['请用 project-handbook 技能回答我在流程手册里的这个问题，并把回答存回手册。',
+        '手册：' + pagePath(), '问题编号：' + entry.id,
+        '针对：' + (node ? node.title + '（节点 ' + node.id + '）' : '整个流程'),
+        '问题：' + entry.question].join('\n');
+    }
+    function showRelayText(text) {
+      const box = element('pre', 'flow-qa-relay', text);
+      result.replaceChildren(element('p', '', '要发给 AI 的内容（已自动复制；没复制上就手动选中复制）：'), box); result.hidden = false;
+    }
+    async function handToAgent(question) {
+      const now = new Date(), pad = n => String(n).padStart(2, '0');
+      const stamp = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '-' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+      const entry = {id: 'q-' + stamp + '-' + Math.random().toString(36).slice(2, 6), node_id: nodeId, question, answer: '', status: 'waiting', error: '', created_at: now.toISOString()};
+      writePending([...readPending(), {id: entry.id, node_id: entry.node_id, question, created_at: entry.created_at}]);
+      entries.push(entry); renderEntries(true);
+      const text = relayMessage(entry);
+      showRelayText(text);
+      setStatus(await copyText(text) ? '已复制。到 WorkBuddy、Codex 等 AI 的对话框里粘贴发送。' : '没能自动复制，请在下方选中文字手动复制。');
+      watchAnswers();
+    }
+    // Re-read answers.js while questions wait, so answers appear without a refresh.
+    let watching = null;
+    function watchAnswers() {
+      if (!relay || watching) return;
+      const tick = () => {
+        watching = null;
+        if (!entries.some(entry => entry.status === 'waiting')) return;
+        if (document.hidden) { watching = setTimeout(tick, 4000); return; }
+        const script = document.createElement('script');
+        script.src = 'answers.js?t=' + Date.now();
+        script.onload = script.onerror = () => {
+          script.remove();
+          const before = entries.filter(entry => entry.status === 'complete').length;
+          mergeRelay();
+          if (entries.filter(entry => entry.status === 'complete').length > before) {
+            // The copied text has done its job; make room for the answer.
+            result.replaceChildren(); result.hidden = true;
+            renderEntries(true); setStatus('AI 的回答已存回手册');
+          }
+          watching = setTimeout(tick, 4000);
+        };
+        document.head.append(script);
+      };
+      watching = setTimeout(tick, 4000);
+    }
     form.addEventListener('submit', event => {
       event.preventDefault();
+      if (relay) {
+        const question = draft.value.trim();
+        if (!question) return;
+        draft.value = ''; updateControls(); handToAgent(question);
+        return;
+      }
       if (send.disabled || active) return;
       const question = draft.value.trim();
       draft.value = '';
@@ -468,6 +564,7 @@
     function failureText(entry) {
       if (typeof entry.error === 'string' && entry.error.trim()) return withRetryHint(entry.error);
       if (entry.status === 'cancelled') return '已停止这次回答。需要结果时，点重试。';
+      if (entry.status === 'waiting') return '等 AI 回答。';
       if (entry.answer) return '回答中断了。点重试可继续这条提问。';
       return '这次没有生成回答。确认已用网页预览打开，并且 Codex 已登录，然后点重试。';
     }
@@ -550,6 +647,7 @@
       return url.href;
     }
     compile.addEventListener('click', async () => {
+      if (relay) return; // Handled below: the AI that made this page builds the new version.
       if (compile.disabled || active) return;
       const ids = [...selected];
       const operation = newOperation('compile'); setStatus(`正在编入 ${ids.length} 条回答…`);
@@ -601,6 +699,8 @@
       value.canvas = {nodes: authoredNodes.map(cleanNode), edges: (book.canvas?.edges || []).map(cleanEdge),
         sections: (book.canvas?.sections || []).map(section => ({...pick(section, ['id', 'title']), nodes: ids(section.nodes)}))};
       value.qa = entries.filter(entry => entry.status === 'complete' && selected.has(entry.id)).map(entry => ({...pick(entry, ['id', 'question', 'answer']), node_id: entry.node_id || null}));
+      // Someone receiving this file has neither the project nor the AI that made it.
+      value.shared = true;
       return value;
     }
     function sanitizeDom(root) {
@@ -706,8 +806,20 @@
       finally { exporting = false; updateControls(); }
     }
     pngFull.addEventListener('click', exportPng);
+    if (relay) {
+      mergeRelay();
+      compile.addEventListener('click', async () => {
+        const ids = entries.filter(entry => entry.status === 'complete' && selected.has(entry.id)).map(entry => entry.id);
+        if (!ids.length) return;
+        const text = ['请用 project-handbook 技能，把这份流程手册里下面这些已回答的问题整理进流程图，生成新版本（原版保留）。',
+          '手册：' + pagePath(), '问题编号：' + ids.join('、')].join('\n');
+        openPanel(compile); showRelayText(text);
+        setStatus(await copyText(text) ? '已复制。到 AI 对话框里粘贴发送，它会生成新版本。' : '没能自动复制，请在下方选中文字手动复制。');
+      });
+      watchAnswers();
+    }
     renderEntries();
-    setStatus(live ? '正在检查本地问答…' : '离线副本；可阅读与导出已有问答');
+    setStatus(live ? '正在检查本地问答…' : relay ? (entries.length ? '可以继续提问；回答由生成这份手册的 AI 给出' : '有疑问就写下来，交给生成这份手册的 AI 回答') : '分享副本；可阅读与导出已有问答');
     if (live) refreshState();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, {once: true});
