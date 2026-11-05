@@ -271,7 +271,7 @@ class CodexBackendTests(unittest.TestCase):
                            'readableRoots': [str(self.source.resolve())]}})
         status = backend.status()
         self.assertTrue(status['connected'])
-        self.assertEqual(set(status), {'available', 'connected', 'model', 'message'})
+        self.assertEqual(set(status), {'available', 'connected', 'model', 'message', 'name'})
         self.assertNotIn('PRIVATE_', json.dumps(status))
         self.assertNotIn(str(self.cwd), json.dumps(status))
         server_commands = [command for command, _ in self.commands if 'generate-json-schema' not in command]

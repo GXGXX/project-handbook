@@ -90,9 +90,11 @@ Most readers are product, operations or design people, not programmers.
    next steps, each example route, and search. Then compare every path,
    condition, order and number with the evidence; a page that opens is not
    proof the explanation is right.
-6. **Deliver** with the shape above. In Codex with Python you may also start
-   the live in-page connection in [references/flow-qa.md](references/flow-qa.md)
-   and offer its address as an extra; the double-click file always works.
+6. **Deliver** with the shape above. With Python, also start the live in-page
+   connection in [references/flow-qa.md](references/flow-qa.md) when you can:
+   in Codex always; in WorkBuddy only if `codebuddy --version` works. Then add
+   one line: 「想在网页里直接问、不用复制粘贴：用这个地址打开 <url>（关掉电脑或 AI
+   工具后失效，失效时双击文件照样能用复制给 AI）」. Never install anything for it.
 
 ## Answer a Question From the Page
 
@@ -117,4 +119,5 @@ is handled in the same file.
 - `assets/viewer/handbook.html`: the same page for building without Python;
   it reads `flow-data.js` and `answers.js` from its own folder.
 - `scripts/save_answer.py`: save an answer into `answers.js` (needs Python).
-- `scripts/flow_server.py`: optional live in-page answers through Codex.
+- `scripts/flow_server.py`: optional live in-page answers through Codex or
+  WorkBuddy's `codebuddy` command line.

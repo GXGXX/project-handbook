@@ -1,4 +1,9 @@
-"""Serve a flow handbook and a private, read-only Codex Q&A connection."""
+"""Serve a flow handbook with private, read-only in-page answers.
+
+Answers come from the agent's own command line on this computer: Codex
+(app server) or CodeBuddy (WorkBuddy's CLI). Pages opened without this server
+hand questions to the agent by copy and paste instead.
+"""
 from __future__ import annotations
 
 import argparse
@@ -40,27 +45,31 @@ def public_ask_failure(backend=None, cancelled=False):
     """User-facing next step only; never return backend internals or paths."""
     if cancelled:
         return '已停止这次回答。需要结果时，点重试。'
-    message = ''
+    message, name = '', 'Codex'
     try:
-        message = str((backend.status() or {}).get('message') or '')
+        status = backend.status() or {}
+        message = str(status.get('message') or '')
+        name = status.get('name') if status.get('name') in ('Codex', 'CodeBuddy') else 'Codex'
     except Exception:
         message = ''
     text = message.lower()
     if re.search(r'sign.?in|log.?in|\bauth\b', text):
+        if name == 'CodeBuddy':
+            return '本机 CodeBuddy 尚未登录。在终端里运行一次 codebuddy，按提示登录后，点重试。'
         return '本机 Codex 尚未登录。打开 Codex 完成登录后，点重试。'
     if re.search(r'insufficient|balance|quota|billing|payment required', text):
         return '当前模型额度不足。更换可用模型或处理额度后，点重试。'
     if 'not found' in text or 'could not start' in text:
-        return '没有找到本机 Codex。安装或启动 Codex 后，点重试。'
+        return f'没有找到本机 {name}。安装或启动 {name} 后，点重试。'
     if re.search(r'cannot verify|cannot enforce|no model turn|unavailable', text):
-        return '当前 Codex 无法安全建立问答连接。检查或更新 Codex 后点重试；流程图仍可阅读和导出。'
+        return f'当前 {name} 无法安全建立问答连接。检查或更新 {name} 后点重试；流程图仍可阅读和导出。'
     if 'timed out' in text:
         return '这次回答超时了。点重试，或把问题拆得更短一些。'
     if 'closed unexpectedly' in text or 'connection closed' in text:
-        return '本机问答连接中断了。确认 Codex 仍在运行后，点重试。'
+        return f'本机问答连接中断了。确认 {name} 仍在运行后，点重试。'
     if 'rejected' in text:
-        return 'Codex 拒绝了这次请求。检查本机登录和配置后，点重试。'
-    return '这次没能完成回答。确认 Codex 已登录，且仍通过网页预览地址打开本页，然后点重试。'
+        return f'{name} 拒绝了这次请求。检查本机登录和配置后，点重试。'
+    return f'这次没能完成回答。确认 {name} 已登录，且仍通过网页预览地址打开本页，然后点重试。'
 
 
 def make_context(data, node_id, question, history):
@@ -102,7 +111,7 @@ class FlowServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = False
 
-    def __init__(self, address, book_dir, backend=None, roots=(), model=None, binary=None):
+    def __init__(self, address, book_dir, backend=None, roots=(), model=None, binary=None, agent='codex'):
         if address[0] != '127.0.0.1':
             raise ValueError('The Q&A server must bind to 127.0.0.1')
         self.book_dir = Path(book_dir).resolve()
@@ -117,8 +126,7 @@ class FlowServer(ThreadingHTTPServer):
         self.entries = []
         self.state_path = self.book_dir / '.flow-session.json'
         if backend is None:
-            from codex_backend import CodexBackend
-            backend = CodexBackend(binary=binary, model=model, cwd=self.book_dir, roots=self.roots)
+            backend = make_backend(agent, binary=binary, model=model, cwd=self.book_dir, roots=self.roots)
         self.backend = backend
         self._book_lock = None
         self._lock_book()
@@ -463,7 +471,7 @@ class FlowHandler(BaseHTTPRequestHandler):
             if self.server.cancel_event.is_set():
                 self.event('error', message='已停止整理，原版未改变。')
                 return
-            patch = json.loads(output)
+            patch = json.loads(re.sub(r'^\s*```(?:json)?\s*|\s*```\s*$', '', output))
             # A version is a local working copy like the original: it keeps the
             # source excerpts. Redaction happens only when exporting to share.
             path = write_revision(self.server.book_dir, data, patch, selected, redact=False,
@@ -477,6 +485,21 @@ class FlowHandler(BaseHTTPRequestHandler):
             self.server.backend.reset_context()
 
 
+def make_backend(agent, **options):
+    """The agent's own command line: codex, codebuddy, or auto (first one found)."""
+    if agent == 'auto':
+        import shutil
+        from codebuddy_backend import discover_binary
+        agent = 'codex' if (options.get('binary') or shutil.which('codex')) else 'codebuddy' if discover_binary() else 'codex'
+    if agent == 'codebuddy':
+        from codebuddy_backend import CodeBuddyBackend
+        return CodeBuddyBackend(**options)
+    if agent != 'codex':
+        raise ValueError('agent must be codex, codebuddy or auto')
+    from codex_backend import CodexBackend
+    return CodexBackend(**options)
+
+
 def launch_background(args):
     book = args.book.resolve(strict=True)
     validate(json.loads((book / 'flow.json').read_text(encoding='utf-8')))
@@ -484,7 +507,8 @@ def launch_background(args):
     command = [sys.executable, str(Path(__file__).resolve()), str(book), '--port', str(args.port)]
     for root in roots:
         command.extend(['--source-root', str(root)])
-    for option, value in (('--model', args.model), ('--codex-bin', args.codex_bin)):
+    for option, value in (('--model', args.model), ('--codex-bin', args.codex_bin), ('--agent', args.agent),
+                          ('--codebuddy-bin', args.codebuddy_bin)):
         if value:
             command.extend([option, value])
     stamp = uuid.uuid4().hex[:10]
@@ -526,6 +550,9 @@ def main():
     parser.add_argument('--port', type=int, default=0)
     parser.add_argument('--model')
     parser.add_argument('--codex-bin')
+    parser.add_argument('--agent', choices=('codex', 'codebuddy', 'auto'), default='codex',
+                        help='Whose command line answers: codex, codebuddy (WorkBuddy), or auto')
+    parser.add_argument('--codebuddy-bin')
     parser.add_argument('--background', action='store_true', help='Start a detached local connection and exit after verification')
     parser.add_argument('--background-log', help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -540,8 +567,8 @@ def main():
     if args.background:
         print(launch_background(args), flush=True)
         return
-    server = FlowServer(('127.0.0.1', args.port), args.book, roots=args.source_root,
-                        model=args.model, binary=args.codex_bin)
+    server = FlowServer(('127.0.0.1', args.port), args.book, roots=args.source_root, model=args.model,
+                        binary=args.codebuddy_bin if args.agent == 'codebuddy' else args.codex_bin, agent=args.agent)
     ready = server.book_dir / '.flow-server.json'
     ready.write_text(json.dumps({'url': server.origin, 'pid': os.getpid()}, ensure_ascii=False), encoding='utf-8')
     print(server.origin, flush=True)

@@ -44,3 +44,4 @@ jobs:
           node tests/test_flow_reader.cjs
           node tests/test_flow_model.cjs
           node tests/test_flow_any_agent.cjs
+          node tests/test_flow_codebuddy_live.cjs

@@ -23,7 +23,7 @@
     const live = location.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)
       && runtime && runtime.api === '/api' && typeof runtime.token === 'string' && runtime.token.length > 0;
     const authoredNodes = book.canvas?.nodes || (book.graphs || []).flatMap(graph => graph.nodes || []);
-    // Without the Codex connection, questions are handed to whichever AI made this
+    // Without the local connection, questions are handed to whichever AI made this
     // page: copy the question there, the AI saves its answer to answers.js beside
     // this file, and the page picks it up. A shared copy is read-only.
     const relay = !live && book.shared !== true && location.protocol === 'file:';
@@ -209,10 +209,14 @@
       status.textContent = message;
       status.classList.toggle('flow-qa-error', error);
     }
+    // Which agent's command line answers here: Codex, or CodeBuddy for WorkBuddy.
+    let backendName = 'Codex';
+    const signIn = () => backendName === 'CodeBuddy' ? '本机 CodeBuddy 尚未登录。在终端里运行一次 codebuddy，按提示登录后，点重试。' : '本机 Codex 尚未登录。打开 Codex 完成登录后，点重试。';
     function updateReadiness(backend) {
       available = backend.available === true;
       connected = available && backend.connected === true;
       backendMessage = typeof backend.message === 'string' ? redactText(backend.message).slice(0, 240) : '';
+      backendName = backend.name === 'CodeBuddy' ? 'CodeBuddy' : 'Codex';
       badge.textContent = !available ? '不可用' : connected ? '已连接' : '待连接';
       badge.dataset.state = !available ? 'unavailable' : connected ? 'connected' : 'pending';
       badge.title = connected ? '' : backendMessage;
@@ -221,12 +225,12 @@
       if (connected) return '已连接本地问答';
       const problem = connectionProblem();
       if (problem) return problem;
-      return available ? '还没连上问答。发送第一个问题会尝试连接本机 Codex。' : '问答暂不可用；可阅读与导出';
+      return available ? '还没连上问答。发送第一个问题会尝试连接本机 ' + backendName + '。' : '问答暂不可用；可阅读与导出';
     }
     function connectionProblem() {
-      if (/sign.?in|log.?in|auth/i.test(backendMessage)) return '请先在本机 Codex 登录，再重试提问。';
-      if (/cannot verify|cannot enforce|unavailable|no model turn/i.test(backendMessage)) return '暂时无法建立安全连接；请检查本机 Codex 后重试。已有内容仍可阅读和导出。';
-      if (/timed out|unexpectedly|failed|rejected/i.test(backendMessage)) return 'Codex 连接暂时失败，请稍后重试。已有内容仍可阅读和导出。';
+      if (/sign.?in|log.?in|auth/i.test(backendMessage)) return '请先在本机 ' + backendName + ' 登录，再重试提问。';
+      if (/cannot verify|cannot enforce|unavailable|no model turn/i.test(backendMessage)) return '暂时无法建立安全连接；请检查本机 ' + backendName + ' 后重试。已有内容仍可阅读和导出。';
+      if (/timed out|unexpectedly|failed|rejected/i.test(backendMessage)) return backendName + ' 连接暂时失败，请稍后重试。已有内容仍可阅读和导出。';
       return '';
     }
     function relayHint() {
@@ -300,7 +304,7 @@
         const userMessage = element('div', 'flow-qa-message flow-qa-message-user');
         userMessage.append(element('span', 'flow-qa-role flow-qa-role-user', '你'), element('h4', 'flow-qa-question', entry.question));
         const assistantMessage = element('div', 'flow-qa-message flow-qa-message-assistant');
-        assistantMessage.append(element('span', 'flow-qa-role flow-qa-role-assistant', live ? 'Codex · AI' : 'AI'));
+        assistantMessage.append(element('span', 'flow-qa-role flow-qa-role-assistant', live ? backendName + ' · AI' : 'AI'));
         if (entry.status === 'streaming') assistantMessage.append(renderAnswer(entry.answer || '正在思考…'));
         else if (entry.status === 'waiting') {
           const waiting = element('div', 'flow-qa-answer flow-qa-answer-waiting');
@@ -575,7 +579,7 @@
       if (entry.status === 'cancelled') return '已停止这次回答。需要结果时，点重试。';
       if (entry.status === 'waiting') return '等 AI 回答。';
       if (entry.answer) return '回答中断了。点重试可继续这条提问。';
-      return '这次没有生成回答。确认已用网页预览打开，并且 Codex 已登录，然后点重试。';
+      return '这次没有生成回答。确认已用网页预览打开，并且 ' + backendName + ' 已登录，然后点重试。';
     }
     async function askQuestion(question, scope, existing) {
       if (active || externalBusy || !reachable || !available || loading) return;
@@ -627,14 +631,14 @@
     function explainFailure(error) {
       const message = safeMessage(error);
       const text = String(error?.message || '');
-      if (/sign.?in|log.?in|\bauth\b|登录/.test(text + message)) return '本机 Codex 尚未登录。打开 Codex 完成登录后，点重试。';
+      if (/sign.?in|log.?in|\bauth\b|登录/.test(text + message)) return signIn();
       if (/insufficient|balance|quota|额度/.test(text + message)) return '当前模型额度不足。更换可用模型或处理额度后，点重试。';
-      if (/not found|could not start|找不到/.test(text)) return '没有找到本机 Codex。安装或启动 Codex 后，点重试。';
-      if (/cannot verify|cannot enforce|unavailable|no model turn|安全连接|暂不可用/.test(text + message)) return '暂时无法完成回答。检查本机 Codex 后点重试；流程图仍可阅读和导出。';
+      if (/not found|could not start|找不到/.test(text)) return '没有找到本机 ' + backendName + '。安装或启动 ' + backendName + ' 后，点重试。';
+      if (/cannot verify|cannot enforce|unavailable|no model turn|安全连接|暂不可用/.test(text + message)) return '暂时无法完成回答。检查本机 ' + backendName + ' 后点重试；流程图仍可阅读和导出。';
       if (/timed out|超时/.test(text + message)) return '这次回答超时了。点重试，或把问题拆得更短一些。';
-      if (/断开|connection closed|closed unexpectedly/.test(text + message)) return '本机问答连接中断了。确认 Codex 仍在运行，并用网页预览打开本页，然后点重试。';
+      if (/断开|connection closed|closed unexpectedly/.test(text + message)) return '本机问答连接中断了。确认 ' + backendName + ' 仍在运行，并用网页预览打开本页，然后点重试。';
       if (message && !/Failed to fetch|请求失败|回答数据格式错误|未知回答事件/.test(message)) return withRetryHint(message);
-      return '这次没有生成回答。确认已用网页预览打开，并且 Codex 已登录，然后点重试。';
+      return '这次没有生成回答。确认已用网页预览打开，并且 ' + backendName + ' 已登录，然后点重试。';
     }
     cancel.addEventListener('click', async () => {
       if (!live || active?.cancelling) return;
