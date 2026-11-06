@@ -28,6 +28,7 @@
     // this file, and the page picks it up. A shared copy is read-only.
     const relay = !live && book.shared !== true && location.protocol === 'file:';
     const pendingKey = 'handbook-pending:' + (typeof pagePath === 'function' ? pagePath() : location.pathname);
+    const askedKey = 'handbook-asked:' + (typeof pagePath === 'function' ? pagePath() : location.pathname);
     let entries = normalizeEntries(book.qa, true), nodeId = null, active = null, externalBusy = false;
     const selected = new Set(entries.filter(entry => entry.status === 'complete').map(entry => entry.id));
     let available = !!live, loading = !!live, exporting = false, polling = null, refreshing = false;
@@ -72,7 +73,9 @@
     function agentAnswers() {
       const values = Array.isArray(window.HANDBOOK_ANSWERS) ? window.HANDBOOK_ANSWERS : [];
       return normalizeEntries(values.filter(value => value && typeof value === 'object').map(value => ({
-        id: value.id, question: value.question, answer: value.answer, status: 'complete',
+        // An agent may save the 问题编号 or nothing as the question; the reader's own words are restored below.
+        id: value.id, question: typeof value.question === 'string' && value.question.trim() !== value.id ? value.question : '',
+        answer: value.answer, status: 'complete',
         node_id: typeof value.node_id === 'string' ? value.node_id : typeof value.node === 'string' ? value.node : null,
         created_at: typeof value.time === 'string' ? value.time : value.created_at
       })), true).map(entry => ({...entry, by: 'agent'}));
@@ -84,8 +87,19 @@
       try { if (list.length) localStorage.setItem(pendingKey, JSON.stringify(list)); else localStorage.removeItem(pendingKey); } catch (_) { /* Storage can be off; the copied text still works. */ }
     }
     // Merge saved answers and questions still waiting for one.
+    function readAsked() {
+      try { const value = JSON.parse(localStorage.getItem(askedKey) || '{}'); return value && typeof value === 'object' ? value : {}; } catch (_) { return {}; }
+    }
     function mergeRelay() {
       const answered = agentAnswers(), done = new Set(answered.map(entry => entry.id));
+      const asked = readAsked(), before = JSON.stringify(asked);
+      for (const item of [...readPending(), ...entries.filter(entry => entry.status === 'waiting')])
+        if (item && typeof item.id === 'string' && typeof item.question === 'string' && item.question) asked[item.id] = item.question;
+      for (const entry of answered) {
+        if (entry.question.trim()) delete asked[entry.id];
+        else entry.question = asked[entry.id] || '（问题原文没有存下来）';
+      }
+      try { if (JSON.stringify(asked) !== before) localStorage.setItem(askedKey, JSON.stringify(asked)); } catch (_) { /* Storage can be off. */ }
       entries = entries.filter(entry => entry.status !== 'waiting' || !done.has(entry.id));
       const known = new Set(entries.map(entry => entry.id));
       for (const entry of answered) if (!known.has(entry.id)) { entries.push(entry); selected.add(entry.id); known.add(entry.id); }

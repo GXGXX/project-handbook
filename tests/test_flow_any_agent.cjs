@@ -210,4 +210,14 @@ test('several questions go to the AI in one paste', async t => {
   const again = await page.evaluate(() => navigator.clipboard.readText());
   assert.match(again, /^请用 project-handbook 技能回答我在流程手册里的这个问题/);
   assert(again.includes(ids[1]) && !again.includes(ids[0]));
+
+  // A model that saves the 问题编号 as the question still shows the reader's words, also after a reload.
+  fs.writeFileSync(path.join(dir, 'answers.js'), 'window.HANDBOOK_ANSWERS = [' + [
+    {id: ids[0], node: 'stock', question: 'x', answer: '不保留。'}, {id: ids[1], node: null, question: ids[1], answer: '几秒。'}
+  ].map(value => JSON.stringify(value)).join(',') + '];');
+  await page.waitForFunction(() => document.querySelectorAll('.flow-qa-entry-state').length === 0, null, {timeout: 10000});
+  assert.deepEqual(await page.locator('.flow-qa-question').allTextContents(), ['x', '整个流程最长要多久？']);
+  await page.reload();
+  await page.locator('.flow-qa-toggle').click();
+  assert.deepEqual(await page.locator('.flow-qa-question').allTextContents(), ['x', '整个流程最长要多久？']);
 });

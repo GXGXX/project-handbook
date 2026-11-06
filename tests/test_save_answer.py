@@ -55,6 +55,7 @@ class SaveAnswerTests(unittest.TestCase):
         cases = [(self.temp, 'q-1', 'x', 'y', None, 'not a handbook folder'),
                  (self.book, 'q 1; rm', 'x', 'y', None, '问题编号'),
                  (self.book, 'q-1', ' ', 'y', None, 'must not be empty'),
+                 (self.book, 'q-20261106-181100-wb01', 'q-20261106-181100-wb01', 'y', None, 'not the 问题编号'),
                  (self.book, 'q-1', 'x', 'y', 'nope', 'node "nope" is not in this handbook')]
         for book, entry_id, question, answer, node, message in cases:
             with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):

@@ -54,6 +54,8 @@ def save(book, entry_id, question, answer, node=None):
         raise ValueError('id must be the 问题编号 from the page, such as q-20261105-093321-04hp')
     if not question.strip() or not answer.strip():
         raise ValueError('question and answer must not be empty')
+    if question.strip() == entry_id or re.fullmatch(r'q-\d{8}-\d{6}-\w+', question.strip()):
+        raise ValueError('--question-file must hold the 问题 text the reader wrote, not the 问题编号')
     known = node_ids(book)
     if node and known is not None and node not in known:
         raise ValueError(f'node "{node}" is not in this handbook; leave --node out for a whole-flow answer')
