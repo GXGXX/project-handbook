@@ -230,7 +230,7 @@
       return '';
     }
     function relayHint() {
-      return (nodeId ? '只问这一步；问整张图时先点上面的取消。' : '') + '点「复制给 AI」后，到 WorkBuddy、Codex 等 AI 的对话框里粘贴发送。AI 回答后会存回这份手册，这里会自动显示。';
+      return '点「复制给 AI」，粘贴到 AI 对话框发送；回答会自动出现在这里。';
     }
     function updateControls() {
       const busy = !!active || externalBusy;
@@ -245,7 +245,7 @@
       pngFull.disabled = exporting;
       const completeCount = entries.filter(entry => entry.status === 'complete').length;
       count.textContent = selected.size ? `将整理 ${selected.size} / ${completeCount} 条完整回答` : completeCount ? '打开回答末尾的开关后，才能整理或导出选中内容' : '有完整回答后，才能整理新版本';
-      footerHint.textContent = relay ? '打开回答末尾的开关选好内容，可导出离线 HTML 分享，或让 AI 整理成新版本（原版保留）。' : !live ? '分享副本不能整理新版本，但仍可导出已加入的回答。' : selected.size ? `将把 ${selected.size} 条已加入的回答编进新版本或离线 HTML；不想用的先关掉开关。整理会生成新文件，原版不动。` : completeCount ? '打开回答末尾的开关后，再整理新版本或导出离线 HTML。' : '先得到完整回答，再整理新版本或导出。';
+      footerHint.textContent = relay ? '打开回答下的开关选好内容，再导出分享或让 AI 整理新版本。' : !live ? '分享副本不能整理新版本，但仍可导出已加入的回答。' : selected.size ? `将把 ${selected.size} 条已加入的回答编进新版本或离线 HTML；不想用的先关掉开关。整理会生成新文件，原版不动。` : completeCount ? '打开回答末尾的开关后，再整理新版本或导出离线 HTML。' : '先得到完整回答，再整理新版本或导出。';
       composerHint.textContent = live ? (nodeId ? '当前只问这个节点。问整张图时，先点上面的取消节点限定。Enter 发送，Shift+Enter 换行。' : '请用本机预览地址提问。Enter 发送，Shift+Enter 换行。') : relay ? relayHint() : '分享副本只能阅读和导出，不能继续追问。';
       contextHint.hidden = !nodeId;
       transcript.setAttribute('aria-busy', active?.kind === 'ask' ? 'true' : 'false');

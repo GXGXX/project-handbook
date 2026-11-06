@@ -8,6 +8,12 @@
 
 ![Project Handbook 工作方式：提供资料和问题、沿问题梳理流程、生成交互 HTML、继续追问和导出](docs/images/project-handbook-workflow.png)
 
+## 50 秒看懂怎么用
+
+[![演示视频：在 AI 对话里提问 → 打开流程图 → 点开某一步 → 在网页里提问并复制给 AI → 回答自动出现 → 跟着例子走一遍](docs/images/demo-poster.jpg)](docs/media/project-handbook-demo.mp4)
+
+点图片播放视频。演示用的是一份合成的「7 日签到活动方案」：在 AI 对话里说一句话生成流程图，点开某一步看规则和依据，在网页里提问、复制给 AI，回答自动存回网页，再跟着数值例子在图上走一遍。
+
 ## 安装
 
 先下载安装包 [project-handbook.zip](https://github.com/GXGXX/project-handbook/releases/latest/download/project-handbook.zip)。

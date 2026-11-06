@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>stage</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:1440px;height:810px;overflow:hidden;background:#eef3f6;font-family:"Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif;color:#1f2d3a}
+.layer{position:absolute;inset:0;opacity:0;transition:none}
+.layer.on{opacity:1}
+.layer{pointer-events:none}#page{pointer-events:auto}
+#book{border:0;width:1440px;height:810px;background:#fff}
+/* Chat mock: a generic AI chat window, not any product's design */
+#chat{background:linear-gradient(160deg,#eef3f6,#e3ecef);display:flex;align-items:center;justify-content:center}
+.win{width:1060px;height:690px;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(31,45,58,.18);display:flex;flex-direction:column;overflow:hidden;border:1px solid #d8e2e8}
+.bar{height:52px;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid #e3eaee;background:#f8fafb}
+.dot{width:12px;height:12px;border-radius:50%;background:#d6dde2}
+.bar b{margin-left:10px;font-size:16px}.bar span{color:#6b7f8e;font-size:14px}
+.msgs{flex:1;padding:24px 36px;display:flex;flex-direction:column;gap:18px;overflow:hidden;justify-content:flex-end}
+.msg{max-width:78%;padding:14px 18px;border-radius:14px;font-size:17px;line-height:1.7;white-space:pre-wrap;word-break:break-all}
+.me{align-self:flex-end;background:#2f6f67;color:#fff;border-bottom-right-radius:4px}
+.ai{align-self:flex-start;background:#f2f5f7;border:1px solid #e1e8ec;border-bottom-left-radius:4px}
+.ai .who,.me .who{display:block;font-size:12px;opacity:.7;margin-bottom:4px;font-weight:bold}
+.ai .path{background:#fff;border:1px solid #cfdde3;border-radius:6px;padding:1px 6px;font-size:15px}
+.thinking{color:#6b7f8e;font-style:italic}
+.input{margin:0 24px 22px;border:1.5px solid #c8d6dd;border-radius:12px;min-height:64px;padding:12px 16px;font-size:16px;line-height:1.6;color:#1f2d3a;display:flex;align-items:flex-end;gap:12px}
+.input .text{flex:1;white-space:pre-wrap;word-break:break-all;max-height:140px;overflow:hidden}
+.input .text:empty:before{content:"给 AI 发消息…";color:#9aabb6}
+.send{width:40px;height:40px;border-radius:10px;background:#2f6f67;color:#fff;display:grid;place-items:center;font-size:20px;flex:none}
+/* Title and end cards */
+.card{background:radial-gradient(circle at 30% 20%,#ffffff,#e6eff2 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:18px}
+.card h1{font-size:64px;margin:0;letter-spacing:1px}.card h1 small{display:block;font-size:30px;color:#2f6f67;margin-top:10px;font-weight:bold}
+.card p{font-size:26px;margin:0;color:#3d5262;line-height:1.6}
+.chips{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.chip{background:#fff;border:1.5px solid #9cc7bb;color:#1f5f57;border-radius:999px;padding:8px 20px;font-size:22px;font-weight:bold}
+.repo{font-size:24px;color:#52697b;margin-top:8px}
+.flow-mini{display:flex;align-items:center;gap:12px;font-size:22px;color:#3d5262}.flow-mini span{background:#fff;border:1px solid #cfdde3;border-radius:10px;padding:8px 16px}.flow-mini i{font-style:normal;color:#9aabb6}
+/* Caption */
+#cap{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);background:rgba(20,32,42,.86);color:#fff;border-radius:14px;padding:12px 26px;font-size:24px;font-weight:bold;letter-spacing:.5px;white-space:nowrap;box-shadow:0 10px 30px rgba(0,0,0,.25);opacity:0;display:flex;align-items:center;gap:14px}
+#cap .n{background:#e5b44a;color:#3b2a05;border-radius:8px;padding:2px 10px;font-size:20px}
+#cap.top{bottom:auto;top:22px}
+/* Cursor */
+#cursor{position:absolute;left:0;top:0;width:28px;height:28px;pointer-events:none;z-index:10;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));opacity:0}
+#ring{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px solid #e5b44a;opacity:0;pointer-events:none;z-index:9}
+</style></head>
+<body>
+<div id="title" class="layer card on">
+  <h1>Project Handbook<small>流程手册</small></h1>
+  <p>把「这个流程怎么走、这个数怎么算」讲成一张能点、能问的流程图网页</p>
+  <div class="flow-mini"><span>资料文件夹 + 一个问题</span><i>→</i><span>可交互流程图</span><i>→</i><span>在网页里继续问</span></div>
+</div>
+<div id="page" class="layer"><iframe id="book" allow="clipboard-read; clipboard-write"></iframe></div>
+<div id="chat" class="layer"><div class="win">
+  <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><b>AI 对话</b><span>WorkBuddy、Codex 等支持 Skills 的 AI 工具</span></div>
+  <div class="msgs" id="msgs"></div>
+  <div class="input"><div class="text" id="input"></div><div class="send">➤</div></div>
+</div></div>
+<div id="end" class="layer card">
+  <h1 style="font-size:52px">装好技能，问一句就有流程图</h1>
+  <div class="chips"><span class="chip">不需要 Python</span><span class="chip">不需要 API key</span><span class="chip">用你 AI 工具自带的模型</span></div>
+  <p>WorkBuddy：技能 → 上传技能包　｜　Codex：发一句话安装</p>
+  <div class="repo">github.com/GXGXX/project-handbook</div>
+</div>
+<div id="cap"><span class="n"></span><span class="t"></span></div>
+<div id="ring"></div>
+<svg id="cursor" viewBox="0 0 28 28"><path d="M4 2 L4 22 L9.5 17 L13 25 L16.5 23.5 L13 15.8 L20.5 15.8 Z" fill="#fff" stroke="#14202a" stroke-width="1.6" stroke-linejoin="round"/></svg>
+<script>
+const $=id=>document.getElementById(id);
+window.stage={
+  show(id,o){$(id).style.opacity=o;},
+  cap(n,t,o=1,top=false){const c=$('cap');c.querySelector('.n').textContent=n;c.querySelector('.n').style.display=n?'':'none';c.querySelector('.t').textContent=t;c.style.opacity=o;c.classList.toggle('top',top);},
+  cursor(x,y,o=1){const c=$('cursor');c.style.left=(x-4)+'px';c.style.top=(y-2)+'px';c.style.opacity=o;},
+  ring(x,y,p){const r=$('ring');r.style.left=x+'px';r.style.top=y+'px';r.style.opacity=p<=0||p>=1?0:1-p;r.style.transform='scale('+(0.4+p)+')';},
+  msg(kind,html){const m=document.createElement('div');m.className='msg '+kind;m.innerHTML=html;$('msgs').append(m);return $('msgs').children.length-1;},
+  setMsg(i,html){$('msgs').children[i].innerHTML=html;},
+  input(t){$('input').textContent=t;},
+  clearMsgs(){$('msgs').replaceChildren();}
+};
+</script>
+</body></html>
