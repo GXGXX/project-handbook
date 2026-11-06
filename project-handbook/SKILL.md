@@ -2,7 +2,7 @@
 name: project-handbook
 description: 把「这个流程/规则/数值是怎么回事」讲成一张可点击的流程图网页。Use when someone gives a folder (project code, product docs, PRD, 活动方案, 配置表) and asks how something works or is calculated — 帮我梳理登录流程、这个活动奖励怎么发、伤害怎么算、这个功能的规则是什么、新人看不懂这个系统 — including vague questions; and when someone pastes a message from a handbook page that starts with 「请用 project-handbook 技能」. Reads the folder without changing it and delivers one offline HTML flowchart with branches, formulas, worked examples and evidence; questions asked in the page are answered by you and saved back into it. Not for editing project files, writing READMEs or API references.
 metadata:
-  version: "3.0.0"
+  version: "3.1.0"
   source-inspiration: "https://github.com/lili-luo/aicoding-cookbook"
 ---
 
