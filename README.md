@@ -6,7 +6,7 @@
 
 适合产品、运营、策划，以及刚接手项目的人。不用写代码，不用配置 API key，用的就是你在 WorkBuddy、Codex 等 AI 工具里本来的账号和模型。
 
-## 50 秒看懂怎么用
+## 1 分钟看懂怎么用
 
 [![演示视频：在 AI 对话里提问 → 打开流程图 → 点开某一步 → 在网页里提问并复制给 AI → 回答自动出现 → 跟着例子走一遍](docs/images/demo-poster.jpg)](docs/media/project-handbook-demo.mp4)
 
@@ -14,19 +14,16 @@
 
 ## 安装
 
-先下载安装包 [project-handbook.zip](https://github.com/GXGXX/project-handbook/releases/latest/download/project-handbook.zip)。
+把这句话发给 WorkBuddy 或 Codex（Claude Code 等其他支持 Skills 的 AI 工具也可以）：
 
-- **WorkBuddy**：打开「技能」→「添加技能」→「上传技能」，选择下载的 zip。也可以把解压出来的 `project-handbook` 文件夹放进 `C:\Users\你的用户名\.workbuddy\skills\`（Mac 是 `~/.workbuddy/skills/`），然后重启 WorkBuddy。
-- **Codex**：把这句话发给 Codex：
+```text
+帮我安装下这个 skill：
+https://github.com/GXGXX/project-handbook/tree/main/project-handbook
+```
 
-  ```text
-  帮我安装下这个 skill：
-  https://github.com/GXGXX/project-handbook/tree/main/project-handbook
-  ```
+装好后开一个新对话就能用；看不到这个技能就重启一下 AI 工具。以后想更新到最新版，再发一次这句话。
 
-- **其他支持 Skills 的 AI 工具**（Claude Code、OpenClaw 等）：把 `project-handbook` 文件夹放进它的 skills 目录。
-
-装好后如果看不到这个技能，重启一下 AI 工具。
+**AI 连不上 GitHub 时**：自己下载安装包 [project-handbook.zip](https://github.com/GXGXX/project-handbook/releases/latest/download/project-handbook.zip)。WorkBuddy 里打开「技能」→「添加技能」→「上传技能」，选这个 zip；其他工具把解压出来的 `project-handbook` 文件夹放进它的 skills 目录（WorkBuddy 是 `C:\Users\你的用户名\.workbuddy\skills\`，Mac 是 `~/.workbuddy/skills/`）。
 
 ## 三步用起来
 

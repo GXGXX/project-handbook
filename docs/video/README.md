@@ -1,6 +1,6 @@
 # README 演示视频
 
-`docs/media/project-handbook-demo.mp4`（约 50 秒，1920×1080，无声）用的是 `docs/examples/checkin.flow.json` 生成的真实网页，由脚本操作录制，不是手工剪辑。页面改版后可以重录：
+`docs/media/project-handbook-demo.mp4`（约 1 分钟，1920×1080，无声）用的是 `docs/examples/checkin.flow.json` 生成的真实网页，由脚本操作录制，不是手工剪辑。页面改版后可以重录：
 
 ```bash
 # 在仓库根目录；需要 Node + Playwright、Python 3、ffmpeg
