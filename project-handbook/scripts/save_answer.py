@@ -63,7 +63,8 @@ def save(book, entry_id, question, answer, node=None):
                    'time': datetime.now().strftime('%Y-%m-%d %H:%M')})
     text = PREFIX + json.dumps(values, ensure_ascii=False, indent=1).replace('</', '<\\/') + ';\n'
     temporary = path.with_name('answers.js.tmp')
-    temporary.write_text(text, encoding='utf-8', newline='\n')
+    with open(temporary, 'w', encoding='utf-8', newline='\n') as handle:  # write_text(newline=) needs 3.10
+        handle.write(text)
     os.replace(temporary, path)
     return path
 
