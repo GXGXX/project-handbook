@@ -134,19 +134,22 @@ const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
   // 4. Ask in the page
   await scene('04-question');
-  await caption('4', '有疑问就写下来，点「复制给 AI」');
+  await caption('4', '有疑问就写下来，点「复制给 AI」；可以连着问几个');
   await moveTo(frame.getByRole('button', {name: '追问这个节点'}), .6);
   await click(() => frame.waitForTimeout(250));
   const panelTop = await frame.evaluate(() => document.querySelector('.flow-qa-panel').getBoundingClientRect().top + scrollY - document.querySelector('nav').offsetHeight - 10);
   await scrollFrame(panelTop, .6);
   await moveTo(frame.locator('.flow-qa-draft'), .5, -80);
   await click();
-  const question = '第 7 天领完以后，第 8 天再签到算第几天？';
-  const n = Math.round(1.3 * FPS);
-  for (let i = 1; i <= n; i++) { await frame.locator('.flow-qa-draft').fill(question.slice(0, Math.ceil(question.length * i / n))); await snap(); }
-  await moveTo(frame.locator('.flow-qa-send'), .5);
-  await click(() => frame.waitForTimeout(300));
-  await hold(1.6);
+  const questions = ['第 7 天领完以后，第 8 天再签到算第几天？', '新用户第 1 天一共拿多少金币？'];
+  for (const [k, question] of questions.entries()) {
+    if (k) { await moveTo(frame.locator('.flow-qa-draft'), .5, -80); await click(); }
+    const n = Math.round(1.2 * FPS);
+    for (let i = 1; i <= n; i++) { await frame.locator('.flow-qa-draft').fill(question.slice(0, Math.ceil(question.length * i / n))); await snap(); }
+    await moveTo(frame.locator('.flow-qa-send'), .5);
+    await click(() => frame.waitForTimeout(300));
+    await hold(k ? 1.8 : .9);
+  }
   const copied = await page.evaluate(() => navigator.clipboard.readText());
 
   // 5. Paste to the AI
@@ -155,29 +158,37 @@ const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   await stage('cursor', cur.x, cur.y, 0);
   await stage('clearMsgs');
   await fade('page', 'chat', .5);
-  await caption('5', '粘贴给 AI：它用资料回答，并把答案存回网页');
+  await caption('5', '粘贴给 AI：它一起回答，并把答案存回网页');
   await hold(.3);
   await stage('input', copied); await hold(1.0);
   await stage('input', ''); await stage('msg', 'me', '<span class="who">你</span>' + copied.replace(/\n/g, '<br>'));
   const answering = await stage('msg', 'ai', '<span class="who">AI</span><span class="thinking">正在查资料回答…</span>');
   await hold(1.0);
-  const id = copied.match(/问题编号：(\S+)/)[1];
-  fs.writeFileSync(path.join(V, 'q.txt'), question);
-  fs.writeFileSync(path.join(V, 'a.md'), '算**第 1 天**。\n\n领完第 7 天的大奖后，连续天数会重置为 0。第 8 天签到时昨天签过，所以 0 + 1 = 1：拿 10 金币，开始新一轮。');
-  execFileSync('python3', ['-X', 'utf8', path.join(REPO, 'project-handbook/scripts/save_answer.py'), BOOK,
-    '--id', id, '--node', 'big', '--question-file', path.join(V, 'q.txt'), '--answer-file', path.join(V, 'a.md')]);
-  await stage('setMsg', answering, '<span class="who">AI</span>算 <b>第 1 天</b>。领完第 7 天的大奖后，连续天数会重置为 0；第 8 天签到时 0 + 1 = 1，拿 10 金币，开始新一轮。<br><br>已存回手册，回到网页几秒后会自动显示。');
-  await hold(2.6);
+  const ids = [...copied.matchAll(/问题编号：(\S+)/g)].map(m => m[1]);
+  const answers = ['算**第 1 天**。\n\n领完第 7 天的大奖后，连续天数会重置为 0。第 8 天签到时昨天签过，所以 0 + 1 = 1：拿 10 金币，开始新一轮。',
+    '**30 金币**。\n\n第 1 天的基础奖励 10 金币，加上新用户首次签到的 20 金币：10 + 20 = 30。'];
+  for (const [k, id] of ids.entries()) {
+    fs.writeFileSync(path.join(V, 'q.txt'), questions[k]);
+    fs.writeFileSync(path.join(V, 'a.md'), answers[k]);
+    execFileSync('python3', ['-X', 'utf8', path.join(REPO, 'project-handbook/scripts/save_answer.py'), BOOK,
+      '--id', id, '--node', 'big', '--question-file', path.join(V, 'q.txt'), '--answer-file', path.join(V, 'a.md')]);
+  }
+  await stage('setMsg', answering, '<span class="who">AI</span>1. 算 <b>第 1 天</b>。领完第 7 天的大奖后，连续天数重置为 0；第 8 天签到时 0 + 1 = 1，拿 10 金币。<br>' +
+    '2. <b>30 金币</b>：第 1 天基础 10 金币 + 新用户首签 20 金币。<br><br>已存回手册，回到网页几秒后会自动显示。');
+  await hold(2.8);
 
   // 6. The answer is in the page
   await scene('06-answer');
   await caption('', '', false);
   await fade('chat', 'page', .5);
-  await caption('6', '回到网页：回答已经出现，不用重新生成');
-  await frame.locator('.flow-qa-entry-state').waitFor({state: 'detached', timeout: 15000});
+  await caption('6', '回到网页：两个回答都已经出现，不用重新生成');
+  await frame.waitForFunction(() => !document.querySelector('.flow-qa-entry-state'), null, {timeout: 15000});
   await frame.waitForTimeout(200);
-  await frame.evaluate(() => { const box = document.querySelector('.flow-qa-transcript'), entries = box.querySelectorAll('.flow-qa-entry'); box.scrollTop = entries[entries.length - 1].offsetTop - box.offsetTop - 4; });
-  await hold(2.6);
+  const entryTop = k => frame.evaluate(k => { const box = document.querySelector('.flow-qa-transcript'), entries = box.querySelectorAll('.flow-qa-entry'); return entries[entries.length + k].offsetTop - box.offsetTop - 4; }, k);
+  await frame.evaluate(y => { document.querySelector('.flow-qa-transcript').scrollTop = y; }, await entryTop(-2));
+  await hold(1.8);
+  await scrollFrame(await entryTop(-1), .8, '.flow-qa-transcript');
+  await hold(1.8);
 
   // 7. Walk an example on the diagram
   await scene('07-route');
