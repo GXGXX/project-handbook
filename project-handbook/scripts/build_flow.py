@@ -260,7 +260,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.viewer:
         VIEWER.parent.mkdir(exist_ok=True)
-        VIEWER.write_text(render_viewer(), encoding='utf-8', newline='\n')
+        with open(VIEWER, 'w', encoding='utf-8', newline='\n') as handle:  # write_text(newline=) needs 3.10
+            handle.write(render_viewer())
     elif args.manifest and args.output:
         build(json.loads(args.manifest.read_text(encoding='utf-8')), args.output)
     else:

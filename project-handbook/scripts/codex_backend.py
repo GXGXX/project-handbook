@@ -131,6 +131,7 @@ def _supports_restricted_reads(schema):
 
 
 class CodexBackend:
+    name = 'Codex'
     def __init__(self, binary=None, model=None, cwd=None, roots=()):
         self._binary = _discover_binary(binary)
         if model is not None and _model_name(model) is None:
@@ -163,7 +164,7 @@ class CodexBackend:
             if self._process and self._process.poll() is not None and not self._closed:
                 self._message = 'Codex connection closed unexpectedly.'
             return {'available': self._binary is not None, 'connected': connected,
-                    'model': self._model, 'message': self._message}
+                    'model': self._model, 'message': self._message, 'name': self.name}
 
     def _preflight(self):
         if not self._binary:

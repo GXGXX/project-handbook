@@ -1,8 +1,10 @@
-# Live In-Page Answers (Codex only)
+# Live In-Page Answers (Codex or WorkBuddy)
 
 Optional. Every page already handles questions by copying them back to the
 agent ([answers.md](answers.md)); this adds answers that appear directly in the
-page, through the local Codex app server. It needs Python and Codex. Use after
+page, through the agent's own command line on this computer: the Codex app
+server, or the CodeBuddy CLI (`codebuddy`, WorkBuddy's command line, same
+Tencent account). It needs Python and one of those. Use after
 building and reviewing a flow handbook. Start the connection yourself;
 the reader should not need to run commands or paste credentials into a page.
 
@@ -11,8 +13,18 @@ the reader should not need to run commands or paste credentials into a page.
 Run with the installed Python runtime, quoting paths as appropriate:
 
 ```text
-python scripts/flow_server.py NEW_OUTPUT --source-root CLIENT --source-root SERVER --source-root DOCS --background
+python scripts/flow_server.py NEW_OUTPUT --agent codex --source-root CLIENT --source-root DOCS --background
+python scripts/flow_server.py NEW_OUTPUT --agent codebuddy --source-root DOCS --background
 ```
+
+Use `--agent codex` in Codex. In WorkBuddy (or CodeBuddy) use
+`--agent codebuddy`, and only when `codebuddy --version` works; do not install
+it for the reader. `--agent auto` takes the first one found. Each CodeBuddy
+answer runs `codebuddy -p --output-format stream-json` in an empty folder with
+the prompt on stdin and without `-y`, so the CLI blocks file, command and
+network tools; source lookup stays with the host retriever below. If the CLI
+was never signed in, the first question fails with a plain sign-in message:
+tell the reader to open a terminal, run `codebuddy` once and log in, then retry.
 
 The command above assumes the installed `project-handbook` skill directory is
 the working directory. In a user's project, resolve the script from the loaded
@@ -34,8 +46,9 @@ Read the startup file, verify the page responds, and open its URL. Do not start 
 the same output; reuse the running address. To stop, terminate only the helper
 PID you verified belongs to this output, not every Python or Codex process.
 
-The backend discovers `CODEX_BIN`, PATH or the Windows Codex bundled executable.
-Optional `--codex-bin` points to an installed executable; `--model` explicitly
+The Codex backend discovers `CODEX_BIN`, PATH or the Windows Codex bundled
+executable; the CodeBuddy backend `CODEBUDDY_BIN` or `codebuddy`/`cbc` on PATH.
+Optional `--codex-bin` / `--codebuddy-bin` point to an installed executable; `--model` explicitly
 selects a model. Otherwise it uses the local Codex configuration. Authentication
 remains server-side with Codex. Do not read or copy auth files into artifacts.
 This is a dedicated ephemeral Codex context, not the active desktop task.
@@ -55,7 +68,8 @@ This is a dedicated ephemeral Codex context, not the active desktop task.
   The panel resizes from its left edge/corner, or its top edge on narrow screens.
   Keep user questions distinct from AI answers and retain formatted Markdown in
   offline exports without executing answer HTML or loading external content.
-- Every model call starts a new ephemeral thread on the verified Codex process.
+- Every model call starts a new ephemeral thread on the verified Codex process
+  (CodeBuddy: a new CLI process per call).
   The prompt already carries the flow and the recent completed answers, so old
   turns never pile up in the model context.
 - The model answers from authored details and recent completed answers first.
