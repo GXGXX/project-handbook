@@ -90,3 +90,7 @@ https://github.com/GXGXX/project-handbook/tree/main/project-handbook
 - README 的签到截图来自 `docs/examples/checkin.flow.json`（合成数据）；演示视频由 `docs/video/` 里的脚本录制。
 - `evals/` 是内容质量评测：用公开项目的问题检查生成的流程图对不对，说明见 [evals/README.md](evals/README.md)。
 - 打标签 `v*` 会自动打包 `project-handbook.zip` 并发布到 Releases。
+
+## 许可证
+
+[MIT](LICENSE)。可以免费使用、修改和转发，转发时保留许可证声明即可。
