@@ -8,9 +8,9 @@
 
 ## 1 分钟看懂怎么用
 
-[![演示视频：在 AI 对话里提问 → 打开流程图 → 点开某一步 → 在网页里提问并复制给 AI → 回答自动出现 → 跟着例子走一遍](docs/images/demo-poster.jpg)](docs/media/project-handbook-demo.mp4)
+![演示：在 AI 对话里提问 → 打开流程图 → 点开某一步 → 在网页里提问并复制给 AI → 回答自动出现 → 跟着例子走一遍](docs/images/demo.gif)
 
-点图片播放视频（用的是一份合成的「7 日签到活动方案」）。
+用的是一份合成的「7 日签到活动方案」。想看高清版，可以[下载视频](https://github.com/GXGXX/project-handbook/raw/main/docs/media/project-handbook-demo.mp4)（3 MB）。
 
 ## 安装
 
