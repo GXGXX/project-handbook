@@ -1,5 +1,7 @@
 # Project Handbook · 流程手册
 
+[![LINUX DO](https://img.shields.io/badge/LINUX%20DO-%E7%A4%BE%E5%8C%BA-blue)](https://linux.do/)
+
 把「这个流程是怎么走的」「这个数是怎么算出来的」讲成一张能点、能问、能分享的流程图网页。
 
 给 AI 一个资料文件夹（产品文档、活动方案、配置表，或者项目代码都行）和一个问题，它会读完资料，生成一份 `handbook.html`：双击就能打开，整个流程在一张图上，每一步都能点开看规则、公式、数值例子和原文依据。看不懂的地方可以直接在网页里提问。
@@ -94,3 +96,7 @@ https://github.com/GXGXX/project-handbook/tree/main/project-handbook
 ## 许可证
 
 [MIT](LICENSE)。可以免费使用、修改和转发，转发时保留许可证声明即可。
+
+## 社区
+
+感谢 [LINUX DO](https://linux.do/) 社区的支持，欢迎来社区交流使用心得、反馈问题。
